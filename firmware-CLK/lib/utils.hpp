@@ -8,7 +8,7 @@
     interrupts();
 
 // Define a debug flag and a debug print function
-#define DEBUG 1
+#define DEBUG 0
 #define DEBUG_PRINT(X)   \
     if (DEBUG) {         \
         Serial.print(X); \

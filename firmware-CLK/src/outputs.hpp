@@ -103,9 +103,13 @@ class Output {
     // Divider
     int GetDividerIndex() { return _dividerIndex; }
     void SetDivider(int index) {
-        if (_outputType == OutputType::DigitalOut && index >= _dividerAmount - 1) {
-            // Skip envelope type for digital outputs
-            index = _dividerAmount - 2; // Set to the second-to-last divider
+        // Skip envelope type for digital outputs
+        if (_outputType == OutputType::DigitalOut && index >= _dividerAmount - 2) {
+            index = _dividerAmount - 3; // Set to the second-to-last divider
+        }
+        // Skip quantizer for outputs
+        if (index >= _dividerAmount - 1) {
+            index = _dividerAmount - 2; // Set to the last valid divider
         }
         _dividerIndex = constrain(index, 0, _dividerAmount - 1);
     }
@@ -256,9 +260,9 @@ class Output {
     // Constants
     const int MaxDACValue = 4095;
     const float MaxWaveValue = 255.0;
-    static int const _dividerAmount = 19;
-    float _clockDividers[_dividerAmount] = {0.0078125, 0.015625, 0.03125, 0.0625, 0.125, 0.25, 0.3333333333, 0.5, 0.6666666667, 1.0, 1.5, 2.0, 3.0, 4.0, 8.0, 16.0, 24.0, 32.0, 10000};
-    String _dividerDescription[_dividerAmount] = {"/128", "/64", "/32", "/16", "/8", "/4", "/3", "/2", "/1.5", "x1", "x1.5", "x2", "x3", "x4", "x8", "x16", "x24", "x32", "Env"};
+    static int const _dividerAmount = 20;
+    float _clockDividers[_dividerAmount] = {0.0078125, 0.015625, 0.03125, 0.0625, 0.125, 0.25, 0.3333333333, 0.5, 0.6666666667, 1.0, 1.5, 2.0, 3.0, 4.0, 8.0, 16.0, 24.0, 32.0, 10000, 10001};
+    String _dividerDescription[_dividerAmount] = {"/128", "/64", "/32", "/16", "/8", "/4", "/3", "/2", "/1.5", "x1", "x1.5", "x2", "x3", "x4", "x8", "x16", "x24", "x32", "Env", "Qtz"};
     static int const MaxEuclideanSteps = 64;
 
     // The shuffle of the TR-909 delays each even-numbered 1/16th by 2/96 of a beat for shuffle setting 1,
@@ -1084,6 +1088,7 @@ void Output::SetWaveformType(WaveformType type) {
     if (_waveformType == WaveformType::ADEnvelope || _waveformType == WaveformType::AREnvelope || _waveformType == WaveformType::ADSREnvelope) {
         _waveActive = false;
         _envState = EnvelopeState::Idle;
+        _quantizerParams.enable = false;
         _waveValue = 0.0f;
         _lastEnvValue = 0.0f;
         _envStartTime = 0;
@@ -1092,6 +1097,7 @@ void Output::SetWaveformType(WaveformType type) {
     } else if (_waveformType == WaveformType::QuantizeInput) {
         _waveActive = true;
         _triggerMode = false;
+        _dividerIndex = 19;
         if (!_quantizerParams.enable) {
             // Enable quantizer if it's not already enabled
             _quantizerParams.enable = true;

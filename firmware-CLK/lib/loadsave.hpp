@@ -30,6 +30,12 @@ struct LoadSaveParams {
     QuantizerParams quantizerParams[NUM_OUTPUTS];
 };
 
+struct CalibrationData {
+    uint32_t calibrationValues[2][6] = {0}; // [channel][0: 0V, 1: 1V, 2: 2V, 3: 3V, 4: 4V, 5: 5V]
+};
+
+// Store the calibration values in flash memory
+FlashStorage(cal0, CalibrationData);
 // Create 4 slots for saving settings
 FlashStorage(slot0, LoadSaveParams);
 FlashStorage(slot1, LoadSaveParams);
@@ -114,4 +120,16 @@ LoadSaveParams Load(int slot) {
         return LoadDefaultParams();
     }
     return p;
+}
+
+void SaveCalibrationData(const CalibrationData &cal) { // save calibration data to flash memory
+    noInterrupts();
+    cal0.write(cal);
+    interrupts();
+}
+
+void LoadCalibrationData(CalibrationData &cal) { // load calibration data from flash memory
+    noInterrupts();
+    cal = cal0.read();
+    interrupts();
 }
