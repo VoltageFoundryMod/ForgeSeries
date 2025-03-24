@@ -102,7 +102,13 @@ class Output {
 
     // Divider
     int GetDividerIndex() { return _dividerIndex; }
-    void SetDivider(int index) { _dividerIndex = constrain(index, 0, _dividerAmount - 1); }
+    void SetDivider(int index) {
+        if (_outputType == OutputType::DigitalOut && index >= _dividerAmount - 1) {
+            // Skip envelope type for digital outputs
+            index = _dividerAmount - 2; // Set to the second-to-last divider
+        }
+        _dividerIndex = constrain(index, 0, _dividerAmount - 1);
+    }
     String GetDividerDescription() { return _dividerDescription[_dividerIndex]; }
     int GetDividerAmounts() { return _dividerAmount; }
 
