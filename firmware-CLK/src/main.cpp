@@ -1644,10 +1644,23 @@ void SetMasterState(bool state) {
     }
 }
 
+uint32_t ReadADC(int pin) {
+    int ADC_THRESHOLD = 10; // Threshold for ADC reading stability
+    uint32_t previousReading = 0;
+    for (int count = 0; count < 10; count++) {
+        float newReading = ApplyCalibration(pin, analogRead(pin));
+        if (abs(previousReading - newReading) <= ADC_THRESHOLD) {
+            break;
+        }
+        previousReading = newReading;
+    }
+    return previousReading;
+}
+
 void HandleCVInputs() {
     for (int i = 0; i < NUM_CV_INS; i++) {
         oldChannelADC[i] = channelADC[i];
-        channelADC[i] = ApplyCalibration(i, analogRead(CV_IN_PINS[i]));
+        channelADC[i] = ReadADC(CV_IN_PINS[i]);
         ONE_POLE(channelADC[i], oldChannelADC[i], 0.5f);
         if (abs(channelADC[i] - oldChannelADC[i]) > 10) {
             HandleCVTarget(i, channelADC[i], CVInputTarget[i]);

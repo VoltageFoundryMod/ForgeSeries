@@ -515,21 +515,18 @@ void HandleOLED() {
     }
 }
 
-// void AdjustADCReadings(int CV_IN_PIN, int ch) {
-//     // Apply calibration
-//     float calibratedReading = max((analogRead(CV_IN_PIN) - ADCOffset[ch]) * ADCCal[ch], 0.0f);
-
-//     // Wait for the ADC to stabilize for a few readings
-//     for (int count = 0; count < 10; count++) {
-//         float newReading = max((analogRead(CV_IN_PIN) - ADCOffset[ch]) * ADCCal[ch], 0.0f);
-//         if (abs(calibratedReading - newReading) <= ADC_THRESHOLD) {
-//             break;
-//         }
-//         calibratedReading = newReading;
-//     }
-
-//     channelADC[ch] = calibratedReading;
-// }
+uint32_t ReadADC(int pin) {
+    int ADC_THRESHOLD = 10; // Threshold for ADC reading stability
+    uint32_t previousReading = 0;
+    for (int count = 0; count < 10; count++) {
+        float newReading = ApplyCalibration(pin, analogRead(pin));
+        if (abs(previousReading - newReading) <= ADC_THRESHOLD) {
+            break;
+        }
+        previousReading = newReading;
+    }
+    return previousReading;
+}
 
 void HandleInputs() {
     oldClockInput = clockInput;
@@ -542,15 +539,9 @@ void HandleInputs() {
 
     //-------------------------------Analog read and qnt setting--------------------------
     for (int i = 0; i < NUM_CV_INS; i++) {
-        channelADC[i] = ApplyCalibration(i, analogRead(CV_IN_PINS[i]));
+        channelADC[i] = ReadADC(CV_IN_PINS[i]);
         ONE_POLE(channelADC[i], oldChannelADC[i], 0.5f);
-        // if (abs(channelADC[i] - oldChannelADC[i]) > 10) {
-        //     HandleCVTarget(i, channelADC[i], CVInputTarget[i]);
-        // }
     }
-
-    // AdjustADCReadings(CV_1_IN_PIN, 0);
-    // AdjustADCReadings(CV_2_IN_PIN, 1);
 
     QuantizeCV(channelADC[0], oldChannelADC[0], quantizerThresholdBuff[0], channelSensitivity[0], octaveShift[0], &CVOutput[0]);
     QuantizeCV(channelADC[1], oldChannelADC[1], quantizerThresholdBuff[1], channelSensitivity[1], octaveShift[1], &CVOutput[1]);
