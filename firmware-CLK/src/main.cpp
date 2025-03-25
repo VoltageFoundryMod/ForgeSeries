@@ -399,7 +399,7 @@ void HandleEncoderClick() {
                 SetTapTempo();
                 break;
             case 63: // Select save slot
-                menuMode = 58;
+                menuMode = 63;
                 break;
             case 64: { // Save settings
                 LoadSaveParams p;
@@ -426,6 +426,7 @@ void HandleEncoderClick() {
                     p.CVInputAttenuation[i] = CVInputAttenuation[i];
                     p.CVInputOffset[i] = CVInputOffset[i];
                 }
+
                 Save(p, saveSlot);
                 unsavedChanges = false;
                 display.clearDisplay(); // clear display
@@ -909,7 +910,7 @@ void HandleEncoderPosition() {
             outputs[quantizerOutputSelect].SetQuantizerOctaveShift(outputs[quantizerOutputSelect].GetQuantizerOctaveShift() + speedFactor);
             unsavedChanges = true;
             break;
-        case 62: // Select save slot
+        case 63: // Select save slot
             saveSlot = (saveSlot + 1 > NUM_SLOTS) ? 0 : saveSlot + 1;
             break;
         }
@@ -1564,8 +1565,10 @@ void HandleDisplay() {
             display.setCursor(10, yPosition);
             display.print("PRESET SLOT: ");
             display.print(saveSlot);
-            if (menuItem == menuIdx + 1) {
+            if (menuItem == menuIdx + 1 && menuMode == 0) {
                 display.drawTriangle(1, yPosition - 1, 1, yPosition + 7, 5, yPosition + 3, 1);
+            } else if (menuMode == menuIdx + 1) {
+                display.fillTriangle(1, yPosition - 1, 1, yPosition + 7, 5, yPosition + 3, 1);
             }
             yPosition += 9;
             display.setCursor(10, yPosition);
@@ -1905,6 +1908,7 @@ void ClockPulse() { // Inside the interrupt
 void UpdateParameters(LoadSaveParams p) {
     BPM = p.BPM;
     externalDividerIndex = p.externalClockDivIdx;
+    // Serial.println(p.divIdx[0]);
     for (int i = 0; i < NUM_OUTPUTS; i++) {
         outputs[i].SetDivider(p.divIdx[i]);
         outputs[i].SetDutyCycle(p.dutyCycle[i]);

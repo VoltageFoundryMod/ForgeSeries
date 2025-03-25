@@ -73,6 +73,13 @@ void CalibrateADC(Adafruit_SSD1306 &display) {
     display.print("Press to start");
     display.display();
     WaitForEncoderPress(); // Wait for user to press the encoder
+<<<<<<< HEAD
+=======
+    display.clearDisplay();
+    display.setCursor(0, 34);
+    display.print("Measuring...");
+    display.display();
+>>>>>>> 2c67c49 (Add multiple reads and threshold to calibration)
     for (int i = 0; i < 6; i++) {
         // Set the DAC
         for (int j = 2; j < 2 + NUM_DAC_OUTS; j++) {
@@ -80,9 +87,20 @@ void CalibrateADC(Adafruit_SSD1306 &display) {
         }
         // Wait for the DAC to settle
         delay(500);
+<<<<<<< HEAD
         // Read the input voltage
         calib.calibrationValues[0][i] = analogRead(CV_1_IN_PIN);
         calib.calibrationValues[1][i] = analogRead(CV_2_IN_PIN);
+=======
+        uint32_t sum1 = 0, sum2 = 0;
+        for (int k = 0; k < 10; ++k) {
+            sum1 += analogRead(CV_1_IN_PIN);
+            sum2 += analogRead(CV_2_IN_PIN);
+            delay(200);
+        }
+        calib.calibrationValues[0][i] = sum1 / 10;
+        calib.calibrationValues[1][i] = sum2 / 10;
+>>>>>>> 2c67c49 (Add multiple reads and threshold to calibration)
 
         // For calibration, record the difference between the correct and measured values
         calib.calibrationValues[0][i] = abs(calib.calibrationValues[0][i] - dacValues[i]);
@@ -124,6 +142,7 @@ uint32_t ApplyCalibration(int channel, uint32_t value) {
         newValue = value - calib.calibrationValues[channel][5];
     }
     newValue = constrain(newValue, 0, 4095); // Constrain the value to the range of 0-4095
+<<<<<<< HEAD
     // Return the corrected value
     DEBUG_PRINT("Channel: ");
     DEBUG_PRINT(channel);
@@ -139,5 +158,12 @@ uint32_t ApplyCalibration(int channel, uint32_t value) {
 
 void LoadCalibration() {
     // Load the calibration data from flash memory
+=======
+    return newValue;
+}
+
+// Load the calibration data from flash memory
+void LoadCalibration() {
+>>>>>>> 2c67c49 (Add multiple reads and threshold to calibration)
     LoadCalibrationData(calib);
 }
