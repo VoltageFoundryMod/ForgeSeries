@@ -77,7 +77,11 @@ void CalibrateADC(Adafruit_SSD1306 &display) {
 =======
     display.clearDisplay();
     display.setCursor(0, 34);
+<<<<<<< HEAD
     display.print("Measuring...");
+=======
+    display.print("Measuring");
+>>>>>>> 4e1932c (Do multiple reads on calibrate)
     display.display();
 >>>>>>> 2c67c49 (Add multiple reads and threshold to calibration)
     for (int i = 0; i < 6; i++) {
