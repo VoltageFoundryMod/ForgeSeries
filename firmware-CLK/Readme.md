@@ -265,6 +265,16 @@ If the external clock is faster than needed (for example running at higher PPQN)
 
 The module works with external clocks from 30 to 300 BPM. Due to timer resolution, using very slow external clocks with high multipliers may lead to jitter on the outputs.
 
+## Calibration
+
+The module need to be calibrated before use and after every firmware update. The calibration process is done by using the internal calibration menu.
+
+1. Power on the module holding the encoder button. The module will enter the calibration mode after showing the VFM Logo and module name.
+2. First the outputs 3 and 4 will be calibrated. The module will show the voltage levels for each output. The calibration process is done using the trimmers in the back of the PCB. Use a multimeter to measure each of the output. The adjustment is mostly linear so setting the first voltages like 2V and 4V will be enough to calibrate the output. Each click advances the voltage for both outputs. This doesn't need to be done after every firmware update, only when the module is powered for the first time since it's a hardware calibration.
+3. After this, the module will calibrate the ADC inputs (CV 1 and 2). Connect a patch cable from Output 3 into CV 1 and Output 4 into CV 2. When clicked, the module will self-calibrate. Click again to save the settings and return to normal operation.
+
+The module will load the saved params on boot. Remember to always calibrate after flashing the firmware.
+
 ## Firmware Update
 
 1. Download the latest firmware from the Releases section of the [GitHub repository](https://github.com/VoltageFoundryMod/ForgeSeries/releases). The firmware file is named `CURRENT.UF2`.

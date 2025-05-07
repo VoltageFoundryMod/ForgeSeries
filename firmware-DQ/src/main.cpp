@@ -9,19 +9,21 @@
 
 // Load local libraries
 #include "boardIO.cpp"
-#include "loadsave.cpp"
+#include "calibrateADC.hpp"
+#include "loadsave.hpp"
 #include "pinouts.hpp"
 #include "quantizer.cpp"
 #include "scales.cpp"
 #include "splash.hpp"
+#include "utils.hpp"
 #include "version.hpp"
 
 // ADC Calibration settings
-const int ADC_THRESHOLD = 5; // Threshold for ADC stability
+// const int ADC_THRESHOLD = 5; // Threshold for ADC stability
 // float ADCCal[2] = {1.026, 1.026}; // ADC readings for the channels
 // int ADCOffset[2] = {25, 25};      // ADC offset for the channels
-float ADCCal[2] = {1.0180, 1.0180}; // ADC readings for the channels
-int ADCOffset[2] = {23, 23};        // ADC offset for the channels
+// float ADCCal[2] = {1.0180, 1.0180}; // ADC readings for the channels
+// int ADCOffset[2] = {23, 23};        // ADC offset for the channels
 ////////////////////////////////////////////
 
 #define OLED_ADDRESS 0x3C
@@ -171,18 +173,19 @@ void HandleEncoderClick() {
             }
             unsavedChanges = true;
         } else if (menuItem == 38) { // Save settings
-            LoadSaveParams p = {
-                &attackEnvelope[0],
-                &attackEnvelope[1],
-                &decayEnvelope[0],
-                &decayEnvelope[1],
-                &syncSignal[0],
-                &syncSignal[1],
-                &channelSensitivity[0],
-                &channelSensitivity[1],
-                &octaveShift[0],
-                &octaveShift[1]};
-            Save(p, activeNotes[0], activeNotes[1]);
+            LoadSaveParams p;
+            for (int i = 0; i < NUM_CHANNELS; i++) {
+                p.valid = true;
+                p.atk[i] = attackEnvelope[i];
+                p.dcy[i] = decayEnvelope[i];
+                p.sync[i] = syncSignal[i];
+                p.oct[i] = octaveShift[i];
+                p.sensitivity[i] = channelSensitivity[i];
+                for (int j = 0; j < 12; j++) {
+                    activeNotes[i][j] = activeNotes[i][j];
+                }
+            }
+            Save(p);
             unsavedChanges = false;
             display.clearDisplay(); // clear display
             display.setTextSize(2);
@@ -512,20 +515,17 @@ void HandleOLED() {
     }
 }
 
-void AdjustADCReadings(int CV_IN_PIN, int ch) {
-    // Apply calibration
-    float calibratedReading = max((analogRead(CV_IN_PIN) - ADCOffset[ch]) * ADCCal[ch], 0.0f);
-
-    // Wait for the ADC to stabilize for a few readings
+uint32_t ReadADC(int pin) {
+    int ADC_THRESHOLD = 10; // Threshold for ADC reading stability
+    uint32_t previousReading = 0;
     for (int count = 0; count < 10; count++) {
-        float newReading = max((analogRead(CV_IN_PIN) - ADCOffset[ch]) * ADCCal[ch], 0.0f);
-        if (abs(calibratedReading - newReading) <= ADC_THRESHOLD) {
+        float newReading = ApplyCalibration(pin, analogRead(pin));
+        if (abs(previousReading - newReading) <= ADC_THRESHOLD) {
             break;
         }
-        calibratedReading = newReading;
+        previousReading = newReading;
     }
-
-    channelADC[ch] = calibratedReading;
+    return previousReading;
 }
 
 void HandleInputs() {
@@ -538,8 +538,10 @@ void HandleInputs() {
     oldQuantizedNoteIdx[1] = quantizedNoteIdx[1];
 
     //-------------------------------Analog read and qnt setting--------------------------
-    AdjustADCReadings(CV_1_IN_PIN, 0);
-    AdjustADCReadings(CV_2_IN_PIN, 1);
+    for (int i = 0; i < NUM_CV_INS; i++) {
+        channelADC[i] = ReadADC(CV_IN_PINS[i]);
+        ONE_POLE(channelADC[i], oldChannelADC[i], 0.5f);
+    }
 
     QuantizeCV(channelADC[0], oldChannelADC[0], quantizerThresholdBuff[0], channelSensitivity[0], octaveShift[0], &CVOutput[0]);
     QuantizeCV(channelADC[1], oldChannelADC[1], quantizerThresholdBuff[1], channelSensitivity[1], octaveShift[1], &CVOutput[1]);
@@ -595,7 +597,7 @@ void HandleInputs() {
 
     for (int ch = 0; ch < 2; ch++) {
         if (oldCVOutput[ch] != CVOutput[ch]) {
-            DACWrite(ch + 1, CVOutput[ch]);
+            DACWrite(ch, CVOutput[ch]);
         }
         // Get the quantized note from the CV output
         GetNote(CVOutput[ch], &quantizedNoteIdx[ch]);
@@ -620,6 +622,24 @@ void loop() {
     HandleIO();
 
     HandleOLED();
+}
+
+void UpdateParameters(LoadSaveParams p) {
+    attackEnvelope[0] = p.atk[0];
+    attackEnvelope[1] = p.atk[1];
+    decayEnvelope[0] = p.dcy[0];
+    decayEnvelope[1] = p.dcy[1];
+    syncSignal[0] = p.sync[0];
+    syncSignal[1] = p.sync[1];
+    channelSensitivity[0] = p.sensitivity[0];
+    channelSensitivity[1] = p.sensitivity[1];
+    octaveShift[0] = p.oct[0];
+    octaveShift[1] = p.oct[1];
+    // Copy arrays element by element
+    for (int i = 0; i < 12; i++) {
+        activeNotes[0][i] = p.note[0][i];
+        activeNotes[1][i] = p.note[1][i];
+    }
 }
 
 void setup() {
@@ -648,20 +668,18 @@ void setup() {
     display.display();
     delay(1500);
 
-    // Load scale and note settings from flash memory
-    LoadSaveParams p = {
-        &attackEnvelope[0],
-        &attackEnvelope[1],
-        &decayEnvelope[0],
-        &decayEnvelope[1],
-        &syncSignal[0],
-        &syncSignal[1],
-        &channelSensitivity[0],
-        &channelSensitivity[1],
-        &octaveShift[0],
-        &octaveShift[1],
-    };
-    Load(p, activeNotes[0], activeNotes[1]);
+    // Check if encoder is pressed during startup to enter calibration mode
+    if (digitalRead(ENCODER_SW) == LOW) {
+        CalibrateDAC(display);
+        CalibrateADC(display);
+    }
+
+    // Load calibration values
+    LoadCalibration();
+
+    LoadSaveParams p = Load();
+    UpdateParameters(p);
+
     BuildQuantBuffer(activeNotes[0], quantizerThresholdBuff[0]);
     BuildQuantBuffer(activeNotes[1], quantizerThresholdBuff[1]);
 }

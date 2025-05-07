@@ -10,17 +10,13 @@
 
 // Load local libraries
 #include "boardIO.hpp"
+#include "calibrateADC.hpp"
 #include "loadsave.hpp"
 #include "outputs.hpp"
 #include "pinouts.hpp"
 #include "splash.hpp"
 #include "utils.hpp"
 #include "version.hpp"
-
-// ADC Calibration settings
-const int ADC_THRESHOLD = 5;        // Threshold for ADC stability
-float ADCCal[2] = {1.0180, 1.0180}; // ADC readings for the channels
-int ADCOffset[2] = {23, 23};        // ADC offset for the channels
 
 // Configuration
 #define PPQN 192
@@ -124,8 +120,6 @@ String CVTargetDescription[] = {
 int CVTargetLength = sizeof(CVTargetDescription) / sizeof(CVTargetDescription[0]);
 CVTarget pendingCVInputTarget[NUM_CV_INS] = {CVTarget::None, CVTarget::None};
 
-// ADC input offset and scale from calibration
-float offsetScale[NUM_CV_INS][2]; // [channel][0: offset, 1: scale]
 // CV target settings
 CVTarget CVInputTarget[NUM_CV_INS] = {CVTarget::None, CVTarget::None};
 int CVInputAttenuation[NUM_CV_INS] = {0, 0};
@@ -1653,17 +1647,23 @@ void SetMasterState(bool state) {
     }
 }
 
-// Adjust the ADC readings
-void AdjustADCReadings(int CV_IN_PIN, int ch) {
-    // Apply calibration
-    float calibratedReading = max((analogRead(CV_IN_PIN) - ADCOffset[ch]) * ADCCal[ch], 0.0f);
-    channelADC[ch] = calibratedReading;
+uint32_t ReadADC(int pin) {
+    int ADC_THRESHOLD = 10; // Threshold for ADC reading stability
+    uint32_t previousReading = 0;
+    for (int count = 0; count < 10; count++) {
+        float newReading = ApplyCalibration(pin, analogRead(pin));
+        if (abs(previousReading - newReading) <= ADC_THRESHOLD) {
+            break;
+        }
+        previousReading = newReading;
+    }
+    return previousReading;
 }
 
 void HandleCVInputs() {
     for (int i = 0; i < NUM_CV_INS; i++) {
         oldChannelADC[i] = channelADC[i];
-        AdjustADCReadings(CV_IN_PINS[i], i);
+        channelADC[i] = ReadADC(CV_IN_PINS[i]);
         ONE_POLE(channelADC[i], oldChannelADC[i], 0.5f);
         if (abs(channelADC[i] - oldChannelADC[i]) > 10) {
             HandleCVTarget(i, channelADC[i], CVInputTarget[i]);
@@ -1974,6 +1974,15 @@ void setup() {
     display.print("V" VERSION);
     display.display();
     delay(1500);
+
+    // Check if encoder is pressed during startup to enter calibration mode
+    if (digitalRead(ENCODER_SW) == LOW) {
+        CalibrateDAC(display);
+        CalibrateADC(display);
+    }
+
+    // Load calibration values
+    LoadCalibration();
 
     // Attach interrupt for external clock
     attachInterrupt(digitalPinToInterrupt(CLK_IN_PIN), ClockReceived, RISING);
