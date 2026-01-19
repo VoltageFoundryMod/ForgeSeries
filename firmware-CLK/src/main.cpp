@@ -11,6 +11,7 @@
 // Load local libraries
 #include "boardIO.hpp"
 #include "loadsave.hpp"
+#include "metrics.hpp"
 #include "outputs.hpp"
 #include "pinouts.hpp"
 #include "splash.hpp"
@@ -37,6 +38,9 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 Encoder encoder(ENC_PIN_1, ENC_PIN_2); // rotary encoder library setting
 float oldPosition = -999;              // rotary encoder library setting
 float newPosition = -999;              // rotary encoder library setting
+
+// Performance metrics
+PerformanceMetrics metrics;
 
 // Output objects
 Output outputs[NUM_OUTPUTS] = {
@@ -510,6 +514,7 @@ void UpdateSpeedFactor() {
 }
 
 void HandleEncoderPosition() {
+    metrics.BeginEncoderMeasurement();
     newPosition = encoder.read();
 
     if ((newPosition - 3) / 4 > oldPosition / 4) { // Decrease, turned counter-clockwise
@@ -921,6 +926,7 @@ void HandleEncoderPosition() {
             break;
         }
     }
+    metrics.EndEncoderMeasurement();
 }
 
 // Redraw the display and show unsaved changes indicator
@@ -956,6 +962,7 @@ void HandleDisplay() {
     unsigned long currentTime = millis();
 
     if (displayRefresh && (currentTime - lastDisplayUpdateTime >= DISPLAY_UPDATE_INTERVAL)) {
+        metrics.BeginDisplayMeasurement();
         lastDisplayUpdateTime = currentTime;
 
         display.clearDisplay();
@@ -1597,6 +1604,7 @@ void HandleDisplay() {
             }
 
             RedrawDisplay();
+            metrics.EndDisplayMeasurement();
             return;
         }
     }
@@ -1607,6 +1615,7 @@ void HandleDisplay() {
         menuMode = 0;
         displayRefresh = 1;
     }
+    metrics.EndDisplayMeasurement();
 }
 
 // Tap tempo function
@@ -1899,10 +1908,12 @@ void HandleOutputs() {
 }
 
 void ClockPulse() { // Inside the interrupt
+    metrics.BeginISRMeasurement();
     for (int i = 0; i < NUM_OUTPUTS; i++) {
         outputs[i].Pulse(PPQN, tickCounter);
     }
     tickCounter++;
+    metrics.EndISRMeasurement();
 }
 
 void UpdateParameters(LoadSaveParams p) {
@@ -2002,6 +2013,8 @@ void HandleIO() {
 
 // Main loop
 void loop() {
+    metrics.BeginLoopMeasurement();
+    
     HandleIO();
 
     // Only handle display every few frames
@@ -2009,4 +2022,14 @@ void loop() {
         HandleDisplay();
     }
     frameSkip = (frameSkip + 1) % FRAME_SKIP_COUNT;
+    
+    // Print performance stats every 5 seconds (auto-reset)
+    static unsigned long lastStatsTime = 0;
+    if (millis() - lastStatsTime >= 5000) {
+        metrics.PrintStats();
+        lastStatsTime = millis();
+        metrics.Reset();
+    }
+    
+    metrics.EndLoopMeasurement();
 }
