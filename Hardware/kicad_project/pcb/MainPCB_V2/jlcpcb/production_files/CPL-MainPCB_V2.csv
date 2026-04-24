@@ -1,0 +1,29 @@
+Designator,Val,Package,Mid X,Mid Y,Rotation,Layer
+C1,100n,C_Disc_D5.1mm_W3.2mm_P5.00mm,146.3,-112.2,0.0,top
+C2,10u,CP_Radial_D4.0mm_P2.00mm,139.7,-112.2726,90.0,top
+C3,100n,C_Disc_D5.1mm_W3.2mm_P5.00mm,146.3,-116.1,0.0,top
+J1,Conn_01x08,PinSocket_1x08_P2.54mm_Vertical,153.1,-92.21,0.0,top
+J2,Conn_01x08,PinSocket_1x08_P2.54mm_Vertical,127.3,-66.35,0.0,top
+J3,Power Input,Pins_1x03_2.54mm_TH,132.16,-118.6,90.0,bottom
+J4,MCP4758 Board,PinHeader_1x10_P2.54mm_Vertical,152.7,-119.59,0.0,bottom
+J5,POWER IN,IDC-Header_2x08_P2.54mm_Vertical,130.83,-93.31,180.0,bottom
+J6,Conn_01x07,PinSocket_1x07_P2.54mm_Vertical,150.235,-64.17975,0.0,bottom
+J7,Conn_01x07,PinSocket_1x07_P2.54mm_Vertical,135.327175,-64.07975,180.0,bottom
+R1,10k,R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal,142.8,-96.3,180.0,top
+R10,470,R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal,144.2,-82.49,90.0,top
+R11,470,R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal,141.0,-82.5,90.0,top
+R12,470,R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal,137.8,-82.5,90.0,top
+R2,6k8,R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal,131.5,-124.4,0.0,top
+R3,10k,R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal,142.8,-100.033333,180.0,top
+R4,6k8,R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal,128.4,-131.09,-90.0,top
+R5,10k,R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal,142.8,-103.766667,180.0,top
+R6,6k8,R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal,131.5,-131.1,-90.0,top
+R7,10k,R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal,142.8,-107.5,180.0,top
+R8,6k8,R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal,134.5,-131.09,-90.0,top
+R9,470,R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal,147.4,-82.49,90.0,top
+RV1,5k,Potentiometer_Vishay_T93YA_Vertical,130.075,-144.14,90.0,bottom
+RV2,5k,Potentiometer_Vishay_T93YA_Vertical,136.85,-144.14,90.0,bottom
+RV3,5k,Potentiometer_Vishay_T93YA_Vertical,143.625,-144.14,90.0,bottom
+RV4,5k,Potentiometer_Vishay_T93YA_Vertical,150.4,-144.14,90.0,bottom
+U1,MCP6004,DIP-14_W7.62mm_Socket,143.51,-127.88,0.0,top
+U2,L7805,TO-220-3_Vertical,131.44,-112.8,180.0,bottom

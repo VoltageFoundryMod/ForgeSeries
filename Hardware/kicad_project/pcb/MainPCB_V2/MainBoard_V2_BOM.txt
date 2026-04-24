@@ -1,0 +1,16 @@
+ForgeSeries Main Board V2 BOM
+
+2x - 100n Capacitor
+1x - 10u polarized capacitor
+1x - MCP4758 board - https://pt.aliexpress.com/item/1005009392784329.html
+4x - 10k Resistor
+4x - 6k8 Resistor
+4x - 470 Resistor
+4x - 5k adjustable trimmer
+1x - MCP6004 DIP Package
+1x - 14 pin DIP socket
+1x - 7805 Regulator TO-220
+1x - Seeed Studio Xiao RP2040
+1x - 01x03 pin header with jumper for power src selection
+2x - 02x08 pin header for eurorack power
+02 - 01x08 pin socket for board interconnect
