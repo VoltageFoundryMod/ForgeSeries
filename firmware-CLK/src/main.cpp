@@ -1,8 +1,48 @@
 #include <Arduino.h>
+#if !defined(ARDUINO_ARCH_RP2040)
 #include <TimerTCC0.h>
+#else
+#include <hardware/timer.h>
+static repeating_timer_t _clockTimer;
+#endif
 // Rotary encoder setting
-#define ENCODER_OPTIMIZE_INTERRUPTS
+// ENCODER_OPTIMIZE_INTERRUPTS disabled - interrupts interfere with waveform timing
+// Using polling mode instead (called in main loop at ~745Hz, fast enough)
+// #define ENCODER_OPTIMIZE_INTERRUPTS
+#if defined(ARDUINO_ARCH_RP2040)
+// RP2040: PJRC Encoder uses architecture-specific macros not available on RP2040.
+// Use a minimal polling-based shim with the same read() API.
+// IMPORTANT: constructor must NOT call pinMode/digitalRead — pins are not ready
+// at global-object-construction time. Call begin() from setup() before first read().
+class Encoder {
+    int _pin1, _pin2;
+    long _pos = 0;
+    bool _last1 = false, _last2 = false;
+public:
+    Encoder(int p1, int p2) : _pin1(p1), _pin2(p2) {}
+    void begin() {
+        pinMode(_pin1, INPUT_PULLUP);
+        pinMode(_pin2, INPUT_PULLUP);
+        _last1 = digitalRead(_pin1);
+        _last2 = digitalRead(_pin2);
+    }
+    long read() {
+        bool cur1 = digitalRead(_pin1);
+        bool cur2 = digitalRead(_pin2);
+        if (cur1 != _last1) {
+            // Multiply by 2 so each detent (2 edges on pin1) gives 4 counts total,
+            // matching PJRC Encoder convention expected by HandleEncoderPosition().
+            // Negate to fix direction (hardware wiring puts CW as negative).
+            _pos += (cur1 != cur2) ? -2 : 2;
+        }
+        _last1 = cur1;
+        _last2 = cur2;
+        return _pos;
+    }
+};
+#else
 #include <Encoder.h>
+#endif
 
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -10,6 +50,7 @@
 
 // Load local libraries
 #include "boardIO.hpp"
+#include "displayManager.hpp"
 #include "loadsave.hpp"
 #include "metrics.hpp"
 #include "outputs.hpp"
@@ -34,6 +75,9 @@ int ADCOffset[2] = {23, 23};        // ADC offset for the channels
 // OLED display object
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
+// Display manager (non-blocking display updates)
+DisplayManager displayMgr(display);
+
 // Rotary encoder object
 Encoder encoder(ENC_PIN_1, ENC_PIN_2); // rotary encoder library setting
 float oldPosition = -999;              // rotary encoder library setting
@@ -44,8 +88,13 @@ PerformanceMetrics metrics;
 
 // Output objects
 Output outputs[NUM_OUTPUTS] = {
+#if defined(ARDUINO_ARCH_RP2040)
+    Output(1, OutputType::DACOut),  // All outputs via MCP4728 on RP2040
+    Output(2, OutputType::DACOut),
+#else
     Output(1, OutputType::DigitalOut),
     Output(2, OutputType::DigitalOut),
+#endif
     Output(3, OutputType::DACOut),
     Output(4, OutputType::DACOut)};
 
@@ -180,6 +229,9 @@ int envelopeOutputSelect = 2;        // Envelope output index
 int saveSlot = 0;                    // Save slot index
 unsigned long lastEncoderUpdate = 0; // Last encoder update time
 
+// Macro to request display refresh (marks display dirty for update)
+#define REQUEST_DISPLAY_REFRESH() do { displayRefresh = 1; displayMgr.MarkDirty(); } while(0)
+
 // Function prototypes
 void UpdateBPM(unsigned int);
 void SetTapTempo();
@@ -206,7 +258,7 @@ void HandleEncoderClick() {
     switchState = digitalRead(ENCODER_SW);
     if (switchState == 1 && oldSwitchState == 0) {
         lastEncoderUpdate = millis();
-        displayRefresh = 1;
+        REQUEST_DISPLAY_REFRESH();
         if (menuMode == 0) {
             switch (menuItem) {
             case 1: // Set BPM
@@ -520,7 +572,7 @@ void HandleEncoderPosition() {
     if ((newPosition - 3) / 4 > oldPosition / 4) { // Decrease, turned counter-clockwise
         UpdateSpeedFactor();
         oldPosition = newPosition;
-        displayRefresh = 1;
+        REQUEST_DISPLAY_REFRESH();
         lastEncoderUpdate = millis();
         switch (menuMode) {
         case 0:
@@ -724,7 +776,7 @@ void HandleEncoderPosition() {
     } else if ((newPosition + 3) / 4 < oldPosition / 4) { // Increase, turned clockwise
         UpdateSpeedFactor();
         oldPosition = newPosition;
-        displayRefresh = 1;
+        REQUEST_DISPLAY_REFRESH();
         lastEncoderUpdate = millis();
         switch (menuMode) {
         case 0:
@@ -929,43 +981,40 @@ void HandleEncoderPosition() {
     metrics.EndEncoderMeasurement();
 }
 
-// Redraw the display and show unsaved changes indicator
+// Redraw the display (now just calls EndFrame)
 void RedrawDisplay() {
-    // If there are unsaved changes, display a circle at the top left corner
-    if (unsavedChanges) {
-        display.fillCircle(1, 1, 1, WHITE);
-    }
-    display.display();
+    // Measure only the I2C transmission time
+    metrics.BeginDisplayMeasurement();
+    displayMgr.EndFrame();
+    metrics.EndDisplayMeasurement();
     displayRefresh = 0;
 }
 
 // Draw a menu position indicator at the right side of the display
 void MenuIndicator() {
-    if (!(menuItem == 1 || menuItem == 2)) {
-        // Draw a vertical line at the right side of the display
-        display.drawLine(127, 0, 127, 63, WHITE);
-        // Draw a dot at the current menu position proportional to the menu items
-        display.drawRect(125, map(menuItem, 1, menuItems, 0, 62), 3, 3, WHITE);
-    }
+    displayMgr.DrawMenuIndicator(menuItem, menuItems);
 }
 
 void MenuHeader(const char *header) {
-    display.setTextSize(1);
-    int headerLength = (strlen(header) * 6) + 24; // Sum of the length of the header and the "- " sides
-    display.setCursor((SCREEN_WIDTH - headerLength) / 2, 1);
-    display.println("- " + String(header) + " -");
+    displayMgr.DrawMenuHeader(header);
 }
 
 // Handle display drawing
 void HandleDisplay() {
-    // Only refresh the display at a reasonable rate
-    unsigned long currentTime = millis();
+    // Sync unsaved changes state to display manager
+    displayMgr.SetUnsavedChanges(unsavedChanges);
 
-    if (displayRefresh && (currentTime - lastDisplayUpdateTime >= DISPLAY_UPDATE_INTERVAL)) {
-        metrics.BeginDisplayMeasurement();
-        lastDisplayUpdateTime = currentTime;
+    // Check for timeout to main screen
+    if (displayMgr.ShouldTimeout(menuItem, menuMode)) {
+        menuItem = 2;
+        menuMode = 0;
+        REQUEST_DISPLAY_REFRESH();
+    }
 
-        display.clearDisplay();
+    // Only refresh the display if needed and rate-limited
+    if (displayRefresh && displayMgr.ShouldUpdate()) {
+        // Begin frame prepares the buffer (fast, no I2C)
+        displayMgr.BeginFrame();
         MenuIndicator();
 
         // Draw the menu
@@ -1604,18 +1653,11 @@ void HandleDisplay() {
             }
 
             RedrawDisplay();
-            metrics.EndDisplayMeasurement();
             return;
         }
     }
 
-    // If more than 5 seconds have passed, return to the main screen
-    if (millis() - lastEncoderUpdate > 7000 && menuItem != 1 && menuItem != 2 && menuMode == 0) {
-        menuItem = 2;
-        menuMode = 0;
-        displayRefresh = 1;
-    }
-    metrics.EndDisplayMeasurement();
+    // EndDisplayMeasurement removed - now measured in RedrawDisplay()
 }
 
 // Tap tempo function
@@ -1687,6 +1729,10 @@ void HandleCVTarget(int ch, float CVValue, CVTarget cvTarget) {
     float attenuatedValue = CVValue * ((100 - CVInputAttenuation[ch]) / 100.0f);
     float offsetValue = attenuatedValue + (CVInputOffset[ch] / 100.0f * MAXDAC);
     CVValue = constrain(offsetValue, 0, MAXDAC);
+
+    // CRITICAL SECTION: Protect parameter updates that affect timing
+    // Prevents race conditions with ISR reading output parameters
+    noInterrupts();
 
     // DEBUG_PRINT("Ch: " + String(ch) + " CV Target: " + String(cvTarget) + " CV Value: " + String(CVValue) + "\n");
     switch (cvTarget) {
@@ -1803,6 +1849,9 @@ void HandleCVTarget(int ch, float CVValue, CVTarget cvTarget) {
         outputs[3].SetCVValue(CVValue);
         break;
     }
+
+    interrupts(); // End critical section
+
     // Update the display if the CV target is not None
     // if (cvTarget != CVTarget::None && menuMode == 0 && millis() - lastDisplayUpdateTime > 1000) {
     //     displayRefresh = 1;
@@ -1854,7 +1903,7 @@ void ClockReceived() {
             clockInterval = averageInterval;
             unsigned int newBPM = 60000 / (averageInterval * externalClockDividers[externalDividerIndex]);
             // Add hysteresis to BPM changes
-            if (abs(newBPM - BPM) > 3) {
+            if (abs((int)newBPM - (int)BPM) > 3) {
                 UpdateBPM(newBPM);
                 displayRefresh = 1;
                 DEBUG_PRINT("External clock connected");
@@ -1892,32 +1941,77 @@ void HandleExternalClock() {
 // Set the hardware timer based on the BPM
 void UpdateBPM(unsigned int newBPM) {
     BPM = constrain(newBPM, minBPM, maxBPM);
+#if defined(ARDUINO_ARCH_RP2040)
+    cancel_repeating_timer(&_clockTimer);
+    int64_t intervalUs = 60000000LL / BPM / PPQN;
+    add_repeating_timer_us(-intervalUs, [](repeating_timer_t *) -> bool { ClockPulse(); return true; }, nullptr, &_clockTimer);
+#else
     TimerTcc0.setPeriod(60L * 1000 * 1000 / BPM / PPQN / 4);
+#endif
 }
 
 void HandleOutputs() {
-    for (int i = 0; i < NUM_OUTPUTS; i++) {
-        // Set the output level based on the pulse state
-        SetPin(i, outputs[i].GetOutputLevel());
+    // Update DAC outputs and envelopes (called from main loop)
+#if defined(ARDUINO_ARCH_RP2040)
+    // All 4 outputs are MCP4728 I2C DAC — single fastWrite for all channels
+    uint16_t v0 = (uint16_t)outputs[0].GetOutputLevel();
+    uint16_t v1 = (uint16_t)outputs[1].GetOutputLevel();
+    uint16_t v2 = (uint16_t)outputs[2].GetOutputLevel();
+    uint16_t v3 = (uint16_t)outputs[3].GetOutputLevel();
 
-        if (i == 2 || i == 3) {
-            // Set the output level based on the pulse state
-            outputs[i].GenEnvelope();
-        }
+    // Debug: print values every ~2 seconds
+    static uint32_t _lastDACPrint = 0;
+    if (millis() - _lastDACPrint > 2000) {
+        Serial.printf("DACWriteAll: %u %u %u %u\n", v0, v1, v2, v3);
+        _lastDACPrint = millis();
     }
+
+    DACWriteAll(v0, v1, v2, v3);
+    for (int i = 0; i < NUM_OUTPUTS; i++) {
+        outputs[i].GenEnvelope();
+    }
+#else
+    // SAMD21: gates 0-1 driven in ISR; update DAC outputs 2-3 here
+    // CRITICAL SECTION: Prevent encoder/display from interrupting DAC writes
+    // DAC writes take ~100-200µs, must complete atomically
+    noInterrupts();
+    SetPin(2, outputs[2].GetOutputLevel());
+    SetPin(3, outputs[3].GetOutputLevel());
+    interrupts();
+
+    // Envelope generation can happen outside critical section
+    outputs[2].GenEnvelope();
+    outputs[3].GenEnvelope();
+#endif
 }
 
 void ClockPulse() { // Inside the interrupt
+    // CRITICAL: This ISR must not be delayed by encoder interrupts
+    // The encoder library's ENCODER_OPTIMIZE_INTERRUPTS uses pin change interrupts
+    // which can interfere with precise waveform timing
     metrics.BeginISRMeasurement();
+
+    // Calculate pulse state for all outputs
     for (int i = 0; i < NUM_OUTPUTS; i++) {
         outputs[i].Pulse(PPQN, tickCounter);
     }
     tickCounter++;
+
+#if !defined(ARDUINO_ARCH_RP2040)
+    // SAMD21: outputs 0-1 are DigitalOut (fast digitalWrite — safe in ISR)
+    // DAC outputs 2-3 are updated in main loop HandleOutputs()
+    SetPin(0, outputs[0].GetOutputLevel());
+    SetPin(1, outputs[1].GetOutputLevel());
+#endif
+    // RP2040: ALL outputs are MCP4728 I2C DAC — I2C is interrupt-driven and
+    // MUST NOT be called from an interrupt context (deadlock). All 4 outputs
+    // are flushed in HandleOutputs() on the main loop instead.
+
     metrics.EndISRMeasurement();
 }
 
 void UpdateParameters(LoadSaveParams p) {
-    BPM = p.BPM;
+    BPM = constrain(p.BPM, minBPM, maxBPM);
     externalDividerIndex = p.externalClockDivIdx;
     // Serial.println(p.divIdx[0]);
     for (int i = 0; i < NUM_OUTPUTS; i++) {
@@ -1944,31 +2038,76 @@ void UpdateParameters(LoadSaveParams p) {
 
 // Initialize the hardware timer
 void InitializeTimer() {
-    // Set up the timer
+#if defined(ARDUINO_ARCH_RP2040)
+    int64_t intervalUs = 60000000LL / BPM / PPQN;
+    if (intervalUs <= 0) intervalUs = 60000000LL / 120 / PPQN;  // fallback to 120 BPM
+    add_repeating_timer_us(-intervalUs, [](repeating_timer_t *) -> bool {
+        ClockPulse();
+        return true;
+    }, nullptr, &_clockTimer);
+#else
     TimerTcc0.initialize();
     TimerTcc0.attachInterrupt(ClockPulse);
-
     // Set high priority for the timer interrupt if your platform supports it
     NVIC_SetPriority(TCC0_IRQn, 0); // Highest priority (0)
+#endif
 }
 
 void setup() {
-    // Initialize serial port
     Serial.begin(115200);
 
-    // Initialize I/O (DAC, pins, etc.)
+#if defined(ARDUINO_ARCH_RP2040)
+    delay(500);  // Give USB-CDC time to enumerate
+    encoder.begin();          // Deferred pin init for RP2040 (safe here, after runtime ready)
+    InitWire();               // Configure SDA/SCL and Wire.begin() — shared by display + DAC
+#endif
+
+    EEPROMInit();
+
+    // Initialize I/O pins (ADC resolution, input pins, encoder button)
     InitIO();
 
-    // Initialize OLED display with address 0x3C for 128x64
+    // Initialize OLED display — comes BEFORE DAC so errors can be shown on screen
     if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
         Serial.println(F("SSD1306 allocation failed"));
-        for (;;)
-            ; // Don't proceed, loop forever
+        // Can't show on display — blink LED instead as distress signal
+        pinMode(LED_BUILTIN, OUTPUT);
+        while (1) {
+            digitalWrite(LED_BUILTIN, HIGH); delay(200);
+            digitalWrite(LED_BUILTIN, LOW);  delay(200);
+        }
     }
-    Wire.setClock(1000000);
+#if !defined(ARDUINO_ARCH_RP2040)
+    Wire.setClock(1000000);  // SAMD21 only — 1MHz I2C (RP2040 already set to 400KHz in InitWire)
+#endif
     display.clearDisplay();
     display.setTextWrap(false);
     display.cp437(true); // Use full 256 char 'Code Page 437' font
+
+#if defined(ARDUINO_ARCH_RP2040)
+    // Initialize the quad DAC — show error on display if not found
+    if (!InitDAC()) {
+        display.clearDisplay();
+        display.setTextSize(1);
+        display.setTextColor(WHITE);
+        display.setCursor(0, 10);
+        display.println("MCP4728 DAC");
+        display.println("not found!");
+        display.println("");
+        display.println("Check I2C wiring");
+        display.printf("Addr: 0x%02X", MCP4728_ADDR);
+        display.display();
+        // Scan I2C bus and print found addresses to serial
+        Serial.println("I2C bus scan:");
+        for (uint8_t addr = 1; addr < 127; addr++) {
+            Wire.beginTransmission(addr);
+            if (Wire.endTransmission() == 0) {
+                Serial.printf("  Found device at 0x%02X\n", addr);
+            }
+        }
+        while (1);  // Halt — DAC is required for all outputs
+    }
+#endif
 
     display.clearDisplay();
     display.drawBitmap(30, 0, VFM_Splash, 68, 64, 1);
@@ -1986,16 +2125,18 @@ void setup() {
     display.display();
     delay(1500);
 
-    // Attach interrupt for external clock
-    attachInterrupt(digitalPinToInterrupt(CLK_IN_PIN), ClockReceived, RISING);
-
     // Load settings from flash memory (slot 0) or set defaults
     LoadSaveParams p = Load(0);
     UpdateParameters(p);
 
-    // Initialize timer
+    // Initialize timer BEFORE attaching external clock interrupt.
+    // ClockReceived() calls UpdateBPM() which calls cancel_repeating_timer();
+    // the timer struct must be valid before any interrupt can fire.
     InitializeTimer();
     UpdateBPM(BPM);
+
+    // Attach external clock interrupt last — timer must be initialized first.
+    attachInterrupt(digitalPinToInterrupt(CLK_IN_PIN), ClockReceived, RISING);
 }
 
 // Handle IO without the display
@@ -2004,9 +2145,9 @@ void HandleIO() {
 
     HandleEncoderPosition();
 
-    HandleOutputs();
-
-    HandleCVInputs();
+    // HandleOutputs() now called directly in ClockPulse() ISR for zero latency
+    // This prevents encoder/display delays from affecting waveform timing
+HandleOutputs();  // DAC outputs (2-3) updated here
 
     HandleExternalClock();
 }
@@ -2014,15 +2155,22 @@ void HandleIO() {
 // Main loop
 void loop() {
     metrics.BeginLoopMeasurement();
-    
-    HandleIO();
+
+    // Update DAC outputs FIRST for minimum latency
+    // This runs at ~745Hz, much faster than display/encoder
+    HandleOutputs();
+
+    HandleEncoderClick();
+    HandleEncoderPosition();
+    HandleCVInputs();
+    HandleExternalClock();
 
     // Only handle display every few frames
     if (frameSkip == 0) {
         HandleDisplay();
     }
     frameSkip = (frameSkip + 1) % FRAME_SKIP_COUNT;
-    
+
     // Print performance stats every 5 seconds (auto-reset)
     static unsigned long lastStatsTime = 0;
     if (millis() - lastStatsTime >= 5000) {
@@ -2030,6 +2178,6 @@ void loop() {
         lastStatsTime = millis();
         metrics.Reset();
     }
-    
+
     metrics.EndLoopMeasurement();
 }

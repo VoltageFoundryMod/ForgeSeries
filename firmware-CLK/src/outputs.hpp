@@ -103,10 +103,12 @@ class Output {
     // Divider
     int GetDividerIndex() { return _dividerIndex; }
     void SetDivider(int index) {
+#if !defined(ARDUINO_ARCH_RP2040)
+        // DigitalOut (SAMD21 only) cannot use the Env divider slot
         if (_outputType == OutputType::DigitalOut && index >= _dividerAmount - 1) {
-            // Skip envelope type for digital outputs
-            index = _dividerAmount - 2; // Set to the second-to-last divider
+            index = _dividerAmount - 2;
         }
+#endif
         _dividerIndex = constrain(index, 0, _dividerAmount - 1);
     }
     String GetDividerDescription() { return _dividerDescription[_dividerIndex]; }
@@ -1170,9 +1172,12 @@ uint32_t Output::GetOutputLevel() {
     float adjustedLevel;
     float outputLevel;
 
+#if !defined(ARDUINO_ARCH_RP2040)
     if (_outputType == OutputType::DigitalOut) {
         return _isPulseOn ? HIGH : LOW;
-    } else {
+    } else
+#endif
+    {
         if (_waveformType == WaveformType::Square) {
             adjustedLevel = _isPulseOn ? (MaxWaveValue * (_level / 100.0)) + ((_offset / 100.0) * MaxWaveValue) : _offset;
             adjustedLevel = constrain(adjustedLevel, 0, MaxWaveValue);

@@ -1,15 +1,21 @@
 #pragma once
 
 #include <Arduino.h>
-#include <FlashStorage.h>
 
 #include "outputs.hpp"
 
-#define NUM_SLOTS 4
+// Number of preset slots.
+// Slot 0 = auto-load/save on boot; slots 1–(NUM_SLOTS-1) = user presets.
+// Increasing this shifts EEPROM_CAL_BASE — re-run CV calibration after changing.
+#define NUM_SLOTS 5
 
-// Struct to hold params that are saved/loaded to/from EEPROM
+// Struct to hold params that are saved/loaded to/from EEPROM/flash
+// VALID_MAGIC: written to the `valid` field on save; checked on load.
+// Using 0xA5 avoids false-positives from erased flash (0xFF) or zeroed RAM.
+#define VALID_MAGIC 0xA5
+
 struct LoadSaveParams {
-    boolean valid;
+    uint8_t valid;  // VALID_MAGIC (0xA5) = valid data; any other value = use defaults
     unsigned int BPM;
     unsigned int externalClockDivIdx;
     int divIdx[NUM_OUTPUTS];
@@ -30,38 +36,18 @@ struct LoadSaveParams {
     QuantizerParams quantizerParams[NUM_OUTPUTS];
 };
 
-// Create 4 slots for saving settings
-FlashStorage(slot0, LoadSaveParams);
-FlashStorage(slot1, LoadSaveParams);
-FlashStorage(slot2, LoadSaveParams);
-FlashStorage(slot3, LoadSaveParams);
+// CV input calibration — stored past the preset block so preset operations
+// never clobber it. Only updated by the calibration routine (Phase 8B).
+struct CalibrationData {
+    boolean valid;
+    float cvCalOffset[NUM_CV_INS];  // back-calculated intercept from 1V anchor
+    float cvCalScale[NUM_CV_INS];   // 1638 / (reading_3v - reading_1v)
+};
 
-// Save data to flash memory
-void Save(const LoadSaveParams &p, int slot) { // save setting data to flash memory
-    if (slot < 0 || slot >= NUM_SLOTS)
-        return;
-    delay(100);
-    noInterrupts();
-    switch (slot) {
-    case 0:
-        slot0.write(p);
-        break;
-    case 1:
-        slot1.write(p);
-        break;
-    case 2:
-        slot2.write(p);
-        break;
-    case 3:
-        slot3.write(p);
-        break;
-    }
-    interrupts();
-}
-
-// Load default setting data
+// ── Load default setting data ─────────────────────────────────────────
 LoadSaveParams LoadDefaultParams() {
     LoadSaveParams p;
+    p.valid = VALID_MAGIC;
     p.BPM = 120;
     p.externalClockDivIdx = 0;
     for (int i = 0; i < NUM_OUTPUTS; i++) {
@@ -87,31 +73,107 @@ LoadSaveParams LoadDefaultParams() {
     return p;
 }
 
-// Load setting data from flash memory
-LoadSaveParams Load(int slot) {
-    if (slot < 0 || slot >= NUM_SLOTS)
-        return LoadDefaultParams();
-    LoadSaveParams p;
-    noInterrupts();
+#if defined(ARDUINO_ARCH_RP2040)
+// ── RP2040: arduino-pico EEPROM emulation ────────────────────────────
+#include <EEPROM.h>
 
-    // Read the data from flash memory
+// EEPROM layout:
+//   [0 .. NUM_SLOTS×sizeof(LoadSaveParams))  — preset slots
+//   [EEPROM_CAL_BASE ..)                     — CalibrationData (never moved by slot ops)
+#define EEPROM_PRESET_BASE  0
+#define EEPROM_CAL_BASE     (NUM_SLOTS * (int)sizeof(LoadSaveParams))
+#define EEPROM_TOTAL_SIZE   (EEPROM_CAL_BASE + (int)sizeof(CalibrationData))
+
+void EEPROMInit() {
+    EEPROM.begin(EEPROM_TOTAL_SIZE);
+}
+
+void Save(const LoadSaveParams &p, int slot) {
+    if (slot < 0 || slot >= NUM_SLOTS) return;
+    LoadSaveParams ps = p;
+    ps.valid = VALID_MAGIC;
+    EEPROM.put(EEPROM_PRESET_BASE + slot * sizeof(LoadSaveParams), ps);
+    EEPROM.commit();
+}
+
+LoadSaveParams Load(int slot) {
+    if (slot < 0 || slot >= NUM_SLOTS) return LoadDefaultParams();
+    LoadSaveParams p;
+    EEPROM.get(EEPROM_PRESET_BASE + slot * sizeof(LoadSaveParams), p);
+    return (p.valid == VALID_MAGIC) ? p : LoadDefaultParams();
+}
+
+void SaveCalibration(const CalibrationData &cal) {
+    EEPROM.put(EEPROM_CAL_BASE, cal);
+    EEPROM.commit();
+}
+
+CalibrationData LoadCalibration() {
+    CalibrationData cal;
+    EEPROM.get(EEPROM_CAL_BASE, cal);
+    if (!cal.valid) {
+        for (int i = 0; i < NUM_CV_INS; i++) {
+            cal.cvCalOffset[i] = 0.0f;
+            cal.cvCalScale[i]  = 1.0f;
+        }
+    }
+    return cal;
+}
+
+#else
+// ── SAMD21: FlashStorage library ─────────────────────────────────────
+#include <FlashStorage.h>
+
+// Create 4 flash slots (legacy NUM_SLOTS was 4; keeping the explicit declarations)
+FlashStorage(slot0, LoadSaveParams);
+FlashStorage(slot1, LoadSaveParams);
+FlashStorage(slot2, LoadSaveParams);
+FlashStorage(slot3, LoadSaveParams);
+
+void EEPROMInit() {
+    // Nothing needed for FlashStorage
+}
+
+void Save(const LoadSaveParams &p, int slot) {
+    if (slot < 0 || slot >= NUM_SLOTS) return;
+    LoadSaveParams ps = p;
+    ps.valid = VALID_MAGIC;
+    delay(100);
+    noInterrupts();
     switch (slot) {
-    case 0:
-        p = slot0.read();
-        break;
-    case 1:
-        p = slot1.read();
-        break;
-    case 2:
-        p = slot2.read();
-        break;
-    case 3:
-        p = slot3.read();
-        break;
+    case 0: slot0.write(ps); break;
+    case 1: slot1.write(ps); break;
+    case 2: slot2.write(ps); break;
+    case 3: slot3.write(ps); break;
     }
     interrupts();
-    if (!p.valid) {
-        return LoadDefaultParams();
-    }
-    return p;
 }
+
+LoadSaveParams Load(int slot) {
+    if (slot < 0 || slot >= NUM_SLOTS) return LoadDefaultParams();
+    LoadSaveParams p;
+    noInterrupts();
+    switch (slot) {
+    case 0: p = slot0.read(); break;
+    case 1: p = slot1.read(); break;
+    case 2: p = slot2.read(); break;
+    case 3: p = slot3.read(); break;
+    default: p = LoadDefaultParams(); break;
+    }
+    interrupts();
+    return (p.valid == VALID_MAGIC) ? p : LoadDefaultParams();
+}
+
+// Stubs — no independent calibration storage on SAMD21 build
+void SaveCalibration(const CalibrationData &) {}
+CalibrationData LoadCalibration() {
+    CalibrationData cal;
+    cal.valid = false;
+    for (int i = 0; i < NUM_CV_INS; i++) {
+        cal.cvCalOffset[i] = 0.0f;
+        cal.cvCalScale[i]  = 1.0f;
+    }
+    return cal;
+}
+
+#endif  // ARDUINO_ARCH_RP2040

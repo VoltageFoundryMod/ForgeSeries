@@ -2,7 +2,9 @@
 #define METRICS_HPP
 
 #include <Arduino.h>
+#if !defined(ARDUINO_ARCH_RP2040)
 #include <malloc.h>
+#endif
 
 /**
  * Performance Metrics System
@@ -51,13 +53,17 @@ private:
     uint32_t lastResetTime = 0;
     static const uint32_t RESET_INTERVAL_MS = 5000; // Reset stats every 5 seconds
 
-    // Memory tracking (simple stack-based approach for SAMD21)
+    // Memory tracking
     uint32_t GetFreeRAM() {
-        // SAMD21 has 32KB RAM total
-        // Use mallinfo for heap usage, estimate stack from SP
+#if defined(ARDUINO_ARCH_RP2040)
+        // RP2040: use heap_end / stack pointer estimate
+        extern char __StackLimit, __bss_end__;
+        return &__StackLimit - &__bss_end__;
+#else
+        // SAMD21: mallinfo-based estimate
         struct mallinfo mi = mallinfo();
-        // Rough estimate: total RAM - heap used - estimated stack (4KB)
         return 32768 - mi.uordblks - 4096;
+#endif
     }
 
 public:
