@@ -4,6 +4,11 @@
 #else
 #include <hardware/timer.h>
 static repeating_timer_t _clockTimer;
+// Core 0 sets this flag after preparing a display buffer; Core 1 clears it after display.display().
+// Wire  (GPIO6/7) = display only, used exclusively by Core 1 at runtime.
+// Wire1 (GPIO0/1) = DAC only,     used exclusively by Core 0 at runtime.
+// Separate hardware I2C blocks + separate cores = zero conflict, no mutex needed.
+static volatile bool _displayFrameReady = false;
 #endif
 // Rotary encoder setting
 // ENCODER_OPTIMIZE_INTERRUPTS disabled - interrupts interfere with waveform timing
@@ -981,13 +986,20 @@ void HandleEncoderPosition() {
     metrics.EndEncoderMeasurement();
 }
 
-// Redraw the display (now just calls EndFrame)
+// Redraw the display.
+// RP2040: Core 0 prepares the buffer (no I2C) and signals Core 1 to flush via Wire.
+// Core 0 then returns immediately and keeps calling HandleOutputs() via Wire1 unblocked.
+// SAMD21: single-core, flush inline.
 void RedrawDisplay() {
-    // Measure only the I2C transmission time
     metrics.BeginDisplayMeasurement();
-    displayMgr.EndFrame();
+    displayMgr.PrepareFrame();   // DrawOverlays + CommitFrame, no display.display()
     metrics.EndDisplayMeasurement();
     displayRefresh = 0;
+#if defined(ARDUINO_ARCH_RP2040)
+    _displayFrameReady = true;  // Signal Core 1 to call display.display() over Wire
+#else
+    display.display();           // SAMD21: single-core, flush inline
+#endif
 }
 
 // Draw a menu position indicator at the right side of the display
@@ -1951,21 +1963,15 @@ void UpdateBPM(unsigned int newBPM) {
 }
 
 void HandleOutputs() {
-    // Update DAC outputs and envelopes (called from main loop)
+    // Update DAC outputs and envelopes
 #if defined(ARDUINO_ARCH_RP2040)
-    // All 4 outputs are MCP4728 I2C DAC — single fastWrite for all channels
+    // All 4 outputs are MCP4728 I2C DAC. DACWriteAll is called directly here.
+    // display.display() is gated to encoder-idle periods in RedrawDisplay() so
+    // it never overlaps with DACWriteAll (same I2C bus).
     uint16_t v0 = (uint16_t)outputs[0].GetOutputLevel();
     uint16_t v1 = (uint16_t)outputs[1].GetOutputLevel();
     uint16_t v2 = (uint16_t)outputs[2].GetOutputLevel();
     uint16_t v3 = (uint16_t)outputs[3].GetOutputLevel();
-
-    // Debug: print values every ~2 seconds
-    static uint32_t _lastDACPrint = 0;
-    if (millis() - _lastDACPrint > 2000) {
-        Serial.printf("DACWriteAll: %u %u %u %u\n", v0, v1, v2, v3);
-        _lastDACPrint = millis();
-    }
-
     DACWriteAll(v0, v1, v2, v3);
     for (int i = 0; i < NUM_OUTPUTS; i++) {
         outputs[i].GenEnvelope();
@@ -2137,41 +2143,36 @@ void setup() {
 
     // Attach external clock interrupt last — timer must be initialized first.
     attachInterrupt(digitalPinToInterrupt(CLK_IN_PIN), ClockReceived, RISING);
+
+    // Force an immediate display refresh — clears the version screen.
+    REQUEST_DISPLAY_REFRESH();
 }
 
-// Handle IO without the display
+// Handle IO without the display (used during save/load message display)
 void HandleIO() {
     HandleEncoderClick();
-
     HandleEncoderPosition();
-
-    // HandleOutputs() now called directly in ClockPulse() ISR for zero latency
-    // This prevents encoder/display delays from affecting waveform timing
-HandleOutputs();  // DAC outputs (2-3) updated here
-
     HandleExternalClock();
 }
 
-// Main loop
 void loop() {
     metrics.BeginLoopMeasurement();
 
-    // Update DAC outputs FIRST for minimum latency
-    // This runs at ~745Hz, much faster than display/encoder
     HandleOutputs();
-
     HandleEncoderClick();
     HandleEncoderPosition();
     HandleCVInputs();
     HandleExternalClock();
 
-    // Only handle display every few frames
+#if defined(ARDUINO_ARCH_RP2040)
+    HandleDisplay();  // Buffer prep only; display.display() done by Core 1
+#else
     if (frameSkip == 0) {
         HandleDisplay();
     }
     frameSkip = (frameSkip + 1) % FRAME_SKIP_COUNT;
+#endif
 
-    // Print performance stats every 5 seconds (auto-reset)
     static unsigned long lastStatsTime = 0;
     if (millis() - lastStatsTime >= 5000) {
         metrics.PrintStats();
@@ -2181,3 +2182,23 @@ void loop() {
 
     metrics.EndLoopMeasurement();
 }
+
+#if defined(ARDUINO_ARCH_RP2040)
+// Core 1: owns Wire (GPIO6/7, I2C1) and handles display.display() exclusively.
+// Wire was initialized on Core 0 in setup(); earlephilhower Wire uses blocking
+// register-poll transfers (no core-affinity IRQs), so Core 1 can use it safely.
+// Core 0 owns Wire1 (GPIO0/1, I2C0) for DAC and never touches Wire after setup().
+void setup1() {
+    Serial.println("Core 1 started: display flush engine (Wire) running.");
+}
+
+void loop1() {
+    // When Core 0 has prepared a new display frame, flush it over Wire.
+    // display.display() takes ~28ms; Core 0 is completely unaffected because
+    // it only uses Wire1 for DAC writes.
+    if (_displayFrameReady) {
+        _displayFrameReady = false;
+        display.display();
+    }
+}
+#endif

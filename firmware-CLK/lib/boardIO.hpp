@@ -74,19 +74,27 @@ void InitIO() {
     // No GPIO gate output pins — all outputs via MCP4728
 }
 
-// Initialize Wire I2C bus. Called from setup() BEFORE display.begin()
-// so both the display and DAC share the same configured bus.
+// Initialize Wire (display) and Wire1 (DAC) I2C buses.
+// Called from setup() BEFORE display.begin() and InitDAC().
+// Wire  (GPIO6/7, I2C1) → SSD1306 display only.
+// Wire1 (GPIO0/1, I2C0) → MCP4728 DAC only.
+// Independent hardware blocks — can run simultaneously, no conflicts.
 void InitWire() {
     Wire.setSDA(I2C_SDA_PIN);
     Wire.setSCL(I2C_SCL_PIN);
     Wire.begin();
     Wire.setClock(400000);
+
+    Wire1.setSDA(I2C_DAC_SDA_PIN);
+    Wire1.setSCL(I2C_DAC_SCL_PIN);
+    Wire1.begin();
+    Wire1.setClock(400000);
 }
 
 // Initialize the MCP4728 DAC. Returns false if not found.
 // Called from setup() AFTER display.begin() so errors can be shown on screen.
 bool InitDAC() {
-    if (!dac4.begin(MCP4728_ADDR, &Wire)) {
+    if (!dac4.begin(MCP4728_ADDR, &Wire1)) {
         Serial.println("MCP4728 not found! Check I2C wiring and address.");
         return false;
     }

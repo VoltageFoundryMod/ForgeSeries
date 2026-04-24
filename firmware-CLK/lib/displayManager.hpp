@@ -69,19 +69,47 @@ public:
         display.clearDisplay();
     }
 
-    // End frame - performs the actual I2C transmission
-    // Returns true if display was actually transmitted (for metrics)
-    bool EndFrame() {
-        // Draw unsaved changes indicator
+    // Reset the rate-limiter timer without clearing isDirty.
+    // Use when you want to defer flushing but ensure ShouldUpdate() re-triggers
+    // after the next UPDATE_INTERVAL_MS without hammering immediately.
+    void TouchUpdateTimer() {
+        lastUpdateTime = millis();
+    }
+
+    // Draw overlay indicators (unsaved dot) into current buffer.
+    // Does NOT touch rate-limiter state — safe to call when deciding whether to flush.
+    void DrawOverlays() {
         if (unsavedChanges) {
             display.fillCircle(1, 1, 1, WHITE);
         }
+    }
 
-        // This is the slow part (43-403ms) - measure only this I2C call
-        display.display();
-
+    // Commit the frame: update rate-limiter state so ShouldUpdate() resets correctly.
+    // Call this once per frame when you actually intend to flush (i.e. before display.display()).
+    void CommitFrame() {
         lastUpdateTime = millis();
         isDirty = false;
+    }
+
+    // Prepare frame: draw housekeeping overlays and update timing state.
+    // Does NOT call display.display(). On RP2040 Core 0 calls this, then sets
+    // _displayFrameReady = true so Core 1 can call display.display() without I2C
+    // contention with the rest of Core 0.
+    bool PrepareFrame() {
+        DrawOverlays();
+        CommitFrame();
+        return true;
+    }
+
+    // End frame - performs the actual I2C transmission (single-core / SAMD21).
+    // On RP2040, prefer PrepareFrame() + let Core 1 call display.display().
+    // Returns true if display was actually transmitted (for metrics)
+    bool EndFrame() {
+        PrepareFrame();
+
+        // This is the slow part (28ms) — blocks the calling core for the entire transfer
+        display.display();
+
         return true; // Display was transmitted
     }
 

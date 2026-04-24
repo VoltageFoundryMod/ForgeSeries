@@ -2,11 +2,17 @@
 
 #if defined(ARDUINO_ARCH_RP2040)
 // ── RP2040 / Seeed XIAO RP2040 ────────────────────────────────────────
-// I2C — shared bus (MCP4728 quad DAC + SSD1306 display)
+// I2C — display bus (SSD1306 OLED) on Wire
 // NOTE: Wire.setSDA/SCL on RP2040 takes GPIO numbers, not Arduino pin numbers.
 // XIAO RP2040 physical pad D4 = GPIO6 (I2C1 SDA), D5 = GPIO7 (I2C1 SCL).
 #define I2C_SDA_PIN 6  // GPIO6 = D4
 #define I2C_SCL_PIN 7  // GPIO7 = D5
+
+// I2C — DAC bus (MCP4728) on Wire1
+// XIAO RP2040 physical pad D6 = GPIO0 (I2C0 SDA), D7 = GPIO1 (I2C0 SCL).
+// Separate bus from display so DACWriteAll and display.display() never conflict.
+#define I2C_DAC_SDA_PIN 0  // GPIO0 = D6
+#define I2C_DAC_SCL_PIN 1  // GPIO1 = D7
 
 // External clock trigger (IN1) — interrupt-driven only, not analog CV
 #define CLK_IN_PIN A0  // GPIO26

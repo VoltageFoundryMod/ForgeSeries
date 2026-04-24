@@ -703,29 +703,52 @@ uint32_t GetFreeRAM() {
 
 ---
 
-### Phase 11 — New Features (Post-Migration)
+### Phase 11 — New Features & Improvements (Post-Migration)
 
 These are enhancements after the core migration is stable. Tackle in order of value.
 
-#### 11a — Internal LFOs (modulators without external CV)
-Add `LFOSource` as a CV modulation source type. LFOs run in Core 1.
+#### 11a — All 4 outputs waveform/level/offset menu
+Currently only outputs 3 & 4 have waveform, level, offset, duty cycle and phase controls in the menu. With all 4 being DAC on RP2040, expose the full set for Out 1 & 2 as well:
+- Add waveform, level, offset, duty cycle, phase menu items for Out 1 & 2
+- Remove or guard the old SAMD21 "Output type" (DigitalOut vs DACOut) selector for those outputs
+- Update `menuItems` count
+- Update `HandleDisplay()` and `HandleEncoderClick()` switch statements
+- Update `LoadSaveParams` / `LoadDefaultParams` if new defaults are needed
+
+#### 11b — Higher internal PPQN resolution for cleaner waveforms
+The current `PPQN = 192` limits waveform step resolution at low BPM. RP2040 timer has sub-100µs precision:
+- Evaluate raising PPQN to 960 or 1920 (5× or 10× current)
+- Audit all `periodTicks`, swing, and phase calculations for overflow with `unsigned long` at higher tick rates
+- Measure ISR load at max BPM × new PPQN to confirm CPU headroom
+- Update `UpdateBPM()` interval calculation
+
+#### 11c — Improved external clock PPQN detection
+The current detection fires on every rising edge and assumes 24PPQN input. Improve robustness:
+- Measure inter-pulse interval over a rolling window (e.g. 4 pulses) to detect input PPQN
+- Auto-detect common standards: 1PPQN (quarter note), 2, 4, 8, 24, 48, 96PPQN
+- Show detected input PPQN on display
+- Reduce false-trigger sensitivity (debounce + hysteresis on interval)
+
+#### 11d — Audio-rate output capability (future)
+RP2040 timer can sustain ~40kHz+ tick rates. This is a longer-term research item:
+- Profile `setChannelValue` I2C latency — MCP4728 at 400kHz I2C has a minimum ~28µs per multi-write, limiting update rate to ~35kHz theoretical maximum
+- If latency is acceptable, add an "Audio" mode that bypasses the PPQN divider and drives outputs at a fixed sample rate
+- May require switching to SPI DAC for true audio rate (design decision)
+- Keep as documented future work until Phase 11a–11c are stable
+
+#### 11e — Internal LFOs (modulators without external CV)
+Add `LFOSource` as a CV modulation source type.
 - Parameters: Rate (Hz), Shape (sine, triangle, square, ramp), Depth, Phase
 - At least 2 independent LFOs assignable to any CVTarget
 - Store LFO params in `LoadSaveParams`
 - Displayed in a new "LFO" menu section
 
-#### 11b — All 4 outputs waveform-capable in menu
-Currently only outputs 3 & 4 have waveform, level, offset controls. With all 4 being DAC:
-- Add waveform/level/offset menu items for Out 1 & 2
-- Update `menuItems` count
-- Update `HandleDisplay()` and encoder handlers
+#### 11f — Quantizer improvements
+- After Phase 8 calibration, verify quantization pitch tracking.
+- Consider adding semitone-level calibration per-channel.
 
-#### 11c — Quantizer improvements
-- Calibration affects quantizer pitch accuracy. After Phase 8, verify quantization tracks correctly.
-- Consider adding semitone-level calibration adjustment.
-
-#### 11d — Beat loop (Pam's-style)
-Complex looping/recording of beat patterns. Design separately when core features are stable.
+#### 11g — Beat loop recorder (Pam's-style)
+Complex looping/recording of beat patterns. Design separately when all other features are stable.
 
 ---
 
@@ -748,7 +771,13 @@ Phase 12 (a → b → c → d → e)        [Modularize: one file at a time, tes
     ↓
 Phase 13 (group by group)            [Menu rework: one menu group at a time]
     ↓
-Phase 11 (a, b, c, d)                [New features: LFOs, all-4 waveform menu, beat loop]
+Phase 11a                            [All 4 outputs full menu — quick win, high value]
+    ↓
+Phase 11b → 11c                      [Waveform resolution + clock detection improvements]
+    ↓
+Phase 11d                            [Audio rate — research/design gate]
+    ↓
+Phase 11e → 11f → 11g                [LFOs, quantizer polish, beat loop recorder]
 ```
 
 **Key: complete and compile-verify each arrow before proceeding.**
