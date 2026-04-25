@@ -13,31 +13,27 @@ ClockForge is a **Eurorack modular synthesizer clock/CV module** firmware for th
 ### Core Structure
 
 - **[src/main.cpp](src/main.cpp)** (2000+ lines): Main event loop, menu system, encoder handling, display updates, timer initialization
-- **[src/outputs.hpp](src/outputs.hpp)** (1200+ lines): `Output` class implementing all waveform generation, Euclidean rhythms, swing, envelopes, quantization
+- **[lib/outputs.hpp](lib/outputs.hpp)** (1200+ lines): `Output` class implementing all waveform generation, Euclidean rhythms, swing, envelopes, quantization
 - **[lib/](lib/)**: Header-only libraries for hardware abstraction and algorithms
 
 ### Major Subsystems
 
 1. **Timing Core** (PPQN = 192):
-
    - Hardware timer (TCC0) generates interrupts at 192 pulses per quarter note
    - Global `tickCounter` incremented in timer ISR
    - External clock sync via interrupt-driven PPQN detection
 
 2. **Output System** (4 outputs):
-
    - Outputs 1-2: Digital gates (PWM-capable for duty cycle)
    - Outputs 3-4: DAC outputs (internal DAC0 + MCP4725 I2C DAC) for CV/waveforms
    - Each output is an `Output` object with independent divider, swing, probability, Euclidean rhythm, phase shift, duty cycle
 
 3. **Waveform Generation**:
-
    - 18 waveform types including Square, Sine, Triangle, Sawtooth, Noise, S&H, envelopes (AD/AR/ADSR)
    - Special modes: quantized CV input passthrough, reset triggers, play/stop gate
-   - See `WaveformType` enum in [src/outputs.hpp](src/outputs.hpp#L17)
+   - See `WaveformType` enum in [lib/outputs.hpp](lib/outputs.hpp#L17)
 
 4. **CV Input Modulation**:
-
    - 2 CV inputs (0-5V) with configurable targets via `CVTarget` enum
    - Each CV can modulate BPM, dividers, swing, duty cycle, output levels, waveforms, etc.
    - CV calibration: `ADCCal[]` and `ADCOffset[]` arrays in [src/main.cpp](src/main.cpp#L21-L22)
@@ -98,7 +94,7 @@ pio run
 ### Code Organization
 
 - **Header-only libraries**: All `lib/*.hpp` files are included directly, no separate `.cpp` compilation
-- **Single translation unit**: `src/main.cpp` includes everything; `outputs.hpp` includes `quantizer.cpp` and `scales.cpp` directly
+- **Single translation unit**: `src/main.cpp` includes everything; `outputs.hpp` (now in `lib/`) includes `quantizer.cpp` and `scales.cpp` directly
 - **Build flags**: `-std=gnu++17 -I lib` in [platformio.ini](platformio.ini#L18)
 
 ### Naming Conventions
@@ -132,7 +128,7 @@ void Pulse(int PPQN, unsigned long tickCounter);
 
 **Divider/Multiplier Array**:
 
-- Defined in [src/outputs.hpp](src/outputs.hpp) as `dividerMultiplier[]` array
+- Defined in [lib/outputs.hpp](lib/outputs.hpp) as `dividerMultiplier[]` array
 - Index-based selection from `/128` to `x32` including triplets (1.5, 3x) and dotted notes
 - CV modulation maps 0-5V input to array index
 
@@ -165,7 +161,7 @@ void Pulse(int PPQN, unsigned long tickCounter);
 
 ### Adding a New Waveform
 
-1. Add enum value to `WaveformType` in [src/outputs.hpp](src/outputs.hpp#L17)
+1. Add enum value to `WaveformType` in [lib/outputs.hpp](lib/outputs.hpp#L17)
 2. Add description to `WaveformTypeDescriptions[]` array
 3. Implement generation logic in `Output::GeneratePulse()` switch statement
 4. Update `WaveformTypeLength` calculation
@@ -217,7 +213,7 @@ void Pulse(int PPQN, unsigned long tickCounter);
 | File                                   | Purpose                                           |
 | -------------------------------------- | ------------------------------------------------- |
 | [src/main.cpp](src/main.cpp)           | Main loop, menu, encoder, display, initialization |
-| [src/outputs.hpp](src/outputs.hpp)     | Output class, all waveform/rhythm logic           |
+| [lib/outputs.hpp](lib/outputs.hpp)     | Output class, all waveform/rhythm logic           |
 | [lib/boardIO.hpp](lib/boardIO.hpp)     | Hardware I/O abstraction (DAC, gates, ADC)        |
 | [lib/pinouts.hpp](lib/pinouts.hpp)     | XIAO SAMD21 pin assignments                       |
 | [lib/loadsave.hpp](lib/loadsave.hpp)   | Flash storage, save slots                         |
