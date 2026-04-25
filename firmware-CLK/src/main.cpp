@@ -3,7 +3,6 @@
 #include <TimerTCC0.h>
 #else
 #include <hardware/timer.h>
-static repeating_timer_t _clockTimer;
 // Core 0 sets this flag after preparing a display buffer; Core 1 clears it after display.display().
 // Wire  (GPIO6/7) = display only, used exclusively by Core 1 at runtime.
 // Wire1 (GPIO0/1) = DAC only,     used exclusively by Core 0 at runtime.
@@ -35,12 +34,19 @@ public:
     long read() {
         bool cur1 = digitalRead(_pin1);
         bool cur2 = digitalRead(_pin2);
-        if (cur1 != _last1) {
-            // Multiply by 2 so each detent (2 edges on pin1) gives 4 counts total,
-            // matching PJRC Encoder convention expected by HandleEncoderPosition().
-            // Negate to fix direction (hardware wiring puts CW as negative).
-            _pos += (cur1 != cur2) ? -2 : 2;
-        }
+        // Full 4-state quadrature decoder — identical in principle to PJRC Encoder.
+        // Counts all 4 transitions per detent (±1 each) → ±4 per detent total,
+        // matching the divisor and hysteresis in HandleEncoderPosition().
+        // Invalid/bounce transitions produce 0 — no spurious counts.
+        // _pos is negated (CW = negative) to match hardware wiring convention.
+        static const int8_t table[16] = {
+             0, -1,  1,  0,
+             1,  0,  0, -1,
+            -1,  0,  0,  1,
+             0,  1, -1,  0
+        };
+        uint8_t idx = (_last1 << 3) | (_last2 << 2) | (cur1 << 1) | (uint8_t)cur2;
+        _pos -= table[idx]; // Negate: CW produces negative counts
         _last1 = cur1;
         _last2 = cur2;
         return _pos;
@@ -56,6 +62,7 @@ public:
 
 // Load local libraries
 #include "boardIO.hpp"
+#include "clockEngine.hpp"
 #include "displayManager.hpp"
 #include "loadsave.hpp"
 #include "metrics.hpp"
@@ -71,14 +78,6 @@ float ADCCal[2] = {1.0180, 1.0180}; // ADC readings for the channels
 int ADCOffset[2] = {23, 23};        // ADC offset for the channels
 
 // Configuration
-// RP2040 @ 133MHz: 960 PPQN → 208µs/tick at 300 BPM — plenty of ISR headroom.
-// SAMD21 @ 48MHz:  192 PPQN → 1042µs/tick at 300 BPM — unchanged.
-// 5× higher resolution = 5× smoother waveform steps at all BPMs.
-#if defined(ARDUINO_ARCH_RP2040)
-#define PPQN 960
-#else
-#define PPQN 192
-#endif
 #define MAXDAC 4095
 
 #define OLED_ADDRESS 0x3C
@@ -93,8 +92,8 @@ DisplayManager displayMgr(display);
 
 // Rotary encoder object
 Encoder encoder(ENC_PIN_1, ENC_PIN_2); // rotary encoder library setting
-float oldPosition = -999;              // rotary encoder library setting
-float newPosition = -999;              // rotary encoder library setting
+float oldPosition = 0;  // last acted-on raw encoder count
+float newPosition = 0;  // current raw encoder count
 
 // Performance metrics
 PerformanceMetrics metrics;
@@ -200,28 +199,8 @@ int CVInputOffset[NUM_CV_INS] = {0, 0};
 // ADC input variables
 float channelADC[NUM_CV_INS], oldChannelADC[NUM_CV_INS];
 
-// BPM and clock settings
-unsigned int BPM = 120;
-unsigned int lastInternalBPM = 120;
-unsigned int const minBPM = 10;
-unsigned int const maxBPM = 300;
-
 // Play/Stop state
 bool masterState = true; // Track global play/stop state (true = playing, false = stopped)
-
-// Global tick counter
-volatile unsigned long tickCounter = 0;
-
-// External clock variables
-volatile unsigned long clockInterval = 0;
-volatile unsigned long lastClockInterruptTime = 0;
-volatile bool usingExternalClock = false;
-
-static int const dividerAmount = 7;
-int externalClockDividers[dividerAmount] = {1, 2, 4, 8, 16, 24, 48};
-String externalDividerDescription[dividerAmount] = {"x1", "/2 ", "/4", "/8", "/16", "24PPQN", "48PPQN"};
-int externalDividerIndex = 0;
-volatile unsigned long externalTickCounter = 0;
 
 unsigned long lastDisplayUpdateTime = 0;
 const unsigned long DISPLAY_UPDATE_INTERVAL = 50; // Minimum 50ms between display updates
@@ -246,7 +225,6 @@ unsigned long lastEncoderUpdate = 0; // Last encoder update time
 #define REQUEST_DISPLAY_REFRESH() do { displayRefresh = 1; displayMgr.MarkDirty(); } while(0)
 
 // Function prototypes
-void UpdateBPM(unsigned int);
 void SetTapTempo();
 void HandleIO();
 void SetMasterState(bool);
@@ -255,12 +233,9 @@ void HandleEncoderClick();
 void HandleEncoderPosition();
 void UpdateSpeedFactor();
 void HandleDisplay();
-void HandleExternalClock();
 void HandleCVInputs();
 void HandleCVTarget(int, float, CVTarget);
 void HandleOutputs();
-void ClockPulse();
-void InitializeTimer();
 void UpdateParameters(LoadSaveParams);
 void ShowTemporaryMessage(const char *msg, uint32_t durationMs = 1000);
 
@@ -536,22 +511,33 @@ void HandleEncoderClick() {
     }
 }
 
-// Calculate the speed of the encoder rotation
-float speedFactor;
+// Calculate the speed of the encoder rotation.
+// Resets to 1.0 when direction reverses so the first detent after a turn-around
+// is always a single step — avoids the "skips 2" artifact on BPM decrease.
+float speedFactor = 1.0;
 unsigned long lastEncoderTime = 0;
-void UpdateSpeedFactor() {
+int lastEncoderDir = 0; // +1 or -1
+void UpdateSpeedFactor(int dir) {
     unsigned long currentEncoderTime = millis();
     unsigned long timeDiff = currentEncoderTime - lastEncoderTime;
     lastEncoderTime = currentEncoderTime;
 
-    if (timeDiff < 50) {
-        speedFactor = 8.0; // Fast rotation
-    } else if (timeDiff < 100) {
-        speedFactor = 4.0; // Medium rotation
-    } else if (timeDiff < 200) {
-        speedFactor = 2.0; // Slow rotation
+    if (lastEncoderDir != 0 && dir != lastEncoderDir) {
+        // Direction changed — clamp to 1 for first step of new direction
+        speedFactor = 1.0;
+        lastEncoderDir = dir;
+        return;
+    }
+    lastEncoderDir = dir;
+
+    if (timeDiff < 30) {
+        speedFactor = 8.0; // Very fast spin
+    } else if (timeDiff < 60) {
+        speedFactor = 4.0; // Fast spin
+    } else if (timeDiff < 120) {
+        speedFactor = 2.0; // Moderate spin
     } else {
-        speedFactor = 1.0; // Normal rotation
+        speedFactor = 1.0; // Normal
     }
 }
 
@@ -560,7 +546,7 @@ void HandleEncoderPosition() {
     newPosition = encoder.read();
 
     if ((newPosition - 3) / 4 > oldPosition / 4) { // Decrease, turned counter-clockwise
-        UpdateSpeedFactor();
+        UpdateSpeedFactor(-1);
         oldPosition = newPosition;
         REQUEST_DISPLAY_REFRESH();
         lastEncoderUpdate = millis();
@@ -569,7 +555,8 @@ void HandleEncoderPosition() {
             menuItem = (menuItem - 1 < 1) ? menuItems : menuItem - 1;
             break;
         case 1: // Set BPM
-            UpdateBPM(BPM - speedFactor);
+            BPM = (unsigned int)constrain((int)BPM - (int)speedFactor, (int)minBPM, (int)maxBPM);
+            bpmNeedsUpdate = true;
             unsavedChanges = true;
             break;
         case 3:
@@ -764,7 +751,7 @@ void HandleEncoderPosition() {
             break;
         }
     } else if ((newPosition + 3) / 4 < oldPosition / 4) { // Increase, turned clockwise
-        UpdateSpeedFactor();
+        UpdateSpeedFactor(+1);
         oldPosition = newPosition;
         REQUEST_DISPLAY_REFRESH();
         lastEncoderUpdate = millis();
@@ -773,7 +760,8 @@ void HandleEncoderPosition() {
             menuItem = (menuItem + 1 > menuItems) ? 1 : menuItem + 1;
             break;
         case 1: // Set BPM
-            UpdateBPM(BPM + speedFactor);
+            BPM = (unsigned int)constrain((int)BPM + (int)speedFactor, (int)minBPM, (int)maxBPM);
+            bpmNeedsUpdate = true;
             unsavedChanges = true;
             break;
         case 3:
@@ -978,8 +966,10 @@ void HandleEncoderPosition() {
 void ShowTemporaryMessage(const char *msg, uint32_t durationMs) {
     // Pause Core 1's GFX rendering so it can't overwrite the buffer.
     // Use _displayLocked rather than touching Wire from Core 0.
+#if defined(ARDUINO_ARCH_RP2040)
     _displayLocked = true;
     delay(10);  // Let Core 1 finish any in-flight HandleDisplay() call (~1ms max)
+#endif
 
     display.clearDisplay();
     display.setTextSize(2);
@@ -997,7 +987,9 @@ void ShowTemporaryMessage(const char *msg, uint32_t durationMs) {
         HandleOutputs();
     }
 
+#if defined(ARDUINO_ARCH_RP2040)
     _displayLocked = false;     // Resume normal Core 1 rendering
+#endif
     REQUEST_DISPLAY_REFRESH();  // Force a clean redraw after returning
 }
 
@@ -1886,96 +1878,7 @@ void HandleCVTarget(int ch, float CVValue, CVTarget cvTarget) {
     // }
 }
 
-// External clock interrupt service routine
-void ClockReceived() {
-    unsigned long currentTime = millis();
-    // Debounce: ignore interrupts that occur too close together (less than 1ms)
-    if (currentTime - lastClockInterruptTime < 1) {
-        return;
-    }
-
-    unsigned long interval = currentTime - lastClockInterruptTime;
-    lastClockInterruptTime = currentTime;
-
-    // Ignore obviously wrong intervals (too short or too long)
-    if (interval < 10 || interval > 2000) {
-        return;
-    }
-
-    static unsigned long intervals[3] = {0, 0, 0};
-    static int intervalIndex = 0;
-
-    intervals[intervalIndex] = interval;
-    intervalIndex = (intervalIndex + 1) % 3;
-
-    // Calculate average interval, excluding outliers
-    unsigned long averageInterval = 0;
-    int validIntervals = 0;
-    for (int i = 0; i < 3; i++) {
-        if (intervals[i] > 0 && abs((long)intervals[i] - (long)interval) < interval / 2) {
-            averageInterval += intervals[i];
-            validIntervals++;
-        }
-    }
-
-    if (validIntervals > 0) {
-        averageInterval /= validIntervals;
-    } else {
-        return;
-    }
-
-    // Divide the external clock signal by the selected divider
-    if (externalTickCounter % externalClockDividers[externalDividerIndex] == 0) {
-        if (averageInterval > 0) {
-            clockInterval = averageInterval;
-            unsigned int newBPM = 60000 / (averageInterval * externalClockDividers[externalDividerIndex]);
-            // Add hysteresis to BPM changes
-            if (abs((int)newBPM - (int)BPM) > 3) {
-                UpdateBPM(newBPM);
-                displayRefresh = 1;
-                DEBUG_PRINT("External clock connected");
-            }
-        }
-
-        // Update outputs
-        noInterrupts(); // Critical section
-        for (int i = 0; i < NUM_OUTPUTS; i++) {
-            outputs[i].SetExternalClock(true);
-            outputs[i].IncrementInternalCounter();
-        }
-        usingExternalClock = true;
-        tickCounter = 0;
-        interrupts();
-    }
-    externalTickCounter++;
-}
-
-// Called on loop to check if the external clock is still connected and revert to internal clock if not
-void HandleExternalClock() {
-    unsigned long currentTime = millis();
-    if (usingExternalClock && (currentTime - lastClockInterruptTime) > 2000) {
-        usingExternalClock = false;
-        BPM = lastInternalBPM;
-        UpdateBPM(BPM);
-        for (int i = 0; i < NUM_OUTPUTS; i++) {
-            outputs[i].SetExternalClock(false);
-        }
-        displayRefresh = 1;
-        DEBUG_PRINT("External clock disconnected");
-    }
-}
-
-// Set the hardware timer based on the BPM
-void UpdateBPM(unsigned int newBPM) {
-    BPM = constrain(newBPM, minBPM, maxBPM);
-#if defined(ARDUINO_ARCH_RP2040)
-    cancel_repeating_timer(&_clockTimer);
-    int64_t intervalUs = 60000000LL / BPM / PPQN;
-    add_repeating_timer_us(-intervalUs, [](repeating_timer_t *) -> bool { ClockPulse(); return true; }, nullptr, &_clockTimer);
-#else
-    TimerTcc0.setPeriod(60L * 1000 * 1000 / BPM / PPQN / 4);
-#endif
-}
+// ClockReceived, HandleExternalClock, UpdateBPM — moved to lib/clockEngine.hpp
 
 void HandleOutputs() {
     // Update DAC outputs and envelopes
@@ -2009,30 +1912,7 @@ void HandleOutputs() {
 #endif
 }
 
-void ClockPulse() { // Inside the interrupt
-    // CRITICAL: This ISR must not be delayed by encoder interrupts
-    // The encoder library's ENCODER_OPTIMIZE_INTERRUPTS uses pin change interrupts
-    // which can interfere with precise waveform timing
-    metrics.BeginISRMeasurement();
-
-    // Calculate pulse state for all outputs
-    for (int i = 0; i < NUM_OUTPUTS; i++) {
-        outputs[i].Pulse(PPQN, tickCounter);
-    }
-    tickCounter++;
-
-#if !defined(ARDUINO_ARCH_RP2040)
-    // SAMD21: outputs 0-1 are DigitalOut (fast digitalWrite — safe in ISR)
-    // DAC outputs 2-3 are updated in main loop HandleOutputs()
-    SetPin(0, outputs[0].GetOutputLevel());
-    SetPin(1, outputs[1].GetOutputLevel());
-#endif
-    // RP2040: ALL outputs are MCP4728 I2C DAC — I2C is interrupt-driven and
-    // MUST NOT be called from an interrupt context (deadlock). All 4 outputs
-    // are flushed in HandleOutputs() on the main loop instead.
-
-    metrics.EndISRMeasurement();
-}
+// ClockPulse — moved to lib/clockEngine.hpp
 
 void UpdateParameters(LoadSaveParams p) {
     BPM = constrain(p.BPM, minBPM, maxBPM);
@@ -2060,22 +1940,7 @@ void UpdateParameters(LoadSaveParams p) {
     }
 }
 
-// Initialize the hardware timer
-void InitializeTimer() {
-#if defined(ARDUINO_ARCH_RP2040)
-    int64_t intervalUs = 60000000LL / BPM / PPQN;
-    if (intervalUs <= 0) intervalUs = 60000000LL / 120 / PPQN;  // fallback to 120 BPM
-    add_repeating_timer_us(-intervalUs, [](repeating_timer_t *) -> bool {
-        ClockPulse();
-        return true;
-    }, nullptr, &_clockTimer);
-#else
-    TimerTcc0.initialize();
-    TimerTcc0.attachInterrupt(ClockPulse);
-    // Set high priority for the timer interrupt if your platform supports it
-    NVIC_SetPriority(TCC0_IRQn, 0); // Highest priority (0)
-#endif
-}
+// InitializeTimer — moved to lib/clockEngine.hpp
 
 void setup() {
     Serial.begin(115200);
@@ -2175,6 +2040,14 @@ void HandleIO() {
 
 void loop() {
     metrics.BeginLoopMeasurement();
+
+    // Apply deferred BPM change — UpdateBPM() calls RP2040 SDK alarm-pool functions
+    // (cancel_repeating_timer + add_repeating_timer_us) which block for ~50-100µs.
+    // Keeping that out of HandleEncoderPosition() prevents encoder edges being missed.
+    if (bpmNeedsUpdate) {
+        bpmNeedsUpdate = false;
+        UpdateBPM(BPM);
+    }
 
     HandleOutputs();
     HandleEncoderClick();
