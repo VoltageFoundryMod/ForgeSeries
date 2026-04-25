@@ -40,7 +40,7 @@ ClockForge is a **Eurorack modular synthesizer clock/CV module** firmware for th
 
 5. **Persistence**:
    - Uses `FlashStorage` library (SAMD21 flash emulation)
-   - 4 save slots, see [lib/loadsave.hpp](lib/loadsave.hpp)
+   - 4 save slots, see [lib/storage.hpp](lib/storage.hpp)
    - `LoadSaveParams` struct holds all configuration state
 
 ### Hardware Abstraction
@@ -216,7 +216,7 @@ void Pulse(int PPQN, unsigned long tickCounter);
 | [lib/outputs.hpp](lib/outputs.hpp)     | Output class, all waveform/rhythm logic           |
 | [lib/boardIO.hpp](lib/boardIO.hpp)     | Hardware I/O abstraction (DAC, gates, ADC)        |
 | [lib/pinouts.hpp](lib/pinouts.hpp)     | XIAO SAMD21 pin assignments                       |
-| [lib/loadsave.hpp](lib/loadsave.hpp)   | Flash storage, save slots                         |
+| [lib/storage.hpp](lib/storage.hpp)     | Flash storage, save slots                         |
 | [lib/euclidean.hpp](lib/euclidean.hpp) | Bjorklund's Euclidean rhythm algorithm            |
 | [lib/quantizer.cpp](lib/quantizer.cpp) | Pitch quantization logic                          |
 | [lib/scales.cpp](lib/scales.cpp)       | Musical scale definitions                         |

@@ -65,7 +65,7 @@ public:
 #include "clockEngine.hpp"
 #include "cvInputs.hpp"
 #include "displayManager.hpp"
-#include "loadsave.hpp"
+#include "storage.hpp"    // includes presetManager.hpp transitively
 #include "metrics.hpp"
 #include "outputs.hpp"
 #include "pinouts.hpp"
@@ -132,7 +132,6 @@ bool unsavedChanges = false;         // Unsaved changes flag
 int euclideanOutputSelect = 0;       // Euclidean rhythm output index
 int quantizerOutputSelect = 2;       // Quantizer output index
 int envelopeOutputSelect = 2;        // Envelope output index
-int saveSlot = 0;                    // Save slot index
 unsigned long lastEncoderUpdate = 0; // Last encoder update time
 
 // Macro to request display refresh (marks display dirty for update)
@@ -149,7 +148,6 @@ void UpdateSpeedFactor();
 void HandleDisplay();
 void HandleCVInputs();
 void HandleOutputs();
-void UpdateParameters(LoadSaveParams);
 void ShowTemporaryMessage(const char *msg, uint32_t durationMs = 1000);
 
 // ----------------------------------------------
@@ -366,32 +364,7 @@ void HandleEncoderClick() {
                 menuMode = 63;
                 break;
             case 64: { // Save settings
-                LoadSaveParams p;
-                p.valid = true;
-                p.BPM = BPM;
-                p.externalClockDivIdx = externalDividerIndex;
-                for (int i = 0; i < NUM_OUTPUTS; i++) {
-                    p.divIdx[i] = outputs[i].GetDividerIndex();
-                    p.dutyCycle[i] = outputs[i].GetDutyCycle();
-                    p.outputState[i] = outputs[i].GetOutputState();
-                    p.outputLevel[i] = outputs[i].GetLevel();
-                    p.outputOffset[i] = outputs[i].GetOffset();
-                    p.swingIdx[i] = outputs[i].GetSwingAmountIndex();
-                    p.swingEvery[i] = outputs[i].GetSwingEvery();
-                    p.pulseProbability[i] = outputs[i].GetPulseProbability();
-                    p.euclideanParams[i] = outputs[i].GetEuclideanParams();
-                    p.phaseShift[i] = outputs[i].GetPhase();
-                    p.waveformType[i] = int(outputs[i].GetWaveformType());
-                    p.envParams[i] = outputs[i].GetEnvelopeParams();
-                    p.quantizerParams[i] = outputs[i].GetQuantizerParams();
-                }
-                for (int i = 0; i < NUM_CV_INS; i++) {
-                    p.CVInputTarget[i] = CVInputTarget[i];
-                    p.CVInputAttenuation[i] = CVInputAttenuation[i];
-                    p.CVInputOffset[i] = CVInputOffset[i];
-                }
-
-                Save(p, saveSlot);
+                Save(CollectParams(), saveSlot);
                 unsavedChanges = false;
                 ShowTemporaryMessage("SAVED");
                 break;
@@ -1672,33 +1645,7 @@ void HandleOutputs() {
 #endif
 }
 
-// ClockPulse — moved to lib/clockEngine.hpp
-
-void UpdateParameters(LoadSaveParams p) {
-    BPM = constrain(p.BPM, minBPM, maxBPM);
-    externalDividerIndex = p.externalClockDivIdx;
-    // Serial.println(p.divIdx[0]);
-    for (int i = 0; i < NUM_OUTPUTS; i++) {
-        outputs[i].SetDivider(p.divIdx[i]);
-        outputs[i].SetDutyCycle(p.dutyCycle[i]);
-        outputs[i].SetOutputState(p.outputState[i]);
-        outputs[i].SetLevel(p.outputLevel[i]);
-        outputs[i].SetOffset(p.outputOffset[i]);
-        outputs[i].SetSwingAmount(p.swingIdx[i]);
-        outputs[i].SetSwingEvery(p.swingEvery[i]);
-        outputs[i].SetPulseProbability(p.pulseProbability[i]);
-        outputs[i].SetEuclideanParams(p.euclideanParams[i]);
-        outputs[i].SetPhase(p.phaseShift[i]);
-        outputs[i].SetWaveformType(static_cast<WaveformType>(p.waveformType[i]));
-        outputs[i].SetEnvelopeParams(p.envParams[i]);
-        outputs[i].SetQuantizerParams(p.quantizerParams[i]);
-    }
-    for (int i = 0; i < NUM_CV_INS; i++) {
-        CVInputTarget[i] = static_cast<CVTarget>(p.CVInputTarget[i]);
-        CVInputAttenuation[i] = p.CVInputAttenuation[i];
-        CVInputOffset[i] = p.CVInputOffset[i];
-    }
-}
+// ClockPulse, UpdateParameters — moved to lib/clockEngine.hpp / presetManager.hpp
 
 // InitializeTimer — moved to lib/clockEngine.hpp
 

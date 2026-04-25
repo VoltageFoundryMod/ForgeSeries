@@ -84,9 +84,9 @@ Each phase is independently buildable and testable. Complete and verify each bef
 - [ ] Phase 11d — Audio-rate output capability
 - [ ] Phase 11e–g — LFOs, quantizer, beat loop recorder
 - [x] Phase 12a — Move outputs.hpp to lib/
-- [ ] Phase 12b — Extract clockEngine.hpp
-- [ ] Phase 12c — Extract cvInputs.hpp
-- [ ] Phase 12d — Extract presetManager.hpp
+- [x] Phase 12b — Extract clockEngine.hpp
+- [x] Phase 12c — Extract cvInputs.hpp
+- [x] Phase 12d — Extract presetManager.hpp
 - [ ] Phase 13 — Data-Driven Menu System
 
 **Bug fixes (this session):**

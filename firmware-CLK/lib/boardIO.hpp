@@ -58,7 +58,7 @@ void DACWrite(int channel, uint32_t value) {
 
 // Calibration helpers ────────────────────────────────────────────────
 // Loaded at boot; updated by CV calibration routine (Phase 8B).
-struct CalibrationData;  // forward-declared here; defined in loadsave.hpp
+struct CalibrationData;  // forward-declared here; defined in storage.hpp
 extern CalibrationData cal;
 
 static int32_t _adcAccum[NUM_CV_INS] = {0};
