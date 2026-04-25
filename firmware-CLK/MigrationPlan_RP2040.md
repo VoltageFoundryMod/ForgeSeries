@@ -62,9 +62,43 @@ All hardware details confirmed. Decisions below are final and reflected througho
 
 Each phase is independently buildable and testable. Complete and verify each before starting the next.
 
+### Progress Summary
+
+- [x] Phase 1 — Build System & Platform Setup
+- [x] Phase 2 — Pin Assignments (pinouts.hpp)
+- [x] Phase 3 — Hardware I/O Abstraction (boardIO.hpp)
+- [x] Phase 4 — Storage System (loadsave.hpp)
+- [x] Phase 5 — Output Engine Updates (outputs.hpp)
+- [x] Phase 6 — Dual-Core Architecture (main.cpp)
+- [ ] Phase 7 — CV Input Updates
+- [ ] Phase 8 — Calibration System
+- [x] Phase 9a — Unsaved changes indicator
+- [ ] Phase 9b — Output activity indicators (reverted, needs rethink)
+- [x] Phase 9c — External clock indicator
+- [ ] Phase 9d — Waveform mini-preview
+- [x] Phase 9e — Timeout to main screen
+- [x] Phase 10 — Metrics System Update (ISR bug fix, DAC/Core1 timing, jitter reporting)
+- [ ] Phase 11a — All 4 outputs full menu
+- [x] Phase 11b — Higher PPQN resolution (RP2040=960)
+- [ ] Phase 11c — Improved external clock PPQN detection
+- [ ] Phase 11d — Audio-rate output capability
+- [ ] Phase 11e–g — LFOs, quantizer, beat loop recorder
+- [x] Phase 12a — Move outputs.hpp to lib/
+- [ ] Phase 12b — Extract clockEngine.hpp
+- [ ] Phase 12c — Extract cvInputs.hpp
+- [ ] Phase 12d — Extract presetManager.hpp
+- [ ] Phase 13 — Data-Driven Menu System
+
+**Bug fixes (this session):**
+- [x] Wire1 (DAC bus) raised to 1MHz — DAC write time halved (~400µs → ~210µs)
+- [x] Save/Load `display.display()` was called from Core 0 (Wire race) — caused garbled/flipped display; fixed with `ShowTemporaryMessage()` helper using `_displayFrameReady`
+- [x] Save/Load `while(HandleIO())` loop was re-entrant inside `HandleEncoderClick()` — caused encoder inversion; replaced with `HandleOutputs()`-only wait loop
+- [x] `_displayLocked` flag added to prevent Core 1 GFX rendering from overwriting temporary message buffer
+- [x] Menu start index corrected (was starting on second page at boot)
+
 ---
 
-### Phase 1 — Build System & Platform Setup
+### Phase 1 — Build System & Platform Setup ✅
 
 **Goal:** Get the project compiling for RP2040 without any code changes.
 
@@ -93,7 +127,7 @@ Each phase is independently buildable and testable. Complete and verify each bef
 
 ---
 
-### Phase 2 — Pin Assignments (pinouts.hpp)
+### Phase 2 — Pin Assignments (pinouts.hpp) ✅
 
 **Goal:** Replace SAMD21 pin constants with RP2040/XIAO RP2040 pin mapping.
 
@@ -130,7 +164,7 @@ Each phase is independently buildable and testable. Complete and verify each bef
 
 ---
 
-### Phase 3 — Hardware I/O Abstraction (boardIO.hpp)
+### Phase 3 — Hardware I/O Abstraction (boardIO.hpp) ✅
 
 **Goal:** Replace all SAMD21-specific I/O with RP2040 equivalents.
 
@@ -189,7 +223,7 @@ void AdjustADCReadings(int pin, int ch) { ... }
 
 ---
 
-### Phase 4 — Storage System (loadsave.hpp)
+### Phase 4 — Storage System (loadsave.hpp) ✅
 
 **Goal:** Replace FlashStorage with arduino-pico's EEPROM emulation.
 
@@ -299,7 +333,7 @@ CalibrationData LoadCalibration() {
 
 ---
 
-### Phase 5 — Output Engine Updates (outputs.hpp)
+### Phase 5 — Output Engine Updates (outputs.hpp) ✅
 
 **Goal:** Remove SAMD21-specific output types; make all 4 outputs waveform-capable.
 
@@ -352,7 +386,7 @@ The `SetDivider()` function was skipping the "Env" divider for digital outputs. 
 
 ---
 
-### Phase 6 — Dual-Core Architecture (main.cpp)
+### Phase 6 — Dual-Core Architecture (main.cpp) ✅
 
 **Goal:** Split the monolithic loop into Core 0 (UI) and Core 1 (real-time engine).
 
@@ -523,7 +557,7 @@ Replace `display.display()` call in `DisplayManager::EndFrame()` with mutex-wrap
 
 ---
 
-### Phase 7 — CV Input Updates (main.cpp)
+### Phase 7 — CV Input Updates (main.cpp) ⬜
 
 **Goal:** Update for 3 CV inputs (IN1=clock trigger, IN2/IN3=modulation).
 
@@ -538,7 +572,7 @@ Replace `display.display()` call in `DisplayManager::EndFrame()` with mutex-wrap
 
 ---
 
-### Phase 8 — Calibration System
+### Phase 8 — Calibration System ⬜
 
 **Goal:** Two calibration procedures: (A) output voltage trim helper, (B) CV input 2-point calibration.
 
@@ -636,7 +670,9 @@ void AdjustADCReadings(int pin, int ch) {
 
 ---
 
-### Phase 9 — Display & UI Improvements
+### Phase 9 — Display & UI Improvements 🔄
+
+> **Partial:** 9a (unsaved indicator), 9c (ext clock indicator), 9e (timeout) done. 9b reverted. 9d/9f deferred.
 
 **Goal:** Better visual feedback on OLED; keep existing menu structure intact initially.
 
@@ -683,7 +719,7 @@ Switching from Adafruit SSD1306 to U8g2 enables partial buffer updates. Defer to
 
 ---
 
-### Phase 10 — Metrics System Update (metrics.hpp)
+### Phase 10 — Metrics System Update (metrics.hpp) ✅
 
 **Goal:** Fix RP2040 RAM reporting and add Core 1 timing.
 
@@ -703,7 +739,9 @@ uint32_t GetFreeRAM() {
 
 ---
 
-### Phase 11 — New Features & Improvements (Post-Migration)
+### Phase 11 — New Features & Improvements (Post-Migration) 🔄
+
+> **Partial:** 11b (PPQN=960 on RP2040) done. 11a, 11c–g pending.
 
 These are enhancements after the core migration is stable. Tackle in order of value.
 
@@ -784,7 +822,9 @@ Phase 11e → 11f → 11g                [LFOs, quantizer polish, beat loop reco
 
 ---
 
-### Phase 12 — Code Modularization
+### Phase 12 — Code Modularization 🔄
+
+> **Partial:** 12a (outputs.hpp → lib/) done. 12b–d pending.
 
 **Goal:** Break `src/main.cpp` (2065 lines, monolithic) into clean, single-responsibility modules in `lib/`. Each module is a header-only file following the existing project convention. `main.cpp` becomes a thin orchestrator containing only `setup()`, `loop()`, `setup1()`, `loop1()`, and global object instantiations.
 
@@ -953,7 +993,7 @@ void loop1() { ... }   // ~15 lines
 
 ---
 
-### Phase 13 — Data-Driven Menu System
+### Phase 13 — Data-Driven Menu System ⬜
 
 **Goal:** Replace the current hardcoded 66-item switch-case menu (spread across `HandleEncoderClick()` ~400 lines, `HandleEncoderPosition()` ~350 lines, `HandleDisplay()` ~600 lines) with a declarative, data-driven approach. Adding or moving a menu item becomes a single array entry change, not surgery across three 300-line functions.
 

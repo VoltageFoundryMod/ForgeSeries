@@ -9,6 +9,7 @@ static repeating_timer_t _clockTimer;
 // Wire1 (GPIO0/1) = DAC only,     used exclusively by Core 0 at runtime.
 // Separate hardware I2C blocks + separate cores = zero conflict, no mutex needed.
 static volatile bool _displayFrameReady = false;
+static volatile bool _displayLocked = false;  // Core 0 sets to pause Core 1 GFX rendering
 #endif
 // Rotary encoder setting
 // ENCODER_OPTIMIZE_INTERRUPTS disabled - interrupts interfere with waveform timing
@@ -70,7 +71,14 @@ float ADCCal[2] = {1.0180, 1.0180}; // ADC readings for the channels
 int ADCOffset[2] = {23, 23};        // ADC offset for the channels
 
 // Configuration
+// RP2040 @ 133MHz: 960 PPQN → 208µs/tick at 300 BPM — plenty of ISR headroom.
+// SAMD21 @ 48MHz:  192 PPQN → 1042µs/tick at 300 BPM — unchanged.
+// 5× higher resolution = 5× smoother waveform steps at all BPMs.
+#if defined(ARDUINO_ARCH_RP2040)
+#define PPQN 960
+#else
 #define PPQN 192
+#endif
 #define MAXDAC 4095
 
 #define OLED_ADDRESS 0x3C
@@ -222,7 +230,7 @@ const uint8_t FRAME_SKIP_COUNT = 3; // Only update every 4th request
 
 // Menu variables
 int menuItems = 66;
-int menuItem = 3;
+int menuItem = 2;
 bool switchState = 1;
 bool oldSwitchState = 1;
 int menuMode = 0;                    // Menu mode for parameter editing
@@ -254,6 +262,7 @@ void HandleOutputs();
 void ClockPulse();
 void InitializeTimer();
 void UpdateParameters(LoadSaveParams);
+void ShowTemporaryMessage(const char *msg, uint32_t durationMs = 1000);
 
 // ----------------------------------------------
 
@@ -496,45 +505,21 @@ void HandleEncoderClick() {
 
                 Save(p, saveSlot);
                 unsavedChanges = false;
-                display.clearDisplay(); // clear display
-                display.setTextSize(2);
-                display.setCursor(SCREEN_WIDTH / 2 - 30, SCREEN_HEIGHT / 2 - 16);
-                display.print("SAVED");
-                display.display();
-                unsigned long saveMessageStartTime = millis();
-                while (millis() - saveMessageStartTime < 1000) {
-                    HandleIO();
-                }
+                ShowTemporaryMessage("SAVED");
                 break;
             }
             case 65: { // Load from slot
                 LoadSaveParams p = Load(saveSlot);
                 UpdateParameters(p);
                 unsavedChanges = false;
-                display.clearDisplay(); // clear display
-                display.setTextSize(2);
-                display.setCursor(SCREEN_WIDTH / 2 - 30, SCREEN_HEIGHT / 2 - 16);
-                display.print("LOADED");
-                display.display();
-                unsigned long loadMessageStartTime = millis();
-                while (millis() - loadMessageStartTime < 1000) {
-                    HandleIO();
-                }
+                ShowTemporaryMessage("LOADED");
                 break;
             }
             case 66: { // Load default settings
                 LoadSaveParams p = LoadDefaultParams();
                 UpdateParameters(p);
                 unsavedChanges = false;
-                display.clearDisplay(); // clear display
-                display.setTextSize(2);
-                display.setCursor(SCREEN_WIDTH / 2 - 30, SCREEN_HEIGHT / 2 - 16);
-                display.print("LOADED");
-                display.display();
-                unsigned long loadMessageStartTime = millis();
-                while (millis() - loadMessageStartTime < 1000) {
-                    HandleIO();
-                }
+                ShowTemporaryMessage("LOADED");
                 break;
             }
             }
@@ -984,6 +969,36 @@ void HandleEncoderPosition() {
         }
     }
     metrics.EndEncoderMeasurement();
+}
+
+// Show a brief full-screen message (e.g. "SAVED", "LOADED") then return.
+// On RP2040: signals Core 1 to flush via Wire — Core 0 never touches the Wire bus.
+// On SAMD21: flushes inline as usual.
+// Uses delay() instead of a HandleIO() loop to avoid re-entrant HandleEncoderClick().
+void ShowTemporaryMessage(const char *msg, uint32_t durationMs) {
+    // Pause Core 1's GFX rendering so it can't overwrite the buffer.
+    // Use _displayLocked rather than touching Wire from Core 0.
+    _displayLocked = true;
+    delay(10);  // Let Core 1 finish any in-flight HandleDisplay() call (~1ms max)
+
+    display.clearDisplay();
+    display.setTextSize(2);
+    int x = (SCREEN_WIDTH - (int)(strlen(msg)) * 12) / 2;
+    display.setCursor(x, SCREEN_HEIGHT / 2 - 8);
+    display.print(msg);
+#if defined(ARDUINO_ARCH_RP2040)
+    _displayFrameReady = true;  // Core 1 flushes over Wire — no Wire call from Core 0
+#else
+    display.display();
+#endif
+    // Keep DAC outputs running during the message — only skip encoder/display work.
+    uint32_t _msgStart = millis();
+    while (millis() - _msgStart < durationMs) {
+        HandleOutputs();
+    }
+
+    _displayLocked = false;     // Resume normal Core 1 rendering
+    REQUEST_DISPLAY_REFRESH();  // Force a clean redraw after returning
 }
 
 // Redraw the display.
@@ -1972,7 +1987,9 @@ void HandleOutputs() {
     uint16_t v1 = (uint16_t)outputs[1].GetOutputLevel();
     uint16_t v2 = (uint16_t)outputs[2].GetOutputLevel();
     uint16_t v3 = (uint16_t)outputs[3].GetOutputLevel();
+    metrics.BeginDACMeasurement();
     DACWriteAll(v0, v1, v2, v3);
+    metrics.EndDACMeasurement();
     for (int i = 0; i < NUM_OUTPUTS; i++) {
         outputs[i].GenEnvelope();
     }
@@ -2195,12 +2212,17 @@ void setup1() {
 
 void loop1() {
     // Render the GFX buffer (CPU-only, no I2C) into display RAM.
-    HandleDisplay();
+    // Skip rendering when Core 0 holds the buffer (e.g. showing a temporary message).
+    if (!_displayLocked) {
+        HandleDisplay();
+    }
     // Flush the prepared frame over Wire when Core 0 (or Display timeout on
     // Core 1) has signalled a new frame is ready.
     if (_displayFrameReady) {
         _displayFrameReady = false;
+        metrics.BeginCore1FlushMeasurement();
         display.display();   // Wire (GPIO6/7, I2C1), Core 1 only
+        metrics.EndCore1FlushMeasurement();
     }
 }
 #endif

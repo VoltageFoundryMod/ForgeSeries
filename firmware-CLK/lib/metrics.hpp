@@ -34,13 +34,28 @@ private:
     volatile uint32_t isrTimeMax = 0;
     volatile uint32_t isrTimeSum = 0;
     volatile uint32_t isrTimeCount = 0;
+    volatile uint32_t isrStartTime = 0; // Dedicated start time (was incorrectly sharing loopStartTime)
 
-    // Display timing statistics
+    // Display timing statistics (Core 0 GFX prep only)
     uint32_t displayTimeMin = 0xFFFFFFFF;
     uint32_t displayTimeMax = 0;
     uint32_t displayTimeSum = 0;
     uint32_t displayTimeCount = 0;
     uint32_t displayStartTime = 0;
+
+    // Core 1 display flush timing (Wire I2C, volatile — written from Core 1)
+    volatile uint32_t core1FlushMin = 0xFFFFFFFF;
+    volatile uint32_t core1FlushMax = 0;
+    volatile uint32_t core1FlushSum = 0;
+    volatile uint32_t core1FlushCount = 0;
+    volatile uint32_t core1FlushStart = 0;
+
+    // DAC write timing statistics
+    uint32_t dacTimeMin = 0xFFFFFFFF;
+    uint32_t dacTimeMax = 0;
+    uint32_t dacTimeSum = 0;
+    uint32_t dacTimeCount = 0;
+    uint32_t dacStartTime = 0;
 
     // Encoder timing statistics
     uint32_t encoderTimeMin = 0xFFFFFFFF;
@@ -86,15 +101,41 @@ public:
 
     // ISR timing (call from within timer interrupt)
     void BeginISRMeasurement() {
-        loopStartTime = micros(); // Reuse variable to save RAM
+        isrStartTime = micros();
     }
 
     void EndISRMeasurement() {
-        uint32_t duration = micros() - loopStartTime;
+        uint32_t duration = micros() - isrStartTime;
         if (duration < isrTimeMin) isrTimeMin = duration;
         if (duration > isrTimeMax) isrTimeMax = duration;
         isrTimeSum += duration;
         isrTimeCount++;
+    }
+
+    // DAC write timing (I2C multi-write transaction)
+    void BeginDACMeasurement() {
+        dacStartTime = micros();
+    }
+
+    void EndDACMeasurement() {
+        uint32_t duration = micros() - dacStartTime;
+        if (duration < dacTimeMin) dacTimeMin = duration;
+        if (duration > dacTimeMax) dacTimeMax = duration;
+        dacTimeSum += duration;
+        dacTimeCount++;
+    }
+
+    // Core 1 display flush timing (call from loop1(), wraps display.display())
+    void BeginCore1FlushMeasurement() {
+        core1FlushStart = micros();
+    }
+
+    void EndCore1FlushMeasurement() {
+        uint32_t duration = micros() - core1FlushStart;
+        if (duration < core1FlushMin) core1FlushMin = duration;
+        if (duration > core1FlushMax) core1FlushMax = duration;
+        core1FlushSum += duration;
+        core1FlushCount++;
     }
 
     // Display timing
@@ -152,6 +193,20 @@ public:
                 displayTimeCount};
     }
 
+    Stats GetCore1FlushStats() {
+        return {core1FlushCount > 0 ? (uint32_t)core1FlushMin : 0,
+                (uint32_t)core1FlushMax,
+                core1FlushCount > 0 ? (uint32_t)(core1FlushSum / core1FlushCount) : 0,
+                (uint32_t)core1FlushCount};
+    }
+
+    Stats GetDACStats() {
+        return {dacTimeCount > 0 ? dacTimeMin : 0,
+                dacTimeMax,
+                dacTimeCount > 0 ? dacTimeSum / dacTimeCount : 0,
+                dacTimeCount};
+    }
+
     Stats GetEncoderStats() {
         return {encoderTimeCount > 0 ? encoderTimeMin : 0,
                 encoderTimeMax,
@@ -161,69 +216,96 @@ public:
 
     // Print comprehensive stats to Serial
     void PrintStats() {
-        Serial.println(F("\n=== Performance Metrics ==="));
+        uint32_t elapsed_ms = millis() - lastResetTime;
+        if (elapsed_ms == 0) elapsed_ms = 1;
 
         Stats loop = GetLoopStats();
-        Serial.print(F("Loop:    min="));
-        Serial.print(loop.min_us);
-        Serial.print(F("us max="));
-        Serial.print(loop.max_us);
-        Serial.print(F("us avg="));
-        Serial.print(loop.avg_us);
-        Serial.print(F("us ("));
+        Stats isr  = GetISRStats();
+
+        // Compute actual rates from sample count over elapsed window
+        float loopHz = loop.count * 1000.0f / elapsed_ms;
+        float isrHz  = isr.count  * 1000.0f / elapsed_ms;
+
+        Serial.print(F("\n=== Performance Metrics ["));
+        Serial.print(elapsed_ms);
+        Serial.print(F("ms, "));
         Serial.print(loop.count);
-        Serial.println(F(" samples)"));
+        Serial.println(F(" loops] ==="));
 
-        Stats isr = GetISRStats();
-        Serial.print(F("ISR:     min="));
-        Serial.print(isr.min_us);
-        Serial.print(F("us max="));
-        Serial.print(isr.max_us);
-        Serial.print(F("us avg="));
+        // Loop: avg / max / jitter (max-min) / actual rate
+        Serial.print(F("Loop:     avg="));
+        Serial.print(loop.avg_us);
+        Serial.print(F("us  max="));
+        Serial.print(loop.max_us);
+        Serial.print(F("us  jitter="));
+        Serial.print(loop.max_us > loop.min_us ? loop.max_us - loop.min_us : 0);
+        Serial.print(F("us  "));
+        Serial.print(loopHz, 0);
+        Serial.println(F("Hz"));
+
+        // ISR: avg / max / actual rate (should equal PPQN * BPM / 60)
+        Serial.print(F("ISR:      avg="));
         Serial.print(isr.avg_us);
-        Serial.print(F("us ("));
-        Serial.print(isr.count);
-        Serial.println(F(" samples)"));
+        Serial.print(F("us  max="));
+        Serial.print(isr.max_us);
+        Serial.print(F("us  "));
+        Serial.print(isrHz, 0);
+        Serial.println(F("Hz"));
 
-        Stats display = GetDisplayStats();
-        if (display.count > 0) {
-            Serial.print(F("Display: min="));
-            Serial.print(display.min_us);
-            Serial.print(F("us max="));
-            Serial.print(display.max_us);
-            Serial.print(F("us avg="));
-            Serial.print(display.avg_us);
-            Serial.print(F("us ("));
-            Serial.print(display.count);
-            Serial.println(F(" samples)"));
+        // DAC write (I2C multi-write transaction, RP2040 only)
+        Stats dac = GetDACStats();
+        if (dac.count > 0) {
+            Serial.print(F("DAC:      avg="));
+            Serial.print(dac.avg_us);
+            Serial.print(F("us  max="));
+            Serial.print(dac.max_us);
+            if (loop.avg_us > 0) {
+                Serial.print(F("us  ("));
+                Serial.print((dac.avg_us * 100) / loop.avg_us);
+                Serial.print(F("% of loop)"));
+            }
+            Serial.println();
         }
 
+        // Display GFX prep (Core 0, CPU-only buffer rendering)
+        Stats display = GetDisplayStats();
+        if (display.count > 0) {
+            Serial.print(F("Disp GFX: avg="));
+            Serial.print(display.avg_us);
+            Serial.print(F("us  max="));
+            Serial.print(display.max_us);
+            Serial.print(F("us  ("));
+            Serial.print(display.count);
+            Serial.println(F(" frames, Core0)"));
+        }
+
+        // Display Wire flush (Core 1, I2C)
+        Stats flush = GetCore1FlushStats();
+        if (flush.count > 0) {
+            Serial.print(F("Disp I2C: avg="));
+            Serial.print(flush.avg_us);
+            Serial.print(F("us  max="));
+            Serial.print(flush.max_us);
+            Serial.print(F("us  ("));
+            Serial.print(flush.count);
+            Serial.println(F(" frames, Core1)"));
+        }
+
+        // Encoder (only when encoder is actively polled)
         Stats encoder = GetEncoderStats();
         if (encoder.count > 0) {
-            Serial.print(F("Encoder: min="));
-            Serial.print(encoder.min_us);
-            Serial.print(F("us max="));
-            Serial.print(encoder.max_us);
-            Serial.print(F("us avg="));
+            Serial.print(F("Encoder:  avg="));
             Serial.print(encoder.avg_us);
-            Serial.print(F("us ("));
-            Serial.print(encoder.count);
-            Serial.println(F(" samples)"));
+            Serial.print(F("us  max="));
+            Serial.print(encoder.max_us);
+            Serial.println(F("us"));
         }
 
         Serial.print(F("Free RAM: "));
         Serial.print(GetFreeRAM());
         Serial.println(F(" bytes"));
 
-        // Calculate CPU utilization (assumes 1000Hz loop rate as baseline)
-        if (loop.count > 0) {
-            float loopFreq = 1000000.0 / loop.avg_us;
-            Serial.print(F("Loop freq: "));
-            Serial.print(loopFreq, 1);
-            Serial.println(F(" Hz"));
-        }
-
-        Serial.println(F("==========================\n"));
+        Serial.println(F("================================\n"));
     }
 
     // Print compact single-line stats (useful for continuous monitoring)
@@ -264,15 +346,27 @@ public:
         isrTimeSum = 0;
         isrTimeCount = 0;
 
+        dacTimeMin = 0xFFFFFFFF;
+        dacTimeMax = 0;
+        dacTimeSum = 0;
+        dacTimeCount = 0;
+
         displayTimeMin = 0xFFFFFFFF;
         displayTimeMax = 0;
         displayTimeSum = 0;
         displayTimeCount = 0;
 
+        core1FlushMin = 0xFFFFFFFF;
+        core1FlushMax = 0;
+        core1FlushSum = 0;
+        core1FlushCount = 0;
+
         encoderTimeMin = 0xFFFFFFFF;
         encoderTimeMax = 0;
         encoderTimeSum = 0;
         encoderTimeCount = 0;
+
+        lastResetTime = millis();
     }
 
     // Quick check if timing is within acceptable bounds

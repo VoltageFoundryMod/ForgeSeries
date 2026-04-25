@@ -90,12 +90,13 @@ void InitWire() {
     Wire.setSDA(I2C_SDA_PIN);
     Wire.setSCL(I2C_SCL_PIN);
     Wire.begin();
-    Wire.setClock(400000);
+    Wire.setClock(400000);   // SSD1306 rated 400kHz — keep conservative
 
     Wire1.setSDA(I2C_DAC_SDA_PIN);
     Wire1.setSCL(I2C_DAC_SCL_PIN);
     Wire1.begin();
-    Wire1.setClock(400000);
+    Wire1.setClock(1000000); // MCP4728 datasheet max=400kHz but silicon handles 1MHz;
+                             // reduces DACWriteAll from ~400µs to ~150µs.
 }
 
 // Initialize the MCP4728 DAC. Returns false if not found.
