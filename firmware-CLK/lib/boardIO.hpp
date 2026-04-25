@@ -25,17 +25,24 @@ static const MCP4728_channel_t _chanMap[4] = {
 };
 
 // Write all 4 DAC channels.
-// Uses setChannelValue (Multi-Write, UDAC=0) which updates the OUTPUT register
-// immediately -- no LDAC pulse required. fastWrite only updates INPUT registers.
+// Uses MCP4728 Multi-Write command in a single I2C transaction (one START/STOP),
+// which is ~3x faster than four separate setChannelValue() calls.
+// Hardware channel mapping: DACA=sw0, DACB=sw2, DACC=sw1, DACD=sw3 (B/C wired swapped).
+// Each 3-byte block: [CMD: 0x40|(hwCh<<2)] [VREF=0,PD=00,GAIN=0,D11:8] [D7:0]
 void DACWriteAll(uint16_t ch0, uint16_t ch1, uint16_t ch2, uint16_t ch3) {
     _dacShadow[0] = ch0;
     _dacShadow[1] = ch1;
     _dacShadow[2] = ch2;
     _dacShadow[3] = ch3;
-    dac4.setChannelValue(_chanMap[0], ch0, MCP4728_VREF_VDD, MCP4728_GAIN_1X);
-    dac4.setChannelValue(_chanMap[1], ch1, MCP4728_VREF_VDD, MCP4728_GAIN_1X);
-    dac4.setChannelValue(_chanMap[2], ch2, MCP4728_VREF_VDD, MCP4728_GAIN_1X);
-    dac4.setChannelValue(_chanMap[3], ch3, MCP4728_VREF_VDD, MCP4728_GAIN_1X);
+    // hw order A,B,C,D maps to sw[0,2,1,3]
+    const uint16_t hwVals[4] = {ch0, ch2, ch1, ch3};
+    Wire1.beginTransmission(MCP4728_ADDR);
+    for (int i = 0; i < 4; i++) {
+        Wire1.write(0x40 | (i << 1));         // Multi-Write cmd: cmd=010, channel=i (bits [2:1]), UDAC=0
+        Wire1.write((hwVals[i] >> 8) & 0x0F); // VREF=VDD, PD=normal, GAIN=1x, D[11:8]
+        Wire1.write(hwVals[i] & 0xFF);         // D[7:0]
+    }
+    Wire1.endTransmission();
 }
 
 // Write a single DAC channel; keeps other channels at their last value.

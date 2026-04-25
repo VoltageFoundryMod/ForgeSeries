@@ -1976,7 +1976,8 @@ void HandleOutputs() {
     for (int i = 0; i < NUM_OUTPUTS; i++) {
         outputs[i].GenEnvelope();
     }
-#else
+#endif
+#if !defined(ARDUINO_ARCH_RP2040)
     // SAMD21: gates 0-1 driven in ISR; update DAC outputs 2-3 here
     // CRITICAL SECTION: Prevent encoder/display from interrupting DAC writes
     // DAC writes take ~100-200µs, must complete atomically
@@ -2164,14 +2165,14 @@ void loop() {
     HandleCVInputs();
     HandleExternalClock();
 
-#if defined(ARDUINO_ARCH_RP2040)
-    HandleDisplay();  // Buffer prep only; display.display() done by Core 1
-#else
+#if !defined(ARDUINO_ARCH_RP2040)
+    // SAMD21: single-core, GFX + display flush in main loop with frame-skip.
     if (frameSkip == 0) {
         HandleDisplay();
     }
     frameSkip = (frameSkip + 1) % FRAME_SKIP_COUNT;
 #endif
+    // RP2040: HandleDisplay() (GFX rendering) runs on Core 1 to keep this loop tight.
 
     static unsigned long lastStatsTime = 0;
     if (millis() - lastStatsTime >= 5000) {
@@ -2184,21 +2185,22 @@ void loop() {
 }
 
 #if defined(ARDUINO_ARCH_RP2040)
-// Core 1: owns Wire (GPIO6/7, I2C1) and handles display.display() exclusively.
-// Wire was initialized on Core 0 in setup(); earlephilhower Wire uses blocking
-// register-poll transfers (no core-affinity IRQs), so Core 1 can use it safely.
-// Core 0 owns Wire1 (GPIO0/1, I2C0) for DAC and never touches Wire after setup().
+// Core 1: owns Wire (GPIO6/7, I2C1) — handles ALL display work.
+// GFX buffer rendering (HandleDisplay) + display.display() both live here so
+// Core 0's loop is never stalled by display work.  Core 0 only does:
+//   timer ISR (ClockPulse) + DACWriteAll (Wire1) + encoder + CV reads.
 void setup1() {
-    Serial.println("Core 1 started: display flush engine (Wire) running.");
+    Serial.println("Core 1 started: display GFX + flush engine (Wire) running.");
 }
 
 void loop1() {
-    // When Core 0 has prepared a new display frame, flush it over Wire.
-    // display.display() takes ~28ms; Core 0 is completely unaffected because
-    // it only uses Wire1 for DAC writes.
+    // Render the GFX buffer (CPU-only, no I2C) into display RAM.
+    HandleDisplay();
+    // Flush the prepared frame over Wire when Core 0 (or Display timeout on
+    // Core 1) has signalled a new frame is ready.
     if (_displayFrameReady) {
         _displayFrameReady = false;
-        display.display();
+        display.display();   // Wire (GPIO6/7, I2C1), Core 1 only
     }
 }
 #endif
