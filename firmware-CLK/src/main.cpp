@@ -63,6 +63,7 @@ public:
 // Load local libraries
 #include "boardIO.hpp"
 #include "clockEngine.hpp"
+#include "cvInputs.hpp"
 #include "displayManager.hpp"
 #include "loadsave.hpp"
 #include "metrics.hpp"
@@ -78,8 +79,6 @@ float ADCCal[2] = {1.0180, 1.0180}; // ADC readings for the channels
 int ADCOffset[2] = {23, 23};        // ADC offset for the channels
 
 // Configuration
-#define MAXDAC 4095
-
 #define OLED_ADDRESS 0x3C
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
@@ -112,92 +111,7 @@ Output outputs[NUM_OUTPUTS] = {
 
 // ---- Global variables ----
 
-// CV modulation targets
-enum CVTarget {
-    None = 0,
-    StartStop,
-    Reset,
-    SetBPM,
-    Div1,
-    Div2,
-    Div3,
-    Div4,
-    Output1Prob,
-    Output2Prob,
-    Output3Prob,
-    Output4Prob,
-    Swing1Amount,
-    Swing1Every,
-    Swing2Amount,
-    Swing2Every,
-    Swing3Amount,
-    Swing3Every,
-    Swing4Amount,
-    Swing4Every,
-    Output3Level,
-    Output4Level,
-    Output3Offset,
-    Output4Offset,
-    Output3Waveform,
-    Output4Waveform,
-    Output1Duty,
-    Output2Duty,
-    Output3Duty,
-    Output4Duty,
-    Envelope1,
-    Envelope2,
-    Output3,
-    Output4,
-};
-
-String CVTargetDescription[] = {
-    "None",
-    "Start/Stop",
-    "Reset",
-    "Set BPM",
-    "Output 1 Div",
-    "Output 2 Div",
-    "Output 3 Div",
-    "Output 4 Div",
-    "Output 1 Prob",
-    "Output 2 Prob",
-    "Output 3 Prob",
-    "Output 4 Prob",
-    "Swing 1 Amt",
-    "Swing 1 Every",
-    "Swing 2 Amt",
-    "Swing 2 Every",
-    "Swing 3 Amt",
-    "Swing 3 Every",
-    "Swing 4 Amt",
-    "Swing 4 Every",
-    "Output 3 Lvl",
-    "Output 4 Lvl",
-    "Output 3 Off",
-    "Output 4 Off",
-    "Output 3 Wav",
-    "Output 4 Wav",
-    "Output 1 Duty",
-    "Output 2 Duty",
-    "Output 3 Duty",
-    "Output 4 Duty",
-    "Output 3 Env",
-    "Output 4 Env",
-    "Output 3",
-    "Output 4",
-};
-int CVTargetLength = sizeof(CVTargetDescription) / sizeof(CVTargetDescription[0]);
-CVTarget pendingCVInputTarget[NUM_CV_INS] = {CVTarget::None, CVTarget::None};
-
-// ADC input offset and scale from calibration
-float offsetScale[NUM_CV_INS][2]; // [channel][0: offset, 1: scale]
-// CV target settings
-CVTarget CVInputTarget[NUM_CV_INS] = {CVTarget::None, CVTarget::None};
-int CVInputAttenuation[NUM_CV_INS] = {0, 0};
-int CVInputOffset[NUM_CV_INS] = {0, 0};
-
-// ADC input variables
-float channelADC[NUM_CV_INS], oldChannelADC[NUM_CV_INS];
+// CV globals and HandleCVInputs/HandleCVTarget — moved to lib/cvInputs.hpp
 
 // Play/Stop state
 bool masterState = true; // Track global play/stop state (true = playing, false = stopped)
@@ -234,7 +148,6 @@ void HandleEncoderPosition();
 void UpdateSpeedFactor();
 void HandleDisplay();
 void HandleCVInputs();
-void HandleCVTarget(int, float, CVTarget);
 void HandleOutputs();
 void UpdateParameters(LoadSaveParams);
 void ShowTemporaryMessage(const char *msg, uint32_t durationMs = 1000);
@@ -1723,160 +1636,7 @@ void SetMasterState(bool state) {
     }
 }
 
-// Adjust the ADC readings
-void AdjustADCReadings(int CV_IN_PIN, int ch) {
-    // Apply calibration
-    float calibratedReading = max((analogRead(CV_IN_PIN) - ADCOffset[ch]) * ADCCal[ch], 0.0f);
-    channelADC[ch] = calibratedReading;
-}
-
-void HandleCVInputs() {
-    for (int i = 0; i < NUM_CV_INS; i++) {
-        oldChannelADC[i] = channelADC[i];
-        AdjustADCReadings(CV_IN_PINS[i], i);
-        ONE_POLE(channelADC[i], oldChannelADC[i], 0.5f);
-        if (abs(channelADC[i] - oldChannelADC[i]) > 10) {
-            HandleCVTarget(i, channelADC[i], CVInputTarget[i]);
-        }
-    }
-}
-
-volatile bool lastResetState = false;
-// Handle the CV target based on the CV value
-void HandleCVTarget(int ch, float CVValue, CVTarget cvTarget) {
-    // Attenuate and offset the CVValue
-    float attenuatedValue = CVValue * ((100 - CVInputAttenuation[ch]) / 100.0f);
-    float offsetValue = attenuatedValue + (CVInputOffset[ch] / 100.0f * MAXDAC);
-    CVValue = constrain(offsetValue, 0, MAXDAC);
-
-    // CRITICAL SECTION: Protect parameter updates that affect timing
-    // Prevents race conditions with ISR reading output parameters
-    noInterrupts();
-
-    // DEBUG_PRINT("Ch: " + String(ch) + " CV Target: " + String(cvTarget) + " CV Value: " + String(CVValue) + "\n");
-    switch (cvTarget) {
-    case CVTarget::None:
-        break;
-    case CVTarget::StartStop:
-        if (CVValue > MAXDAC / 2) {
-            SetMasterState(true);
-        } else {
-            SetMasterState(false);
-        }
-        break;
-    case CVTarget::Reset:
-        if (CVValue > MAXDAC / 2 && !lastResetState) {
-            tickCounter = 0;
-            externalTickCounter = 0;
-            lastResetState = true;
-        } else if (CVValue < MAXDAC / 2) {
-            lastResetState = false;
-        }
-        break;
-    case CVTarget::SetBPM:
-        // Convert float value to BPM range
-        UpdateBPM(map(CVValue, 0, MAXDAC, minBPM, maxBPM));
-        break;
-    case CVTarget::Div1:
-        outputs[0].SetDivider(map(CVValue, 0, MAXDAC, 0, outputs[0].GetDividerAmounts()));
-        break;
-    case CVTarget::Div2:
-        outputs[1].SetDivider(map(CVValue, 0, MAXDAC, 0, outputs[1].GetDividerAmounts()));
-        break;
-    case CVTarget::Div3:
-        outputs[2].SetDivider(map(CVValue, 0, MAXDAC, 0, outputs[2].GetDividerAmounts()));
-        break;
-    case CVTarget::Div4:
-        outputs[3].SetDivider(map(CVValue, 0, MAXDAC, 0, outputs[3].GetDividerAmounts()));
-        break;
-    case CVTarget::Output1Prob:
-        outputs[0].SetPulseProbability(map(CVValue, 0, MAXDAC, 1, 100));
-        break;
-    case CVTarget::Output2Prob:
-        outputs[1].SetPulseProbability(map(CVValue, 0, MAXDAC, 1, 100));
-        break;
-    case CVTarget::Output3Prob:
-        outputs[2].SetPulseProbability(map(CVValue, 0, MAXDAC, 1, 100));
-        break;
-    case CVTarget::Output4Prob:
-        outputs[3].SetPulseProbability(map(CVValue, 0, MAXDAC, 1, 100));
-        break;
-    case CVTarget::Swing1Amount:
-        outputs[0].SetSwingAmount(map(CVValue, 0, MAXDAC, 0, outputs[0].GetSwingAmounts()));
-        break;
-    case CVTarget::Swing1Every:
-        outputs[0].SetSwingEvery(map(CVValue, 0, MAXDAC, 1, outputs[0].GetSwingEveryAmounts()));
-        break;
-    case CVTarget::Swing2Amount:
-        outputs[1].SetSwingAmount(map(CVValue, 0, MAXDAC, 0, outputs[1].GetSwingAmounts()));
-        break;
-    case CVTarget::Swing2Every:
-        outputs[1].SetSwingEvery(map(CVValue, 0, MAXDAC, 1, outputs[1].GetSwingEveryAmounts()));
-        break;
-    case CVTarget::Swing3Amount:
-        outputs[2].SetSwingAmount(map(CVValue, 0, MAXDAC, 0, outputs[2].GetSwingAmounts()));
-        break;
-    case CVTarget::Swing3Every:
-        outputs[2].SetSwingEvery(map(CVValue, 0, MAXDAC, 1, outputs[2].GetSwingEveryAmounts()));
-        break;
-    case CVTarget::Swing4Amount:
-        outputs[3].SetSwingAmount(map(CVValue, 0, MAXDAC, 0, outputs[3].GetSwingAmounts()));
-        break;
-    case CVTarget::Swing4Every:
-        outputs[3].SetSwingEvery(map(CVValue, 0, MAXDAC, 1, outputs[3].GetSwingEveryAmounts()));
-        break;
-    case CVTarget::Output3Offset:
-        outputs[2].SetOffset(map(CVValue, 0, MAXDAC, 0, 100));
-        break;
-    case CVTarget::Output4Offset:
-        outputs[3].SetOffset(map(CVValue, 0, MAXDAC, 0, 100));
-        break;
-    case CVTarget::Output3Level:
-        outputs[2].SetLevel(map(CVValue, 0, MAXDAC, 0, 100));
-        break;
-    case CVTarget::Output4Level:
-        outputs[3].SetLevel(map(CVValue, 0, MAXDAC, 0, 100));
-        break;
-    case CVTarget::Output3Waveform:
-        outputs[2].SetWaveformType(static_cast<WaveformType>(map(CVValue, 0, MAXDAC, 0, WaveformTypeLength)));
-        break;
-    case CVTarget::Output4Waveform:
-        outputs[3].SetWaveformType(static_cast<WaveformType>(map(CVValue, 0, MAXDAC, 0, WaveformTypeLength)));
-        break;
-    case CVTarget::Output1Duty:
-        outputs[0].SetDutyCycle(map(CVValue, 0, MAXDAC, 0, 100));
-        break;
-    case CVTarget::Output2Duty:
-        outputs[1].SetDutyCycle(map(CVValue, 0, MAXDAC, 0, 100));
-        break;
-    case CVTarget::Output3Duty:
-        outputs[2].SetDutyCycle(map(CVValue, 0, MAXDAC, 0, 100));
-        break;
-    case CVTarget::Output4Duty:
-        outputs[3].SetDutyCycle(map(CVValue, 0, MAXDAC, 0, 100));
-        break;
-    case CVTarget::Envelope1:
-        outputs[2].SetExternalTrigger(CVValue > MAXDAC / 2);
-        break;
-    case CVTarget::Envelope2:
-        outputs[3].SetExternalTrigger(CVValue > MAXDAC / 2);
-        break;
-    case CVTarget::Output3:
-        outputs[2].SetCVValue(CVValue);
-        break;
-    case CVTarget::Output4:
-        outputs[3].SetCVValue(CVValue);
-        break;
-    }
-
-    interrupts(); // End critical section
-
-    // Update the display if the CV target is not None
-    // if (cvTarget != CVTarget::None && menuMode == 0 && millis() - lastDisplayUpdateTime > 1000) {
-    //     displayRefresh = 1;
-    //     lastDisplayUpdateTime = millis();
-    // }
-}
+// AdjustADCReadings, HandleCVInputs, HandleCVTarget — moved to lib/cvInputs.hpp
 
 // ClockReceived, HandleExternalClock, UpdateBPM — moved to lib/clockEngine.hpp
 

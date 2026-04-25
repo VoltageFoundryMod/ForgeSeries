@@ -5,6 +5,10 @@
 
 #include "pinouts.hpp"
 
+// DAC resolution constants — shared across all platforms
+#define DAC_RESOLUTION (12)
+#define MAXDAC         4095
+
 #if defined(ARDUINO_ARCH_RP2040)
 // ── RP2040 I/O ────────────────────────────────────────────────────────
 #include <Adafruit_MCP4728.h>
@@ -144,8 +148,6 @@ void SetPin(int pin, uint32_t value);
 
 // Create the MCP4725 object
 Adafruit_MCP4725 dac;
-#define DAC_RESOLUTION (12)
-
 // Handle IO devices initialization
 void InitIO() {
     // ADC settings. These increase ADC reading stability but at the cost of cycle time. Takes around 0.7ms for one reading with these
