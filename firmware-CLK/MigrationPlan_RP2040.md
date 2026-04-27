@@ -87,7 +87,7 @@ Each phase is independently buildable and testable. Complete and verify each bef
 - [x] Phase 12b — Extract clockEngine.hpp
 - [x] Phase 12c — Extract cvInputs.hpp
 - [x] Phase 12d — Extract presetManager.hpp
-- [ ] Phase 13 — Data-Driven Menu System
+- [x] Phase 13 — Data-Driven Menu System (click + position handlers; HandleDisplay pending)
 
 **Bug fixes (this session):**
 - [x] Wire1 (DAC bus) raised to 1MHz — DAC write time halved (~400µs → ~210µs)
