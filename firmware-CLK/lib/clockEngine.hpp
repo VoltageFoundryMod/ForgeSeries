@@ -209,6 +209,10 @@ void ClockPulse() {
         outputs[i].Pulse(PPQN, tickCounter);
     }
     tickCounter++;
+    // Signal the display to refresh so blinking output boxes stay in sync
+    // with the actual pulse state. The display manager's 50ms time gate limits
+    // the real rendering rate regardless of how often this is set.
+    displayRefresh = 1;
 
 #if !defined(ARDUINO_ARCH_RP2040)
     // SAMD21: outputs 0-1 are DigitalOut — safe to drive from ISR

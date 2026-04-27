@@ -90,6 +90,9 @@ class Output {
     void SetPulse(bool state) { _isPulseOn = state; }
     void TogglePulse() { _isPulseOn = !_isPulseOn; }
     bool HasPulseChanged();
+    // Display blink indicator: toggles once per output period in GeneratePulse().
+    // Unlike _isPulseOn, this is waveform-type agnostic and doesn't alias at fast rates.
+    bool GetBlinkState() { return _blinkState; }
     void SetExternalClock(bool state) { _externalClock = state; }
     void IncrementInternalCounter() { _internalPulseCounter++; }
 
@@ -280,6 +283,7 @@ class Output {
     int _offset = 0;              // Output voltage offset for DAC outs (default to 0%)
     bool _isPulseOn = false;      // Pulse state
     bool _lastPulseState = false; // Last pulse state
+    bool _blinkState = false;     // Display blink indicator (toggled once per output period)
     bool _state = true;           // Output state
     bool _oldState = true;        // Previous output state (for master stop)
     bool _masterState = true;     // Master output state
@@ -1012,6 +1016,23 @@ void Output::Pulse(int PPQN, unsigned long globalTick) {
 
     // Calculate the clock divider for external clock
     int clockDividerExternal = 1 / _clockDividers[_dividerIndex];
+
+    // Compute display blink state deterministically from the tick counter so
+    // outputs with identical settings are always in phase and a tickCounter
+    // reset (play start, load defaults, first external sync) auto-syncs all.
+    // Cap the blink rate at x8 (PPQN/8 ticks per period): faster multipliers
+    // alias against the ~20 Hz display refresh and appear to blink slower.
+    const float blinkMinPeriod = PPQN / 8.0f;  // x8 is the fastest visible blink rate
+    if (_externalClock && _clockDividers[_dividerIndex] < 1) {
+        unsigned long blinkDivider = max((unsigned long)clockDividerExternal, (unsigned long)8);
+        _blinkState = ((_internalPulseCounter / blinkDivider) % 2 == 0);
+    } else {
+        float blinkPeriod = max(periodTicks, blinkMinPeriod);
+        unsigned long adjustedTick = (tickCounterSwing >= phaseOffsetTicks)
+                                         ? (tickCounterSwing - phaseOffsetTicks)
+                                         : 0;
+        _blinkState = ((adjustedTick / (unsigned long)blinkPeriod) % 2 == 0);
+    }
 
     // Calculate the pulse duration (in ticks) based on the duty cycle
     unsigned int _pulseDuration = int(periodTicks * (_dutyCycle / 100.0));

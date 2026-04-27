@@ -91,12 +91,20 @@ void HandleDisplay() {
             }
             display.setTextSize(1);
             for (int i = 0; i < NUM_OUTPUTS; i++) {
-                if (outputs[i].GetOutputState()) {
+                if (!outputs[i].GetOutputState()) {
+                    // Output disabled: show number only, no box
+                    display.setCursor((i * 30) + 16, 47);
+                    display.setTextColor(WHITE);
+                    display.print(i + 1);
+                } else if (outputs[i].GetBlinkState()) {
+                    // Blink phase A: filled box + inverted number
                     display.fillRect((i * 30) + 14, 46, 9, 9, WHITE);
                     display.setCursor((i * 30) + 16, 47);
                     display.setTextColor(BLACK);
                     display.print(i + 1);
+                    display.setTextColor(WHITE);
                 } else {
+                    // Blink phase B: outline box + white number
                     display.drawRect((i * 30) + 14, 46, 9, 9, WHITE);
                     display.setCursor((i * 30) + 16, 47);
                     display.setTextColor(WHITE);

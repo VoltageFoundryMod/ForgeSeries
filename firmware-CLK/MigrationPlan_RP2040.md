@@ -73,7 +73,7 @@ Each phase is independently buildable and testable. Complete and verify each bef
 - [x] Phase 7 — CV Input Updates
 - [x] Phase 8 — Calibration System
 - [x] Phase 9a — Unsaved changes indicator
-- [ ] Phase 9b — Output activity indicators (reverted, needs rethink)
+- [x] Phase 9b — Output activity indicators
 - [x] Phase 9c — External clock indicator
 - [ ] Phase 9d — Waveform mini-preview
 - [x] Phase 9e — Timeout to main screen
