@@ -28,8 +28,8 @@
 // • Items that share the same  group  field are displayed on the same page.
 //   Encoder left/right navigation steps through menu items sequentially;
 //   the page shown is always the group of the current item.
-// • int menuItems (src/main.cpp) — total item count shown in the scroll bar.
-//   Keep it equal to MENU_ITEM_COUNT (= sizeof(MENU_ITEMS)/sizeof([0])).
+// • MENU_ITEM_COUNT is computed automatically from sizeof(MENU_ITEMS)/sizeof([0]).
+//   Navigation and the scroll bar use it directly — no manual counter needed.
 //
 // MENU_ITEMS[] COLUMN GUIDE
 // ──────────────────────────
@@ -85,8 +85,7 @@
 //      { "OUT 2 WAV:", getWav1, nullptr, 70, 0, 8, ROW_SINGLE, MENU_EDIT, setWaveform1, nullptr }, // 45 ← NEW
 //    All subsequent item numbers shift up by 2.
 //
-// 4. Update menuItems in src/main.cpp:
-//      int menuItems = 68;   // was 66
+// 4. No separate counter to update — MENU_ITEM_COUNT is computed automatically.
 //
 // 5. Fix hardcoded item-number checks in lib/menuRender.hpp that reference
 //    item numbers ≥ 44 (the insertion point).  Search for numeric literals
@@ -99,7 +98,7 @@
 // 1. Choose a new group number (next free integer after 12 → use 13).
 // 2. Add getter/setter functions.
 // 3. Append items at the end of MENU_ITEMS[] with the new group number.
-// 4. Update menuItems in src/main.cpp.
+// 4. No separate counter to update — MENU_ITEM_COUNT is automatic.
 // 5. Add the page title to the groupTitles[] array in lib/menuRender.hpp:
 //      "", "", ..., "MY NEW PAGE"   // index = group number
 // 6. If the group needs a custom layout, add an  if (grp == 13) { … return; }
@@ -120,7 +119,7 @@
 //    (search the file for  == <number>  and  <= <number>).
 // 4. The group field itself does NOT need to change (it just identifies
 //    which items share a page; it is independent of display order).
-// 5. Update menuItems if the total count changed.
+// 5. MENU_ITEM_COUNT updates automatically; no manual counter to keep.
 //
 // ═══════════════════════════════════════════════════════════╗
 // RECIPE: ADD A ROW_TWOCOL ITEM PAIR (e.g. two linked params)║
@@ -149,7 +148,6 @@ extern int   menuMode;
 // Functions defined later in main.cpp — forward declarations only.
 extern void ShowTemporaryMessage(const char *msg, uint32_t durationMs = 1000);
 extern void ToggleMasterState();
-extern void SetTapTempo();
 
 // ================================================================
 // Group 1 — BPM / transport  (items 1–2)
@@ -330,8 +328,6 @@ static void setQtzOctave(int d){ outputs[quantizerOutputSelect].SetQuantizerOcta
 // ================================================================
 // Group 13 — Settings / save-load  (items 62–66)
 // ================================================================
-
-// SetTapTempo() is declared extern above (defined in main.cpp).
 
 // Save-slot scroll wraps within [0, NUM_SLOTS] inclusive.
 static void setSaveSlot(int d) {

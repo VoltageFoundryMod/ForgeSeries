@@ -14,7 +14,6 @@ extern DisplayManager displayMgr;
 extern bool           displayRefresh;
 extern bool           unsavedChanges;
 extern int            menuItem;
-extern int            menuItems;
 // menuMode is already declared extern in menuHandlers.hpp
 extern bool           masterState;
 extern int            euclideanOutputSelect;
@@ -22,7 +21,7 @@ extern Output         outputs[];
 
 // ── Thin display helpers ─────────────────────────────────────
 inline void MenuIndicator() {
-    displayMgr.DrawMenuIndicator(menuItem, menuItems);
+    displayMgr.DrawMenuIndicator(menuItem, MENU_ITEM_COUNT);
 }
 
 inline void MenuHeader(const char* header) {

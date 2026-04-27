@@ -10,51 +10,6 @@
 static volatile bool _displayFrameReady = false;
 static volatile bool _displayLocked = false;  // Core 0 sets to pause Core 1 GFX rendering
 #endif
-// Rotary encoder setting
-// ENCODER_OPTIMIZE_INTERRUPTS disabled - interrupts interfere with waveform timing
-// Using polling mode instead (called in main loop at ~745Hz, fast enough)
-// #define ENCODER_OPTIMIZE_INTERRUPTS
-#if defined(ARDUINO_ARCH_RP2040)
-// RP2040: PJRC Encoder uses architecture-specific macros not available on RP2040.
-// Use a minimal polling-based shim with the same read() API.
-// IMPORTANT: constructor must NOT call pinMode/digitalRead — pins are not ready
-// at global-object-construction time. Call begin() from setupZ() before first read().
-class Encoder {
-    int _pin1, _pin2;
-    long _pos = 0;
-    bool _last1 = false, _last2 = false;
-public:
-    Encoder(int p1, int p2) : _pin1(p1), _pin2(p2) {}
-    void begin() {
-        pinMode(_pin1, INPUT_PULLUP);
-        pinMode(_pin2, INPUT_PULLUP);
-        _last1 = digitalRead(_pin1);
-        _last2 = digitalRead(_pin2);
-    }
-    long read() {
-        bool cur1 = digitalRead(_pin1);
-        bool cur2 = digitalRead(_pin2);
-        // Full 4-state quadrature decoder — identical in principle to PJRC Encoder.
-        // Counts all 4 transitions per detent (±1 each) → ±4 per detent total,
-        // matching the divisor and hysteresis in HandleEncoderPosition().
-        // Invalid/bounce transitions produce 0 — no spurious counts.
-        // _pos is negated (CW = negative) to match hardware wiring convention.
-        static const int8_t table[16] = {
-             0, -1,  1,  0,
-             1,  0,  0, -1,
-            -1,  0,  0,  1,
-             0,  1, -1,  0
-        };
-        uint8_t idx = (_last1 << 3) | (_last2 << 2) | (cur1 << 1) | (uint8_t)cur2;
-        _pos -= table[idx]; // Negate: CW produces negative counts
-        _last1 = cur1;
-        _last2 = cur2;
-        return _pos;
-    }
-};
-#else
-#include <Encoder.h>
-#endif
 
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -62,6 +17,7 @@ public:
 
 // Load local libraries
 #include "boardIO.hpp"
+#include "encoder.hpp"
 #include "clockEngine.hpp"
 #include "cvInputs.hpp"
 #include "displayManager.hpp"
@@ -113,9 +69,6 @@ Output outputs[NUM_OUTPUTS] = {
     Output(4, OutputType::DACOut)};
 
 // ---- Global variables ----
-
-// CV globals and HandleCVInputs/HandleCVTarget — moved to lib/cvInputs.hpp
-
 // Play/Stop state
 bool masterState = true; // Track global play/stop state (true = playing, false = stopped)
 
@@ -125,7 +78,6 @@ uint8_t frameSkip = 0;
 const uint8_t FRAME_SKIP_COUNT = 3; // Only update every 4th request
 
 // Menu variables
-int menuItems = 66;
 int menuItem = 2;
 bool switchState = 1;
 bool oldSwitchState = 1;
@@ -143,7 +95,6 @@ unsigned long lastEncoderUpdate = 0; // Last encoder update time
 #include "menuRender.hpp"      // MenuIndicator, MenuHeader, HandleDisplay
 
 // Function prototypes
-void SetTapTempo();
 void HandleIO();
 void SetMasterState(bool);
 void ToggleMasterState();
@@ -227,7 +178,7 @@ void HandleEncoderPosition() {
         REQUEST_DISPLAY_REFRESH();
         lastEncoderUpdate = millis();
         if (menuMode == 0) {
-            menuItem = (menuItem - 1 < 1) ? menuItems : menuItem - 1;
+            menuItem = (menuItem - 1 < 1) ? MENU_ITEM_COUNT : menuItem - 1;
         } else if (menuMode >= 1 && menuMode <= MENU_ITEM_COUNT) {
             if (MENU_ITEMS[menuMode - 1].setter)
                 MENU_ITEMS[menuMode - 1].setter(-(int)speedFactor);
@@ -238,7 +189,7 @@ void HandleEncoderPosition() {
         REQUEST_DISPLAY_REFRESH();
         lastEncoderUpdate = millis();
         if (menuMode == 0) {
-            menuItem = (menuItem + 1 > menuItems) ? 1 : menuItem + 1;
+            menuItem = (menuItem + 1 > MENU_ITEM_COUNT) ? 1 : menuItem + 1;
         } else if (menuMode >= 1 && menuMode <= MENU_ITEM_COUNT) {
             if (MENU_ITEMS[menuMode - 1].setter)
                 MENU_ITEMS[menuMode - 1].setter(+(int)speedFactor);
@@ -298,32 +249,6 @@ void RedrawDisplay() {
 #endif
 }
 
-// Tap tempo function
-static unsigned long lastTapTime = 0;
-static unsigned long tapTimes[3] = {0, 0, 0};
-static int tapIndex = 0;
-void SetTapTempo() {
-    if (usingExternalClock) {
-        return;
-    }
-    unsigned long currentMillis = millis();
-    if (currentMillis - lastTapTime > 2000) {
-        tapIndex = 0;
-    }
-    if (tapIndex < 3) {
-        tapTimes[tapIndex] = currentMillis;
-        tapIndex++;
-        lastTapTime = currentMillis;
-    }
-    if (tapIndex == 3) {
-        unsigned long averageTime = (tapTimes[2] - tapTimes[0]) / 2;
-        unsigned int newBPM = 60000 / averageTime;
-        tapIndex++;
-        UpdateBPM(newBPM);
-        unsavedChanges = true;
-    }
-}
-
 // Toggle the master state and update all outputs
 void ToggleMasterState() {
     SetMasterState(!masterState);
@@ -341,10 +266,6 @@ void SetMasterState(bool state) {
         outputs[i].SetMasterState(state);
     }
 }
-
-// AdjustADCReadings, HandleCVInputs, HandleCVTarget — moved to lib/cvInputs.hpp
-
-// ClockReceived, HandleExternalClock, UpdateBPM — moved to lib/clockEngine.hpp
 
 void HandleOutputs() {
     // Update DAC outputs and envelopes
@@ -378,24 +299,36 @@ void HandleOutputs() {
 #endif
 }
 
-// ClockPulse, UpdateParameters — moved to lib/clockEngine.hpp / presetManager.hpp
-
-// InitializeTimer — moved to lib/clockEngine.hpp
-
 void setup() {
     Serial.begin(115200);
-
 #if defined(ARDUINO_ARCH_RP2040)
-    delay(500);  // Give USB-CDC time to enumerate
+    // USB-CDC on RP2040: wait up to 3 s for a host to open the port so that
+    // early Serial.println() messages are not silently dropped.  We time-out
+    // unconditionally so the module boots normally even without a connected PC.
+    {
+        uint32_t _t = millis();
+        while (!Serial && (millis() - _t) < 3000) { /* wait */ }
+        if (Serial) delay(100); // Let TX path stabilize after CDC connects
+    }
+#endif
+    Serial.println("\n\n--- Starting ClockForge ---");
+    Serial.println("Initializing core 0...");
+
+    Serial.println("Initializing encoder and I2C...");
+#if defined(ARDUINO_ARCH_RP2040)
+    delay(500);               // Give USB-CDC time to enumerate
     encoder.begin();          // Deferred pin init for RP2040 (safe here, after runtime ready)
     InitWire();               // Configure SDA/SCL and Wire.begin() — shared by display + DAC
 #endif
 
+    Serial.println("Initializing storage...");
     EEPROMInit();
 
     // Initialize I/O pins (ADC resolution, input pins, encoder button)
+    Serial.println("Initializing I/O...");
     InitIO();
 
+    Serial.println("Initializing display...");
     // Initialize OLED display — comes BEFORE DAC so errors can be shown on screen
     if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
         Serial.println(F("SSD1306 allocation failed"));
@@ -413,6 +346,7 @@ void setup() {
     display.setTextWrap(false);
     display.cp437(true); // Use full 256 char 'Code Page 437' font
 
+    Serial.println("Initializing DAC...");
 #if defined(ARDUINO_ARCH_RP2040)
     // Initialize the quad DAC — show error on display if not found
     if (!InitDAC()) {
@@ -438,6 +372,7 @@ void setup() {
     }
 #endif
 
+    Serial.println("Initialization complete. Showing splash screen...");
     display.clearDisplay();
     display.drawBitmap(30, 0, VFM_Splash, 68, 64, 1);
     display.display();
@@ -454,6 +389,7 @@ void setup() {
     display.display();
     delay(1500);
 
+    Serial.println("Loading settings from flash memory slot 0...");
     // Load settings from flash memory (slot 0) or set defaults
     LoadSaveParams p = Load(0);
     UpdateParameters(p);
@@ -461,8 +397,10 @@ void setup() {
     // Initialize timer BEFORE attaching external clock interrupt.
     // ClockReceived() calls UpdateBPM() which calls cancel_repeating_timer();
     // the timer struct must be valid before any interrupt can fire.
+    Serial.println("Initializing timer...");
     InitializeTimer();
     UpdateBPM(BPM);
+    Serial.printf("Initial BPM: %d\n", BPM);
 
     // Attach external clock interrupt last — timer must be initialized first.
     attachInterrupt(digitalPinToInterrupt(CLK_IN_PIN), ClockReceived, RISING);
@@ -520,7 +458,7 @@ void loop() {
 // Core 0's loop is never stalled by display work.  Core 0 only does:
 //   timer ISR (ClockPulse) + DACWriteAll (Wire1) + encoder + CV reads.
 void setup1() {
-    Serial.println("Core 1 started: display GFX + flush engine (Wire) running.");
+    Serial.println("Initialized core 1 started: display GFX + flush engine (Wire) running.");
 }
 
 void loop1() {

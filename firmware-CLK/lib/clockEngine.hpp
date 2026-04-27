@@ -56,6 +56,7 @@ int    externalDividerIndex                    = 0;
 extern Output            outputs[NUM_OUTPUTS];
 extern PerformanceMetrics metrics;
 extern bool              displayRefresh;
+extern bool              unsavedChanges;
 
 // Set by encoder handler; applied by loop() so SDK timer calls never block encoder polling.
 bool bpmNeedsUpdate = false;
@@ -65,6 +66,7 @@ bool bpmNeedsUpdate = false;
 // ─────────────────────────────────────────────────────────────────────────────
 void ClockPulse();
 void UpdateBPM(unsigned int newBPM);
+void SetTapTempo();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // External clock interrupt service routine
@@ -204,4 +206,27 @@ void InitializeTimer() {
     TimerTcc0.attachInterrupt(ClockPulse);
     NVIC_SetPriority(TCC0_IRQn, 0); // Highest priority (0)
 #endif
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tap tempo — compute BPM from the last 3 taps
+// ─────────────────────────────────────────────────────────────────────────────
+static unsigned long _tapLastTime = 0;
+static unsigned long _tapTimes[3]  = {0, 0, 0};
+static int           _tapIndex     = 0;
+void SetTapTempo() {
+    if (usingExternalClock) return;
+    unsigned long now = millis();
+    if (now - _tapLastTime > 2000) _tapIndex = 0;
+    if (_tapIndex < 3) {
+        _tapTimes[_tapIndex] = now;
+        _tapIndex++;
+        _tapLastTime = now;
+    }
+    if (_tapIndex == 3) {
+        unsigned long averageTime = (_tapTimes[2] - _tapTimes[0]) / 2;
+        UpdateBPM(60000 / averageTime);
+        _tapIndex++;
+        unsavedChanges = true;
+    }
 }
