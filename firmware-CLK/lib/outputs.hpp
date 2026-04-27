@@ -112,10 +112,11 @@ class Output {
             index = _dividerAmount - 2;
         }
 #endif
-        _dividerIndex = constrain(index, 0, _dividerAmount - 1);
+        // Env slot (last index) is not user-selectable; SetWaveformType uses SetDividerInternal.
+        _dividerIndex = constrain(index, 0, _dividerAmount - 2);
     }
     String GetDividerDescription() { return _dividerDescription[_dividerIndex]; }
-    int GetDividerAmounts() { return _dividerAmount; }
+    int GetDividerAmounts() { return _dividerAmount - 1; } // Env slot is not user-selectable
 
     // Duty Cycle
     int GetDutyCycle() { return _dutyCycle; }
@@ -261,9 +262,9 @@ class Output {
     // Constants
     const int MaxDACValue = 4095;
     const float MaxWaveValue = 255.0;
-    static int const _dividerAmount = 19;
-    float _clockDividers[_dividerAmount] = {0.0078125, 0.015625, 0.03125, 0.0625, 0.125, 0.25, 0.3333333333, 0.5, 0.6666666667, 1.0, 1.5, 2.0, 3.0, 4.0, 8.0, 16.0, 24.0, 32.0, 10000};
-    String _dividerDescription[_dividerAmount] = {"/128", "/64", "/32", "/16", "/8", "/4", "/3", "/2", "/1.5", "x1", "x1.5", "x2", "x3", "x4", "x8", "x16", "x24", "x32", "Env"};
+    static int const _dividerAmount = 21;
+    float _clockDividers[_dividerAmount] = {0.0078125, 0.015625, 0.03125, 0.0625, 0.125, 0.25, 0.3333333333, 0.5, 0.6666666667, 1.0, 1.5, 2.0, 3.0, 4.0, 8.0, 16.0, 24.0, 32.0, 48.0, 64.0, 10000};
+    String _dividerDescription[_dividerAmount] = {"/128", "/64", "/32", "/16", "/8", "/4", "/3", "/2", "/1.5", "x1", "x1.5", "x2", "x3", "x4", "x8", "x16", "x24", "x32", "x48", "x64", "Env"};
     static int const MaxEuclideanSteps = 64;
 
     // The shuffle of the TR-909 delays each even-numbered 1/16th by 2/96 of a beat for shuffle setting 1,
@@ -360,6 +361,12 @@ class Output {
     } _envState = Idle;
 
     // -------------- Private Functions --------------
+
+    // Bypass the user-selectable cap to allow setting the Env slot (index _dividerAmount-1).
+    // Only called by SetWaveformType when an envelope waveform is selected.
+    void SetDividerInternal(int index) {
+        _dividerIndex = constrain(index, 0, _dividerAmount - 1);
+    }
 
     // Start the waveform generation
     void StartWaveform() {
@@ -1128,7 +1135,7 @@ void Output::SetWaveformType(WaveformType type) {
         _lastEnvValue = 0.0f;
         _envStartTime = 0;
         _triggerMode = true;
-        SetDivider(18);
+        SetDividerInternal(_dividerAmount - 1);  // Env slot (always the last entry)
     } else if (_waveformType == WaveformType::QuantizeInput) {
         _waveActive = true;
         _triggerMode = false;
