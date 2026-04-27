@@ -61,18 +61,9 @@ void DACWrite(int channel, uint32_t value) {
 // Calibration helpers ────────────────────────────────────────────────
 extern CalibrationData cal;
 
-static int32_t _adcAccum[NUM_CV_INS] = {0};
-static uint8_t _adcCount[NUM_CV_INS] = {0};
-static float   _channelADC[NUM_CV_INS] = {0.0f, 0.0f};
-
-// Accumulate 8 samples then apply 2-point calibration.
-// Call once per CV channel each loop iteration.
-void AdjustADCReadings(int pin, int ch);  // body below (needs CalibrationData)
-
 // Returns the latest calibrated ADC reading for a CV channel (0–4095).
-float GetCVReading(int ch) {
-    return _channelADC[ch];
-}
+// Implemented in cvInputs.hpp (AdjustADCReadings writes channelADC[]).
+float GetCVReading(int ch);
 
 void InitIO() {
     analogReadResolution(12);  // RP2040 supports 12-bit ADC

@@ -70,7 +70,7 @@ Each phase is independently buildable and testable. Complete and verify each bef
 - [x] Phase 4 — Storage System (loadsave.hpp)
 - [x] Phase 5 — Output Engine Updates (outputs.hpp)
 - [x] Phase 6 — Dual-Core Architecture (main.cpp)
-- [ ] Phase 7 — CV Input Updates
+- [x] Phase 7 — CV Input Updates
 - [x] Phase 8 — Calibration System
 - [x] Phase 9a — Unsaved changes indicator
 - [ ] Phase 9b — Output activity indicators (reverted, needs rethink)
@@ -80,7 +80,7 @@ Each phase is independently buildable and testable. Complete and verify each bef
 - [x] Phase 10 — Metrics System Update (ISR bug fix, DAC/Core1 timing, jitter reporting)
 - [ ] Phase 11a — All 4 outputs full menu
 - [x] Phase 11b — Higher PPQN resolution (RP2040=960)
-- [ ] Phase 11c — Improved external clock PPQN detection
+- [x] Phase 11c — Improved external clock PPQN detection
 - [ ] Phase 11d — Audio-rate output capability
 - [ ] Phase 11e–g — LFOs, quantizer, beat loop recorder
 - [x] Phase 12a — Move outputs.hpp to lib/

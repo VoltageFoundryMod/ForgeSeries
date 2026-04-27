@@ -447,6 +447,9 @@ void loop() {
     HandleEncoderPosition();
     HandleCVInputs();
     HandleExternalClock();
+    // Clock and CV handlers set displayRefresh=1 but cannot call displayMgr.MarkDirty().
+    // Propagate here so HandleDisplay() actually fires (it requires both flags).
+    if (displayRefresh) displayMgr.MarkDirty();
 
 #if !defined(ARDUINO_ARCH_RP2040)
     // SAMD21: single-core, GFX + display flush in main loop with frame-skip.

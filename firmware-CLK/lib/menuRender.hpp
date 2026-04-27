@@ -56,8 +56,19 @@ void HandleDisplay() {
             display.print(s);
             if (usingExternalClock) {
                 display.setTextSize(1);
-                display.setCursor(120, 24);
-                display.print("E");
+                if (extClockBlinkState) {
+                    // Phase A: filled box, blank (inverted) "E"
+                    display.fillRect(118, 23, 10, 11, WHITE);
+                    display.setTextColor(BLACK);
+                    display.setCursor(121, 25);
+                    display.print("E");
+                    display.setTextColor(WHITE);
+                } else {
+                    // Phase B: outline box, filled "E"
+                    display.drawRect(118, 23, 10, 11, WHITE);
+                    display.setCursor(121, 25);
+                    display.print("E");
+                }
             }
             if (menuMode == 0 && menuItem == 1) {
                 display.drawTriangle(2, 6, 2, 14, 6, 10, 1);

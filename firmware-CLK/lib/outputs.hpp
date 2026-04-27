@@ -294,8 +294,7 @@ class Output {
     };
     int _quantizerThresholdBuff[62]; // input quantize
     bool _activeNotes[12] = {false}; // 1=note valid,0=note invalid
-    float _inputCV = 0.0f;           // Input CV value for quantizer
-    float _oldInputCV;
+    float _inputCV = 0.0f;           // Input CV value for quantizer (set by HandleCVTarget)
 
     unsigned long _internalPulseCounter = 0; // Pulse counter (used for external clock division)
     unsigned long _resetPulseStart = 0;      // Reset pulse start time

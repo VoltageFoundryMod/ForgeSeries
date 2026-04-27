@@ -155,6 +155,7 @@ extern void ToggleMasterState();
 
 static void setBPM(int d) {
     BPM = (unsigned int)constrain((int)BPM + d, (int)minBPM, (int)maxBPM);
+    lastInternalBPM = BPM;
     bpmNeedsUpdate  = true;
     unsavedChanges  = true;
 }

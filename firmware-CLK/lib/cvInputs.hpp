@@ -3,7 +3,7 @@
 // cvInputs.hpp — CV input processing, CVTarget enum, attenuation, calibration
 //
 // Owns: CVTarget enum, CVTargetDescription[], CVInputTarget/Attenuation/Offset[],
-//       channelADC[], offsetScale[], pendingCVInputTarget[],
+//       channelADC[], pendingCVInputTarget[],
 //       AdjustADCReadings(), HandleCVInputs(), HandleCVTarget().
 // Depends on: outputs[], BPM/tickCounter/externalTickCounter (clockEngine.hpp),
 //             masterState/SetMasterState() (main.cpp via extern).
@@ -93,11 +93,18 @@ String CVTargetDescription[] = {
 };
 int CVTargetLength = sizeof(CVTargetDescription) / sizeof(CVTargetDescription[0]);
 
+// ── CV oversample count ───────────────────────────────────────────────────────
+// RP2040 ADC is noisier than SAMD21 (no hardware averaging).
+// 8x software oversampling halves the noise floor (~1.4 effective bits gained).
+// SAMD21 uses 128x hardware averaging in InitIO(), so 1 read is sufficient.
+#if defined(ARDUINO_ARCH_RP2040)
+static constexpr int CV_OVERSAMPLE_SAMPLES = 8;
+#else
+static constexpr int CV_OVERSAMPLE_SAMPLES = 1;
+#endif
+
 // ── CV input state globals ────────────────────────────────────────────────────
 CVTarget pendingCVInputTarget[NUM_CV_INS] = {CVTarget::None, CVTarget::None};
-
-// ADC input offset and scale from calibration
-float offsetScale[NUM_CV_INS][2]; // [channel][0: offset, 1: scale]
 
 // Active CV target assignments
 CVTarget CVInputTarget[NUM_CV_INS]  = {CVTarget::None, CVTarget::None};
@@ -121,7 +128,13 @@ void HandleCVTarget(int ch, float CVValue, CVTarget cvTarget);
 // so downstream code sees the same 12-bit range it always has.
 // ─────────────────────────────────────────────────────────────────────────────
 void AdjustADCReadings(int CV_IN_PIN, int ch) {
-    int raw = analogRead(CV_IN_PIN);
+    // Average multiple samples to reduce RP2040 ADC noise.
+    // SAMD21 uses hardware 128x averaging so CV_OVERSAMPLE_SAMPLES == 1 there.
+    int32_t sum = 0;
+    for (int i = 0; i < CV_OVERSAMPLE_SAMPLES; i++) {
+        sum += analogRead(CV_IN_PIN);
+    }
+    int raw = (int)(sum / CV_OVERSAMPLE_SAMPLES);
 
     // Piecewise-linear interpolation through the calibration LUT.
     // LUT maps known voltages → expected raw ADC values captured during calibration.
@@ -153,9 +166,28 @@ void HandleCVInputs() {
     for (int i = 0; i < NUM_CV_INS; i++) {
         oldChannelADC[i] = channelADC[i];
         AdjustADCReadings(CV_IN_PINS[i], i);
-        ONE_POLE(channelADC[i], oldChannelADC[i], 0.5f);
-        if (abs(channelADC[i] - oldChannelADC[i]) > 10) {
+
+        // Choose IIR filter aggressiveness based on target:
+        //   Direct CV passthrough (Output3/Output4) feeds the quantizer.
+        //   Use a light filter (α≈0.15 of old state) so pitch changes propagate
+        //   within 1–2 loop iterations.  The quantizer has its own ±10-count
+        //   hysteresis, so extra smoothing here only adds unwanted lag.
+        //   All other targets (BPM, dividers, …) tolerate and benefit from
+        //   heavier filtering (α=0.5) to suppress ADC noise on slow parameters.
+        //
+        //   ONE_POLE(out, in, coeff): out = (1-coeff)*out + coeff*in
+        //     here out=new_raw, in=old_filtered → result = (1-α)*new_raw + α*old
+        bool isDirectCV = (CVInputTarget[i] == CVTarget::Output3 ||
+                           CVInputTarget[i] == CVTarget::Output4);
+        if (isDirectCV) {
+            ONE_POLE(channelADC[i], oldChannelADC[i], 0.15f);
+            // Always propagate — let the quantizer's internal hysteresis decide
             HandleCVTarget(i, channelADC[i], CVInputTarget[i]);
+        } else {
+            ONE_POLE(channelADC[i], oldChannelADC[i], 0.5f);
+            if (abs(channelADC[i] - oldChannelADC[i]) > 10) {
+                HandleCVTarget(i, channelADC[i], CVInputTarget[i]);
+            }
         }
     }
 }
