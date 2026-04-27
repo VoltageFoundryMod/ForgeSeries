@@ -14,6 +14,7 @@
 
 #include <Arduino.h>
 
+#include "calibrationData.hpp"  // CalibrationData, CAL_LUT_*, CAL_LUT_POINTS
 #include "clockEngine.hpp"
 #include "cvInputs.hpp"
 #include "outputs.hpp"
@@ -48,12 +49,7 @@ struct LoadSaveParams {
     QuantizerParams quantizerParams[NUM_OUTPUTS];
 };
 
-// CV calibration — stored past the preset block so slot ops never clobber it.
-struct CalibrationData {
-    boolean valid;
-    float cvCalOffset[NUM_CV_INS];  // back-calculated intercept from 1V anchor
-    float cvCalScale[NUM_CV_INS];   // 1638 / (reading_3v - reading_1v)
-};
+// CV calibration — see calibrationData.hpp for the struct definition.
 
 // ── Factory defaults ──────────────────────────────────────────────────────────
 LoadSaveParams LoadDefaultParams() {

@@ -32,11 +32,6 @@ static volatile bool _displayLocked = false;  // Core 0 sets to pause Core 1 GFX
 #include "menuHandlers.hpp"    // MENU_ITEMS[] + setter/action implementations
 #include "menuDisplay.hpp"     // MD_* display primitives (depends on menuHandlers.hpp)
 
-// ADC Calibration settings
-const int ADC_THRESHOLD = 5;        // Threshold for ADC stability
-float ADCCal[2] = {1.0180, 1.0180}; // ADC readings for the channels
-int ADCOffset[2] = {23, 23};        // ADC offset for the channels
-
 // Configuration
 #define OLED_ADDRESS 0x3C
 #define SCREEN_WIDTH 128
@@ -93,6 +88,10 @@ unsigned long lastEncoderUpdate = 0; // Last encoder update time
 #define REQUEST_DISPLAY_REFRESH() do { displayRefresh = 1; displayMgr.MarkDirty(); } while(0)
 
 #include "menuRender.hpp"      // MenuIndicator, MenuHeader, HandleDisplay
+#include "calibration.hpp"     // RunCalibration() — output trim + CV LUT capture
+
+// Calibration data (loaded from EEPROM at boot; updated by RunCalibration())
+CalibrationData cal;
 
 // Function prototypes
 void HandleIO();
@@ -390,9 +389,25 @@ void setup() {
     delay(1500);
 
     Serial.println("Loading settings from flash memory slot 0...");
+    // Load calibration data first so CV inputs work correctly from the start.
+    cal = LoadCalibration();
+    if (!cal.valid) {
+        Serial.println("No calibration data found. Using ideal defaults. Run calibration for best accuracy.");
+    } else {
+        Serial.println("Calibration data loaded.");
+    }
     // Load settings from flash memory (slot 0) or set defaults
     LoadSaveParams p = Load(0);
     UpdateParameters(p);
+
+    // ── Calibration mode: hold encoder button during boot ──────────────────
+    // Check AFTER display is up (so we can show instructions) but BEFORE
+    // the timer starts (so RunCalibration() can block freely).
+    if (digitalRead(ENCODER_SW) == LOW) {
+        Serial.println("Encoder held at boot — entering calibration mode.");
+        RunCalibration();  // blocks; reboots at end
+        // never returns
+    }
 
     // Initialize timer BEFORE attaching external clock interrupt.
     // ClockReceived() calls UpdateBPM() which calls cancel_repeating_timer();

@@ -1,6 +1,6 @@
 #pragma once
 
-// storage.hpp — Platform-specific storage backend
+// loadsave.hpp — Platform-specific storage backend
 //
 // Only responsibility: persist LoadSaveParams and CalibrationData to
 // non-volatile storage. Schema and business logic live in presetManager.hpp.
@@ -49,13 +49,17 @@ CalibrationData LoadCalibration() {
     CalibrationData cal;
     EEPROM.get(EEPROM_CAL_BASE, cal);
     if (!cal.valid) {
+        // Populate with ideal theoretical ADC values: Vadc = Vin × 33/51 × 4095/3.3
+        // = Vin(V) × 0.647 / 3.3 × 4095  →  0V=0, 0.5V≈804, 1V≈1608 …
+        // These make the module usable before calibration is run.
+        // Ideal: reading = millivolts × (33/51) × 4095 / 3300
         for (int i = 0; i < NUM_CV_INS; i++) {
             for (int p = 0; p < CAL_LUT_POINTS; p++) {
                 uint32_t mv = CAL_LUT_MV[p];
                 cal.cvLUT[i][p] = (uint16_t)((uint32_t)mv * 33 * 4095 / (51 * 3300));
             }
         }
-        cal.valid = false;
+        cal.valid = false;  // still mark invalid so calibration screen prompts user
     }
     return cal;
 }

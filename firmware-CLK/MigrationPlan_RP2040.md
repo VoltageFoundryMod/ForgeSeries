@@ -71,7 +71,7 @@ Each phase is independently buildable and testable. Complete and verify each bef
 - [x] Phase 5 — Output Engine Updates (outputs.hpp)
 - [x] Phase 6 — Dual-Core Architecture (main.cpp)
 - [ ] Phase 7 — CV Input Updates
-- [ ] Phase 8 — Calibration System
+- [x] Phase 8 — Calibration System
 - [x] Phase 9a — Unsaved changes indicator
 - [ ] Phase 9b — Output activity indicators (reverted, needs rethink)
 - [x] Phase 9c — External clock indicator

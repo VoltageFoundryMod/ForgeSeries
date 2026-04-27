@@ -265,6 +265,45 @@ If the external clock is faster than needed (for example running at higher PPQN)
 
 The module works with external clocks from 30 to 300 BPM. Due to timer resolution, using very slow external clocks with high multipliers may lead to jitter on the outputs.
 
+## Hardware Calibration
+
+The module ships with sensible default values, but for best CV precision — especially when using quantization or 1V/oct pitch CV — you should run the hardware calibration wizard once after building or assembling the module.
+
+Calibration is a two-phase process:
+
+**Phase 1 — Output trim**: fine-tunes the output op-amp gain so every output jack delivers exactly 5.00 V at full scale.
+**Phase 2 — CV input LUT**: maps 7 known voltages from the (now calibrated) outputs back through the voltage-divider input circuit, building a per-channel piecewise-linear correction table that compensates for resistor tolerances and RP2040 ADC non-linearity.
+
+Calibration data is stored in a dedicated area of non-volatile memory **separate from presets**, so it survives firmware updates and preset load/save operations.
+
+### What you need
+
+- A multimeter capable of measuring DC voltage to at least two decimal places
+- Two standard Eurorack patch cables
+
+### Running calibration
+
+1. Power on the module while **holding the encoder button** pressed. The display will show the calibration wizard. Release the button when you see the welcome screen.
+
+2. **Step 1 — Output trim** (`1/3  OUTPUT TRIM`):
+   All four outputs are driven to full scale (5 V). Using a multimeter set to DC voltage, probe each output jack in turn and adjust its corresponding trimmer potentiometer on the PCB until the reading is exactly **5.00 V**. Repeat for all four outputs.
+   When all four outputs read 5.00 V, press the encoder to continue.
+
+3. **Step 2 — Patch cables** (`2/3  PATCH CABLES`):
+   Connect two patch cables as shown on the display:
+   - **OUT 1 → CV IN 1**
+   - **OUT 2 → CV IN 2**
+
+   Keep both cables connected for the next step, then press the encoder.
+
+4. **Step 3 — CV input capture** (`3/3  CV INPUT CAL`):
+   The firmware automatically steps Out 1 and Out 2 through seven voltage levels (0 V, 0.5 V, 1 V, 2 V, 3 V, 4 V, 5 V). At each step it waits 200 ms for the voltage to settle, then averages 256 ADC samples per channel. A progress bar shows the current step. No interaction needed — just wait (~10 seconds total).
+
+5. **Review and save**:
+   The display shows the raw ADC readings at 0 V and 5 V for a quick sanity check. If the numbers look reasonable (0 V ≈ 0, 5 V ≈ 3300–4000 depending on your resistors), press the encoder to **save and reboot**. The module will restart with calibration applied.
+
+> **Tip:** Calibration only needs to be run once. Re-run it if you replace any resistors or trimmers on the board, or if CV tracking feels off after assembly.
+
 ## Firmware Update
 
 1. Download the latest firmware from the Releases section of the [GitHub repository](https://github.com/VoltageFoundryMod/ForgeSeries/releases). The firmware file is named `CURRENT.UF2`.

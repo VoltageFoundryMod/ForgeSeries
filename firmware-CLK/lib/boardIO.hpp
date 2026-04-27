@@ -13,6 +13,8 @@
 // ── RP2040 I/O ────────────────────────────────────────────────────────
 #include <Adafruit_MCP4728.h>
 
+#include "calibrationData.hpp"  // CalibrationData (full definition)
+
 // MCP4728 quad 12-bit I2C DAC (channels A=out1, B=out2, C=out3, D=out4)
 Adafruit_MCP4728 dac4;
 
@@ -57,8 +59,6 @@ void DACWrite(int channel, uint32_t value) {
 }
 
 // Calibration helpers ────────────────────────────────────────────────
-// Loaded at boot; updated by CV calibration routine (Phase 8B).
-struct CalibrationData;  // forward-declared here; defined in storage.hpp
 extern CalibrationData cal;
 
 static int32_t _adcAccum[NUM_CV_INS] = {0};

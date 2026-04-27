@@ -10,6 +10,7 @@
 
 #include <Arduino.h>
 
+#include "calibrationData.hpp"  // CalibrationData + CAL_LUT_*
 #include "boardIO.hpp"
 #include "clockEngine.hpp"
 #include "outputs.hpp"
@@ -107,8 +108,7 @@ int      CVInputOffset[NUM_CV_INS]      = {0, 0};
 float channelADC[NUM_CV_INS], oldChannelADC[NUM_CV_INS];
 
 // ── extern refs defined in main.cpp / clockEngine.hpp ────────────────────────
-extern float    ADCCal[2];
-extern int      ADCOffset[2];
+extern CalibrationData cal;
 extern bool     masterState;
 extern void     SetMasterState(bool state);
 
@@ -116,11 +116,34 @@ extern void     SetMasterState(bool state);
 void HandleCVTarget(int ch, float CVValue, CVTarget cvTarget);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Read one ADC channel and apply calibration into channelADC[ch]
+// Read one ADC channel and apply LUT piecewise-linear calibration.
+// Raw ADC → millivolts via the per-channel LUT, then → 0–4095 (0–5V scale)
+// so downstream code sees the same 12-bit range it always has.
 // ─────────────────────────────────────────────────────────────────────────────
 void AdjustADCReadings(int CV_IN_PIN, int ch) {
-    float calibratedReading = max((analogRead(CV_IN_PIN) - ADCOffset[ch]) * ADCCal[ch], 0.0f);
-    channelADC[ch] = calibratedReading;
+    int raw = analogRead(CV_IN_PIN);
+
+    // Piecewise-linear interpolation through the calibration LUT.
+    // LUT maps known voltages → expected raw ADC values captured during calibration.
+    // We invert: raw ADC → millivolts, then millivolts → 0-4095 (0-5V scale).
+    float mv = 0.0f;
+    if (raw <= (int)cal.cvLUT[ch][0]) {
+        mv = CAL_LUT_MV[0];
+    } else if (raw >= (int)cal.cvLUT[ch][CAL_LUT_POINTS - 1]) {
+        mv = CAL_LUT_MV[CAL_LUT_POINTS - 1];
+    } else {
+        for (int i = 0; i < CAL_LUT_POINTS - 1; i++) {
+            int lo = cal.cvLUT[ch][i];
+            int hi = cal.cvLUT[ch][i + 1];
+            if (raw >= lo && raw <= hi) {
+                float t = (hi > lo) ? (float)(raw - lo) / (float)(hi - lo) : 0.0f;
+                mv = CAL_LUT_MV[i] + t * (CAL_LUT_MV[i + 1] - CAL_LUT_MV[i]);
+                break;
+            }
+        }
+    }
+    // Convert millivolts (0–5000) to 12-bit DAC scale (0–4095)
+    channelADC[ch] = constrain(mv * 4095.0f / 5000.0f, 0.0f, 4095.0f);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
