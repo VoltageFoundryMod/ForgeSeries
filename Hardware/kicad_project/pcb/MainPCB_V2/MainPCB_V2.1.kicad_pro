@@ -451,7 +451,7 @@
     "pinned_symbol_libs": []
   },
   "meta": {
-    "filename": "MainPCB_V2.kicad_pro",
+    "filename": "MainPCB_V2.1.kicad_pro",
     "version": 3
   },
   "net_settings": {
@@ -486,7 +486,7 @@
     "last_paths": {
       "gencad": "",
       "idf": "",
-      "netlist": "",
+      "netlist": "./",
       "plot": "",
       "pos_files": "",
       "specctra_dsn": "",
@@ -608,7 +608,7 @@
     "meta": {
       "version": 1
     },
-    "net_format_name": "",
+    "net_format_name": "KiCad",
     "page_layout_descr_file": "",
     "plot_directory": "./",
     "space_save_all_events": true,
