@@ -743,6 +743,7 @@ class Output {
 
     // ----------- Envelope Generation Functions -----------
     void HandleTrigger() {
+        if (!_state) return; // Output disabled — ignore triggers
         if (_triggerMode && (_waveformType == WaveformType::ADEnvelope || _waveformType == WaveformType::AREnvelope || _waveformType == WaveformType::ADSREnvelope)) {
             if (!_waveActive || _envParams.retrigger) {
 #ifdef ENVELOPE_DEBUG
