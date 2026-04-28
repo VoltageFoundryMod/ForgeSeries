@@ -51,6 +51,10 @@ enum CVTarget {
     Output4Duty,
     Envelope1,
     Envelope2,
+    Envelope3,
+    Envelope4,
+    Output1,
+    Output2,
     Output3,
     Output4,
 };
@@ -86,8 +90,12 @@ String CVTargetDescription[] = {
     "Output 2 Duty",
     "Output 3 Duty",
     "Output 4 Duty",
+    "Output 1 Env",
+    "Output 2 Env",
     "Output 3 Env",
     "Output 4 Env",
+    "Output 1",
+    "Output 2",
     "Output 3",
     "Output 4",
 };
@@ -177,7 +185,9 @@ void HandleCVInputs() {
         //
         //   ONE_POLE(out, in, coeff): out = (1-coeff)*out + coeff*in
         //     here out=new_raw, in=old_filtered → result = (1-α)*new_raw + α*old
-        bool isDirectCV = (CVInputTarget[i] == CVTarget::Output3 ||
+        bool isDirectCV = (CVInputTarget[i] == CVTarget::Output1 ||
+                           CVInputTarget[i] == CVTarget::Output2 ||
+                           CVInputTarget[i] == CVTarget::Output3 ||
                            CVInputTarget[i] == CVTarget::Output4);
         if (isDirectCV) {
             ONE_POLE(channelADC[i], oldChannelADC[i], 0.15f);
@@ -308,18 +318,31 @@ void HandleCVTarget(int ch, float CVValue, CVTarget cvTarget) {
         break;
     case CVTarget::Envelope1: {
         // Schmitt-trigger hysteresis: higher threshold to arm, lower to release.
-        // Prevents false gate-releases from brief gate-input dips around midpoint
-        // (e.g. a clock output used as gate freezes at 0V for ~500µs during
-        // UpdateBPM timer-cancel; IIR-filtered CV can dip toward midpoint briefly).
+        bool wasTriggered = outputs[0].GetExternalTrigger();
+        outputs[0].SetExternalTrigger(CVValue > (wasTriggered ? (MAXDAC * 0.40f) : (MAXDAC * 0.60f)));
+        break;
+    }
+    case CVTarget::Envelope2: {
+        bool wasTriggered = outputs[1].GetExternalTrigger();
+        outputs[1].SetExternalTrigger(CVValue > (wasTriggered ? (MAXDAC * 0.40f) : (MAXDAC * 0.60f)));
+        break;
+    }
+    case CVTarget::Envelope3: {
         bool wasTriggered = outputs[2].GetExternalTrigger();
         outputs[2].SetExternalTrigger(CVValue > (wasTriggered ? (MAXDAC * 0.40f) : (MAXDAC * 0.60f)));
         break;
     }
-    case CVTarget::Envelope2: {
+    case CVTarget::Envelope4: {
         bool wasTriggered = outputs[3].GetExternalTrigger();
         outputs[3].SetExternalTrigger(CVValue > (wasTriggered ? (MAXDAC * 0.40f) : (MAXDAC * 0.60f)));
         break;
     }
+    case CVTarget::Output1:
+        outputs[0].SetCVValue(CVValue);
+        break;
+    case CVTarget::Output2:
+        outputs[1].SetCVValue(CVValue);
+        break;
     case CVTarget::Output3:
         outputs[2].SetCVValue(CVValue);
         break;

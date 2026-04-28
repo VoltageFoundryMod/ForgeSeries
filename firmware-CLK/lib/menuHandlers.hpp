@@ -240,15 +240,20 @@ static void setDuty2(int d) { outputs[2].SetDutyCycle(outputs[2].GetDutyCycle() 
 static void setDuty3(int d) { outputs[3].SetDutyCycle(outputs[3].GetDutyCycle() + d); unsavedChanges = true; }
 
 // ================================================================
-// Group 9 — Level / Offset / Waveform  (items 38–43)
+// Group 8 — Waveform (all 4 outputs)  (items 8–11)
 // ================================================================
 
-static void setLevel2(int d)  { outputs[2].SetLevel(outputs[2].GetLevel() + d);   unsavedChanges = true; }
-static void setOffset2(int d) { outputs[2].SetOffset(outputs[2].GetOffset() + d); unsavedChanges = true; }
-static void setLevel3(int d)  { outputs[3].SetLevel(outputs[3].GetLevel() + d);   unsavedChanges = true; }
-static void setOffset3(int d) { outputs[3].SetOffset(outputs[3].GetOffset() + d); unsavedChanges = true; }
-
 // Waveform scroll: ignore speedFactor magnitude — use direction only (preserves original ±1 wrap)
+static void setWaveform0(int d) {
+    int dir = (d > 0) ? 1 : -1;
+    outputs[0].SetWaveformType(static_cast<WaveformType>((outputs[0].GetWaveformType() + WaveformTypeLength + dir) % WaveformTypeLength));
+    unsavedChanges = true;
+}
+static void setWaveform1(int d) {
+    int dir = (d > 0) ? 1 : -1;
+    outputs[1].SetWaveformType(static_cast<WaveformType>((outputs[1].GetWaveformType() + WaveformTypeLength + dir) % WaveformTypeLength));
+    unsavedChanges = true;
+}
 static void setWaveform2(int d) {
     int dir = (d > 0) ? 1 : -1;
     outputs[2].SetWaveformType(static_cast<WaveformType>((outputs[2].GetWaveformType() + WaveformTypeLength + dir) % WaveformTypeLength));
@@ -261,15 +266,26 @@ static void setWaveform3(int d) {
 }
 
 // ================================================================
+// Group 13 — Level / Offset (all 4 outputs)  (items 12–19)
+// ================================================================
+
+static void setLevel0(int d)  { outputs[0].SetLevel(outputs[0].GetLevel() + d);   unsavedChanges = true; }
+static void setOffset0(int d) { outputs[0].SetOffset(outputs[0].GetOffset() + d); unsavedChanges = true; }
+static void setLevel1(int d)  { outputs[1].SetLevel(outputs[1].GetLevel() + d);   unsavedChanges = true; }
+static void setOffset1(int d) { outputs[1].SetOffset(outputs[1].GetOffset() + d); unsavedChanges = true; }
+static void setLevel2(int d)  { outputs[2].SetLevel(outputs[2].GetLevel() + d);   unsavedChanges = true; }
+static void setOffset2(int d) { outputs[2].SetOffset(outputs[2].GetOffset() + d); unsavedChanges = true; }
+static void setLevel3(int d)  { outputs[3].SetLevel(outputs[3].GetLevel() + d);   unsavedChanges = true; }
+static void setOffset3(int d) { outputs[3].SetOffset(outputs[3].GetOffset() + d); unsavedChanges = true; }
+
+// ================================================================
 // Group 10 — Envelope settings  (items 44–50)
 // ================================================================
 
-// Envelope output select is clamped to outputs 2–3 (index 2–3), wrapping within that range.
+// Envelope output select wraps across all 4 outputs (indices 0–3).
 static void setEnvOutputSel(int d) {
     int dir = (d > 0) ? 1 : -1;
-    envelopeOutputSelect = (envelopeOutputSelect + dir < 2) ? 3 :
-                           (envelopeOutputSelect + dir > 3) ? 2 :
-                            envelopeOutputSelect + dir;
+    envelopeOutputSelect = (envelopeOutputSelect + dir + NUM_OUTPUTS) % NUM_OUTPUTS;
     unsavedChanges = true;
 }
 // Attack/decay/release receive delta × 2 to match the original ×2 speedFactor scale.
@@ -416,13 +432,21 @@ static String getDuty1()  { return outputs[1].GetDutyCycleDescription(); }
 static String getDuty2()  { return outputs[2].GetDutyCycleDescription(); }
 static String getDuty3()  { return outputs[3].GetDutyCycleDescription(); }
 
-// ── Group 9: Level / Offset / Waveform ──────────────────────
+// ── Group 8: Waveform (all 4) ────────────────────────────────
+static String getWav0()   { return outputs[0].GetWaveformTypeDescription(); }
+static String getWav1()   { return outputs[1].GetWaveformTypeDescription(); }
+static String getWav2()   { return outputs[2].GetWaveformTypeDescription(); }
+static String getWav3()   { return outputs[3].GetWaveformTypeDescription(); }
+
+// ── Group 13: Level / Offset (all 4) ─────────────────────────
+static String getLvl0()   { return outputs[0].GetLevelDescription(); }
+static String getOff0()   { return outputs[0].GetOffsetDescription(); }
+static String getLvl1()   { return outputs[1].GetLevelDescription(); }
+static String getOff1()   { return outputs[1].GetOffsetDescription(); }
 static String getLvl2()   { return outputs[2].GetLevelDescription(); }
 static String getOff2()   { return outputs[2].GetOffsetDescription(); }
 static String getLvl3()   { return outputs[3].GetLevelDescription(); }
 static String getOff3()   { return outputs[3].GetOffsetDescription(); }
-static String getWav2()   { return outputs[2].GetWaveformTypeDescription(); }
-static String getWav3()   { return outputs[3].GetWaveformTypeDescription(); }
 
 // ── Group 10: Envelope ───────────────────────────────────────
 static char _envBuf[8];
@@ -435,8 +459,8 @@ static String getCurve()   { return outputs[envelopeOutputSelect].GetCurveDescri
 static String getRetrig()  { return outputs[envelopeOutputSelect].GetRetriggerDescription(); }
 
 // ── Group 11: CV inputs ──────────────────────────────────────
-static String getCVTgt0()  { return CVTargetDescription[menuMode == 51 ? pendingCVInputTarget[0] : CVInputTarget[0]]; }
-static String getCVTgt1()  { return CVTargetDescription[menuMode == 52 ? pendingCVInputTarget[1] : CVInputTarget[1]]; }
+static String getCVTgt0()  { return CVTargetDescription[menuMode == 57 ? pendingCVInputTarget[0] : CVInputTarget[0]]; }
+static String getCVTgt1()  { return CVTargetDescription[menuMode == 58 ? pendingCVInputTarget[1] : CVInputTarget[1]]; }
 static char _cvBuf[8];
 static String getCVAttn0() { snprintf(_cvBuf, sizeof(_cvBuf), "%d%%", CVInputAttenuation[0]); return _cvBuf; }
 static String getCVOff0()  { snprintf(_cvBuf, sizeof(_cvBuf), "%d%%", CVInputOffset[0]);      return _cvBuf; }
@@ -475,89 +499,97 @@ const MenuItem MENU_ITEMS[] = {
     { "OUTPUT 4:", getDiv3,      nullptr,    84,   0,   1, ROW_SINGLE, MENU_EDIT,   setDiv3,          nullptr          }, //  6
     { "EXT. DIV:", getExtDiv,    nullptr,    84,   0,   1, ROW_SINGLE, MENU_EDIT,   setExtDivider,    nullptr          }, //  7
 
-    // ── Group 2: Output state ─────────────────────────────── items  8–11
-    { "OUTPUT 1:", getState0,    nullptr,    70,   0,   2, ROW_SINGLE, MENU_TOGGLE, nullptr,          toggleOut0       }, //  8
-    { "OUTPUT 2:", getState1,    nullptr,    70,   0,   2, ROW_SINGLE, MENU_TOGGLE, nullptr,          toggleOut1       }, //  9
-    { "OUTPUT 3:", getState2,    nullptr,    70,   0,   2, ROW_SINGLE, MENU_TOGGLE, nullptr,          toggleOut2       }, // 10
-    { "OUTPUT 4:", getState3,    nullptr,    70,   0,   2, ROW_SINGLE, MENU_TOGGLE, nullptr,          toggleOut3       }, // 11
+    // ── Group 8: Waveform (all 4 outputs) ──────────────────── items  8–11
+    { "OUT 1 WAV:", getWav0,     nullptr,    70,   0,   8, ROW_SINGLE, MENU_EDIT,   setWaveform0,     nullptr          }, //  8
+    { "OUT 2 WAV:", getWav1,     nullptr,    70,   0,   8, ROW_SINGLE, MENU_EDIT,   setWaveform1,     nullptr          }, //  9
+    { "OUT 3 WAV:", getWav2,     nullptr,    70,   0,   8, ROW_SINGLE, MENU_EDIT,   setWaveform2,     nullptr          }, // 10
+    { "OUT 4 WAV:", getWav3,     nullptr,    70,   0,   8, ROW_SINGLE, MENU_EDIT,   setWaveform3,     nullptr          }, // 11
 
-    // ── Group 3: Pulse probability ────────────────────────── items 12–15
-    { "OUTPUT 1:", getProb0,     nullptr,    70,   0,   3, ROW_SINGLE, MENU_EDIT,   setProb0,         nullptr          }, // 12
-    { "OUTPUT 2:", getProb1,     nullptr,    70,   0,   3, ROW_SINGLE, MENU_EDIT,   setProb1,         nullptr          }, // 13
-    { "OUTPUT 3:", getProb2,     nullptr,    70,   0,   3, ROW_SINGLE, MENU_EDIT,   setProb2,         nullptr          }, // 14
-    { "OUTPUT 4:", getProb3,     nullptr,    70,   0,   3, ROW_SINGLE, MENU_EDIT,   setProb3,         nullptr          }, // 15
+    // ── Group 13: Level / Offset (all 4 outputs) ────────────── items 12–19
+    // col1x=70 (LVL), col2x=100 (OFF); even items = TWOCOL, odd = HIDDEN
+    { "OUTPUT 1:", getLvl0,      getOff0,    70,  100, 13, ROW_TWOCOL, MENU_EDIT,   setLevel0,        nullptr          }, // 12
+    { "OUTPUT 1:", getLvl0,      getOff0,    70,  100, 13, ROW_HIDDEN, MENU_EDIT,   setOffset0,       nullptr          }, // 13
+    { "OUTPUT 2:", getLvl1,      getOff1,    70,  100, 13, ROW_TWOCOL, MENU_EDIT,   setLevel1,        nullptr          }, // 14
+    { "OUTPUT 2:", getLvl1,      getOff1,    70,  100, 13, ROW_HIDDEN, MENU_EDIT,   setOffset1,       nullptr          }, // 15
+    { "OUTPUT 3:", getLvl2,      getOff2,    70,  100, 13, ROW_TWOCOL, MENU_EDIT,   setLevel2,        nullptr          }, // 16
+    { "OUTPUT 3:", getLvl2,      getOff2,    70,  100, 13, ROW_HIDDEN, MENU_EDIT,   setOffset2,       nullptr          }, // 17
+    { "OUTPUT 4:", getLvl3,      getOff3,    70,  100, 13, ROW_TWOCOL, MENU_EDIT,   setLevel3,        nullptr          }, // 18
+    { "OUTPUT 4:", getLvl3,      getOff3,    70,  100, 13, ROW_HIDDEN, MENU_EDIT,   setOffset3,       nullptr          }, // 19
 
-    // ── Group 4: Euclidean rhythm ─────────────────────────── items 16–21
-    { "OUTPUT:",   getEucSel,    nullptr,    64,   0,   4, ROW_SINGLE, MENU_EDIT,   setEuclideanOutputSel, nullptr     }, // 16
-    { "ENABLED:",  getEucEn,     nullptr,    64,   0,   4, ROW_SINGLE, MENU_TOGGLE, nullptr,          toggleEuclidean  }, // 17
-    { "STEPS:",    getEucSteps,  nullptr,    64,   0,   4, ROW_SINGLE, MENU_EDIT,   setEuclideanSteps,    nullptr      }, // 18
-    { "HITS:",     getEucTrig,   nullptr,    64,   0,   4, ROW_SINGLE, MENU_EDIT,   setEuclideanTrig,     nullptr      }, // 19
-    { "ROT:",      getEucRot,    nullptr,    64,   0,   4, ROW_SINGLE, MENU_EDIT,   setEuclideanRot,      nullptr      }, // 20
-    { "PAD:",      getEucPad,    nullptr,    64,   0,   4, ROW_SINGLE, MENU_EDIT,   setEuclideanPad,      nullptr      }, // 21
+    // ── Group 2: Output state ─────────────────────────────── items 20–23
+    { "OUTPUT 1:", getState0,    nullptr,    70,   0,   2, ROW_SINGLE, MENU_TOGGLE, nullptr,          toggleOut0       }, // 20
+    { "OUTPUT 2:", getState1,    nullptr,    70,   0,   2, ROW_SINGLE, MENU_TOGGLE, nullptr,          toggleOut1       }, // 21
+    { "OUTPUT 3:", getState2,    nullptr,    70,   0,   2, ROW_SINGLE, MENU_TOGGLE, nullptr,          toggleOut2       }, // 22
+    { "OUTPUT 4:", getState3,    nullptr,    70,   0,   2, ROW_SINGLE, MENU_TOGGLE, nullptr,          toggleOut3       }, // 23
 
-    // ── Group 5: Swing ────────────────────────────────────── items 22–29
+    // ── Group 3: Pulse probability ────────────────────────── items 24–27
+    { "OUTPUT 1:", getProb0,     nullptr,    70,   0,   3, ROW_SINGLE, MENU_EDIT,   setProb0,         nullptr          }, // 24
+    { "OUTPUT 2:", getProb1,     nullptr,    70,   0,   3, ROW_SINGLE, MENU_EDIT,   setProb1,         nullptr          }, // 25
+    { "OUTPUT 3:", getProb2,     nullptr,    70,   0,   3, ROW_SINGLE, MENU_EDIT,   setProb2,         nullptr          }, // 26
+    { "OUTPUT 4:", getProb3,     nullptr,    70,   0,   3, ROW_SINGLE, MENU_EDIT,   setProb3,         nullptr          }, // 27
+
+    // ── Group 4: Euclidean rhythm ─────────────────────────── items 28–33
+    { "OUTPUT:",   getEucSel,    nullptr,    64,   0,   4, ROW_SINGLE, MENU_EDIT,   setEuclideanOutputSel, nullptr     }, // 28
+    { "ENABLED:",  getEucEn,     nullptr,    64,   0,   4, ROW_SINGLE, MENU_TOGGLE, nullptr,          toggleEuclidean  }, // 29
+    { "STEPS:",    getEucSteps,  nullptr,    64,   0,   4, ROW_SINGLE, MENU_EDIT,   setEuclideanSteps,    nullptr      }, // 30
+    { "HITS:",     getEucTrig,   nullptr,    64,   0,   4, ROW_SINGLE, MENU_EDIT,   setEuclideanTrig,     nullptr      }, // 31
+    { "ROT:",      getEucRot,    nullptr,    64,   0,   4, ROW_SINGLE, MENU_EDIT,   setEuclideanRot,      nullptr      }, // 32
+    { "PAD:",      getEucPad,    nullptr,    64,   0,   4, ROW_SINGLE, MENU_EDIT,   setEuclideanPad,      nullptr      }, // 33
+
+    // ── Group 5: Swing ────────────────────────────────────── items 34–41
     // col1x=70 (AMT), col2x=100 (EVERY)
-    { "OUTPUT 1:", getSwingAmt0, getSwingEv0, 70, 100, 5, ROW_TWOCOL, MENU_EDIT,   setSwingAmt0,     nullptr          }, // 22
-    { "OUTPUT 1:", getSwingAmt0, getSwingEv0, 70, 100, 5, ROW_HIDDEN, MENU_EDIT,   setSwingEvery0,   nullptr          }, // 23  (merged with 22)
-    { "OUTPUT 2:", getSwingAmt1, getSwingEv1, 70, 100, 5, ROW_TWOCOL, MENU_EDIT,   setSwingAmt1,     nullptr          }, // 24
-    { "OUTPUT 2:", getSwingAmt1, getSwingEv1, 70, 100, 5, ROW_HIDDEN, MENU_EDIT,   setSwingEvery1,   nullptr          }, // 25
-    { "OUTPUT 3:", getSwingAmt2, getSwingEv2, 70, 100, 5, ROW_TWOCOL, MENU_EDIT,   setSwingAmt2,     nullptr          }, // 26
-    { "OUTPUT 3:", getSwingAmt2, getSwingEv2, 70, 100, 5, ROW_HIDDEN, MENU_EDIT,   setSwingEvery2,   nullptr          }, // 27
-    { "OUTPUT 4:", getSwingAmt3, getSwingEv3, 70, 100, 5, ROW_TWOCOL, MENU_EDIT,   setSwingAmt3,     nullptr          }, // 28
-    { "OUTPUT 4:", getSwingAmt3, getSwingEv3, 70, 100, 5, ROW_HIDDEN, MENU_EDIT,   setSwingEvery3,   nullptr          }, // 29
+    { "OUTPUT 1:", getSwingAmt0, getSwingEv0, 70, 100, 5, ROW_TWOCOL, MENU_EDIT,   setSwingAmt0,     nullptr          }, // 34
+    { "OUTPUT 1:", getSwingAmt0, getSwingEv0, 70, 100, 5, ROW_HIDDEN, MENU_EDIT,   setSwingEvery0,   nullptr          }, // 35  (merged with 34)
+    { "OUTPUT 2:", getSwingAmt1, getSwingEv1, 70, 100, 5, ROW_TWOCOL, MENU_EDIT,   setSwingAmt1,     nullptr          }, // 36
+    { "OUTPUT 2:", getSwingAmt1, getSwingEv1, 70, 100, 5, ROW_HIDDEN, MENU_EDIT,   setSwingEvery1,   nullptr          }, // 37
+    { "OUTPUT 3:", getSwingAmt2, getSwingEv2, 70, 100, 5, ROW_TWOCOL, MENU_EDIT,   setSwingAmt2,     nullptr          }, // 38
+    { "OUTPUT 3:", getSwingAmt2, getSwingEv2, 70, 100, 5, ROW_HIDDEN, MENU_EDIT,   setSwingEvery2,   nullptr          }, // 39
+    { "OUTPUT 4:", getSwingAmt3, getSwingEv3, 70, 100, 5, ROW_TWOCOL, MENU_EDIT,   setSwingAmt3,     nullptr          }, // 40
+    { "OUTPUT 4:", getSwingAmt3, getSwingEv3, 70, 100, 5, ROW_HIDDEN, MENU_EDIT,   setSwingEvery3,   nullptr          }, // 41
 
-    // ── Group 6: Phase shift ──────────────────────────────── items 30–33
-    { "OUTPUT 1:", getPhase0,    nullptr,    70,   0,   6, ROW_SINGLE, MENU_EDIT,   setPhase0,        nullptr          }, // 30
-    { "OUTPUT 2:", getPhase1,    nullptr,    70,   0,   6, ROW_SINGLE, MENU_EDIT,   setPhase1,        nullptr          }, // 31
-    { "OUTPUT 3:", getPhase2,    nullptr,    70,   0,   6, ROW_SINGLE, MENU_EDIT,   setPhase2,        nullptr          }, // 32
-    { "OUTPUT 4:", getPhase3,    nullptr,    70,   0,   6, ROW_SINGLE, MENU_EDIT,   setPhase3,        nullptr          }, // 33
+    // ── Group 6: Phase shift ──────────────────────────────── items 42–45
+    { "OUTPUT 1:", getPhase0,    nullptr,    70,   0,   6, ROW_SINGLE, MENU_EDIT,   setPhase0,        nullptr          }, // 42
+    { "OUTPUT 2:", getPhase1,    nullptr,    70,   0,   6, ROW_SINGLE, MENU_EDIT,   setPhase1,        nullptr          }, // 43
+    { "OUTPUT 3:", getPhase2,    nullptr,    70,   0,   6, ROW_SINGLE, MENU_EDIT,   setPhase2,        nullptr          }, // 44
+    { "OUTPUT 4:", getPhase3,    nullptr,    70,   0,   6, ROW_SINGLE, MENU_EDIT,   setPhase3,        nullptr          }, // 45
 
-    // ── Group 7: Duty cycle ───────────────────────────────── items 34–37
-    { "OUT 1 DUTY:", getDuty0,   nullptr,    70,   0,   7, ROW_SINGLE, MENU_EDIT,   setDuty0,         nullptr          }, // 34
-    { "OUT 2 DUTY:", getDuty1,   nullptr,    70,   0,   7, ROW_SINGLE, MENU_EDIT,   setDuty1,         nullptr          }, // 35
-    { "OUT 3 DUTY:", getDuty2,   nullptr,    70,   0,   7, ROW_SINGLE, MENU_EDIT,   setDuty2,         nullptr          }, // 36
-    { "OUT 4 DUTY:", getDuty3,   nullptr,    70,   0,   7, ROW_SINGLE, MENU_EDIT,   setDuty3,         nullptr          }, // 37
+    // ── Group 7: Duty cycle ───────────────────────────────── items 46–49
+    { "OUT 1 DUTY:", getDuty0,   nullptr,    70,   0,   7, ROW_SINGLE, MENU_EDIT,   setDuty0,         nullptr          }, // 46
+    { "OUT 2 DUTY:", getDuty1,   nullptr,    70,   0,   7, ROW_SINGLE, MENU_EDIT,   setDuty1,         nullptr          }, // 47
+    { "OUT 3 DUTY:", getDuty2,   nullptr,    70,   0,   7, ROW_SINGLE, MENU_EDIT,   setDuty2,         nullptr          }, // 48
+    { "OUT 4 DUTY:", getDuty3,   nullptr,    70,   0,   7, ROW_SINGLE, MENU_EDIT,   setDuty3,         nullptr          }, // 49
 
-    // ── Group 8: Level / Offset  (Out 3+4)  + Waveform ───── items 38–43
-    // col1x=70 (LVL), col2x=100 (OFF) for items 38-41; items 42-43 single
-    { "OUTPUT 3:", getLvl2,      getOff2,    70,  100,  8, ROW_TWOCOL, MENU_EDIT,   setLevel2,        nullptr          }, // 38
-    { "OUTPUT 3:", getLvl2,      getOff2,    70,  100,  8, ROW_HIDDEN, MENU_EDIT,   setOffset2,       nullptr          }, // 39
-    { "OUTPUT 4:", getLvl3,      getOff3,    70,  100,  8, ROW_TWOCOL, MENU_EDIT,   setLevel3,        nullptr          }, // 40
-    { "OUTPUT 4:", getLvl3,      getOff3,    70,  100,  8, ROW_HIDDEN, MENU_EDIT,   setOffset3,       nullptr          }, // 41
-    { "OUT 3 WAV:", getWav2,     nullptr,    70,   0,   8, ROW_SINGLE, MENU_EDIT,   setWaveform2,     nullptr          }, // 42
-    { "OUT 4 WAV:", getWav3,     nullptr,    70,   0,   8, ROW_SINGLE, MENU_EDIT,   setWaveform3,     nullptr          }, // 43
+    // ── Group 9: Envelope ─────────────────────────────────── items 50–56
+    { "OUTPUT:",   getEnvSel,    nullptr,    64,   0,   9, ROW_SINGLE, MENU_EDIT,   setEnvOutputSel,  nullptr          }, // 50
+    { "Attack:",   getAttack,    nullptr,    64,   0,   9, ROW_SINGLE, MENU_EDIT,   setAttack,        nullptr          }, // 51
+    { "Decay:",    getDecay,     nullptr,    64,   0,   9, ROW_SINGLE, MENU_EDIT,   setDecay,         nullptr          }, // 52
+    { "Sustain:",  getSustain,   nullptr,    64,   0,   9, ROW_SINGLE, MENU_EDIT,   setSustain,       nullptr          }, // 53
+    { "Release:",  getRelease,   nullptr,    64,   0,   9, ROW_SINGLE, MENU_EDIT,   setRelease,       nullptr          }, // 54
+    { "Curv:",     getCurve,     nullptr,    64,   0,   9, ROW_SINGLE, MENU_EDIT,   setCurve,         nullptr          }, // 55
+    { "Retr:",     getRetrig,    nullptr,    64,   0,   9, ROW_SINGLE, MENU_TOGGLE, nullptr,          toggleRetrigger  }, // 56
 
-    // ── Group 9: Envelope ─────────────────────────────────── items 44–50
-    { "OUTPUT:",   getEnvSel,    nullptr,    64,   0,   9, ROW_SINGLE, MENU_EDIT,   setEnvOutputSel,  nullptr          }, // 44
-    { "Attack:",   getAttack,    nullptr,    64,   0,   9, ROW_SINGLE, MENU_EDIT,   setAttack,        nullptr          }, // 45
-    { "Decay:",    getDecay,     nullptr,    64,   0,   9, ROW_SINGLE, MENU_EDIT,   setDecay,         nullptr          }, // 46
-    { "Sustain:",  getSustain,   nullptr,    64,   0,   9, ROW_SINGLE, MENU_EDIT,   setSustain,       nullptr          }, // 47
-    { "Release:",  getRelease,   nullptr,    64,   0,   9, ROW_SINGLE, MENU_EDIT,   setRelease,       nullptr          }, // 48
-    { "Curv:",     getCurve,     nullptr,    64,   0,   9, ROW_SINGLE, MENU_EDIT,   setCurve,         nullptr          }, // 49
-    { "Retr:",     getRetrig,    nullptr,    64,   0,   9, ROW_SINGLE, MENU_TOGGLE, nullptr,          toggleRetrigger  }, // 50
+    // ── Group 10: CV inputs ───────────────────────────────── items 57–62
+    // Items 57-58: full-width target rows; 59-62: two-col ATTN+OFF
+    { "CV 1:",     getCVTgt0,    nullptr,    70,   0,  10, ROW_SINGLE, MENU_EDIT,   setCVTarget0,     nullptr          }, // 57
+    { "CV 2:",     getCVTgt1,    nullptr,    70,   0,  10, ROW_SINGLE, MENU_EDIT,   setCVTarget1,     nullptr          }, // 58
+    { "CV 1:",     getCVAttn0,   getCVOff0,  60,  100, 10, ROW_TWOCOL, MENU_EDIT,   setCVAttn0,       nullptr          }, // 59
+    { "CV 1:",     getCVAttn0,   getCVOff0,  60,  100, 10, ROW_HIDDEN, MENU_EDIT,   setCVOffset0,     nullptr          }, // 60
+    { "CV 2:",     getCVAttn1,   getCVOff1,  60,  100, 10, ROW_TWOCOL, MENU_EDIT,   setCVAttn1,       nullptr          }, // 61
+    { "CV 2:",     getCVAttn1,   getCVOff1,  60,  100, 10, ROW_HIDDEN, MENU_EDIT,   setCVOffset1,     nullptr          }, // 62
 
-    // ── Group 10: CV inputs ───────────────────────────────── items 51–56
-    // Items 51-52: full-width target rows; 53-56: two-col ATTN+OFF
-    { "CV 1:",     getCVTgt0,    nullptr,    70,   0,  10, ROW_SINGLE, MENU_EDIT,   setCVTarget0,     nullptr          }, // 51
-    { "CV 2:",     getCVTgt1,    nullptr,    70,   0,  10, ROW_SINGLE, MENU_EDIT,   setCVTarget1,     nullptr          }, // 52
-    { "CV 1:",     getCVAttn0,   getCVOff0,  60,  100, 10, ROW_TWOCOL, MENU_EDIT,   setCVAttn0,       nullptr          }, // 53
-    { "CV 1:",     getCVAttn0,   getCVOff0,  60,  100, 10, ROW_HIDDEN, MENU_EDIT,   setCVOffset0,     nullptr          }, // 54
-    { "CV 2:",     getCVAttn1,   getCVOff1,  60,  100, 10, ROW_TWOCOL, MENU_EDIT,   setCVAttn1,       nullptr          }, // 55
-    { "CV 2:",     getCVAttn1,   getCVOff1,  60,  100, 10, ROW_HIDDEN, MENU_EDIT,   setCVOffset1,     nullptr          }, // 56
+    // ── Group 11: Quantizer ───────────────────────────────── items 63–67
+    { "OUTPUT:",      getQtzSel,  nullptr,  64,   0,  11, ROW_SINGLE, MENU_EDIT,   setQtzOutputSel,  nullptr          }, // 63
+    { "ENABLED:",     getQtzEn,   nullptr,  64,   0,  11, ROW_SINGLE, MENU_TOGGLE, nullptr,          toggleQuantizer  }, // 64
+    { "ROOT NOTE:",   getQtzNote, nullptr,  64,   0,  11, ROW_SINGLE, MENU_EDIT,   setQtzNote,       nullptr          }, // 65
+    { "SCALE:",       getQtzScale,nullptr,  64,   0,  11, ROW_SINGLE, MENU_EDIT,   setQtzScale,      nullptr          }, // 66
+    { "OCT TRANSPOSE:",getQtzOct, nullptr,  64,   0,  11, ROW_SINGLE, MENU_EDIT,   setQtzOctave,     nullptr          }, // 67
 
-    // ── Group 11: Quantizer ───────────────────────────────── items 57–61
-    { "OUTPUT:",      getQtzSel,  nullptr,  64,   0,  11, ROW_SINGLE, MENU_EDIT,   setQtzOutputSel,  nullptr          }, // 57
-    { "ENABLED:",     getQtzEn,   nullptr,  64,   0,  11, ROW_SINGLE, MENU_TOGGLE, nullptr,          toggleQuantizer  }, // 58
-    { "ROOT NOTE:",   getQtzNote, nullptr,  64,   0,  11, ROW_SINGLE, MENU_EDIT,   setQtzNote,       nullptr          }, // 59
-    { "SCALE:",       getQtzScale,nullptr,  64,   0,  11, ROW_SINGLE, MENU_EDIT,   setQtzScale,      nullptr          }, // 60
-    { "OCT TRANSPOSE:",getQtzOct, nullptr,  64,   0,  11, ROW_SINGLE, MENU_EDIT,   setQtzOctave,     nullptr          }, // 61
-
-    // ── Group 12: Settings / save-load ───────────────────── items 62–66
-    { "TAP TEMPO",    nullptr,    nullptr,   0,   0,  12, ROW_ACTION, MENU_ACTION, nullptr,          SetTapTempo      }, // 62
-    { "PRESET SLOT:", getSaveSlot,nullptr,  64,   0,  12, ROW_SINGLE, MENU_EDIT,   setSaveSlot,      nullptr          }, // 63
-    { "SAVE",         nullptr,    nullptr,   0,   0,  12, ROW_ACTION, MENU_ACTION, nullptr,          actionSave       }, // 64
-    { "LOAD",         nullptr,    nullptr,   0,   0,  12, ROW_ACTION, MENU_ACTION, nullptr,          actionLoad       }, // 65
-    { "LOAD DEFAULTS",nullptr,    nullptr,   0,   0,  12, ROW_ACTION, MENU_ACTION, nullptr,          actionLoadDefaults}, // 66
+    // ── Group 12: Settings / save-load ───────────────────── items 68–72
+    { "TAP TEMPO",    nullptr,    nullptr,   0,   0,  12, ROW_ACTION, MENU_ACTION, nullptr,          SetTapTempo      }, // 68
+    { "PRESET SLOT:", getSaveSlot,nullptr,  64,   0,  12, ROW_SINGLE, MENU_EDIT,   setSaveSlot,      nullptr          }, // 69
+    { "SAVE",         nullptr,    nullptr,   0,   0,  12, ROW_ACTION, MENU_ACTION, nullptr,          actionSave       }, // 70
+    { "LOAD",         nullptr,    nullptr,   0,   0,  12, ROW_ACTION, MENU_ACTION, nullptr,          actionLoad       }, // 71
+    { "LOAD DEFAULTS",nullptr,    nullptr,   0,   0,  12, ROW_ACTION, MENU_ACTION, nullptr,          actionLoadDefaults}, // 72
 };
 
 const int MENU_ITEM_COUNT = (int)(sizeof(MENU_ITEMS) / sizeof(MENU_ITEMS[0]));
