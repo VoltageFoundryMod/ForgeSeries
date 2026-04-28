@@ -80,7 +80,7 @@ int menuMode = 0;                    // Menu mode for parameter editing
 bool displayRefresh = 1;             // Display refresh flag
 bool unsavedChanges = false;         // Unsaved changes flag
 int euclideanOutputSelect = 0;       // Euclidean rhythm output index
-int quantizerOutputSelect = 2;       // Quantizer output index
+int quantizerOutputSelect = 0;       // Quantizer output index
 int envelopeOutputSelect = 0;        // Envelope output index
 unsigned long lastEncoderUpdate = 0; // Last encoder update time
 

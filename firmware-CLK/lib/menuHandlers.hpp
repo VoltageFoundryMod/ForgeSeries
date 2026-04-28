@@ -329,12 +329,10 @@ static void setCVOffset1(int d) { CVInputOffset[1]      = constrain(CVInputOffse
 // Group 12 — Quantizer  (items 57–61)
 // ================================================================
 
-// Quantizer output select is also clamped to outputs 2–3.
+// Quantizer output select wraps across all 4 outputs (indices 0–3).
 static void setQtzOutputSel(int d) {
     int dir = (d > 0) ? 1 : -1;
-    quantizerOutputSelect = (quantizerOutputSelect + dir < 2) ? 3 :
-                            (quantizerOutputSelect + dir > 3) ? 2 :
-                             quantizerOutputSelect + dir;
+    quantizerOutputSelect = (quantizerOutputSelect + dir + NUM_OUTPUTS) % NUM_OUTPUTS;
     unsavedChanges = true;
 }
 static void toggleQuantizer()  { outputs[quantizerOutputSelect].ToggleQuantizer(); unsavedChanges = true; }
