@@ -24,6 +24,8 @@ enum WaveformType {
     LogEnvelope,
     InvExpEnvelope,
     InvLogEnvelope,
+    Hatchet2,       // 2 square sub-pulses per clock cycle
+    Hatchet4,       // 4 square sub-pulses per clock cycle
     Noise,
     SmoothNoise,
     SampleHold,
@@ -45,6 +47,8 @@ String WaveformTypeDescriptions[] = {
     "Log Env",
     "Inv Exp Env",
     "Inv Log Env",
+    "Hatchet x2",
+    "Hatchet x4",
     "Noise",
     "SmoothNoise",
     "S&H",
@@ -451,6 +455,11 @@ class Output {
     void StopWaveform() {
         switch (_waveformType) {
         case WaveformType::Square:
+            SetPulse(false);
+            _waveActive = false;
+            break;
+        case WaveformType::Hatchet2:
+        case WaveformType::Hatchet4:
             SetPulse(false);
             _waveActive = false;
             break;
@@ -1156,12 +1165,13 @@ void Output::Pulse(int PPQN, unsigned long globalTick) {
     // to avoid the Env divider slot (clockDivider=10000 → periodTicks<1 →
     // int(periodTicks)==0 → % 0 UB fires GeneratePulse() every tick).
     if (!_triggerMode) {
+        bool _isHatchet = (_waveformType == WaveformType::Hatchet2 || _waveformType == WaveformType::Hatchet4);
         // If using an external clock, generate a pulse based on the internal pulse counter
         // dirty workaround to make this work with clock dividers
         if (_externalClock && _clockDividers[_dividerIndex] < 1) {
             if (_internalPulseCounter % clockDividerExternal == 0 || _internalPulseCounter == 0) {
                 GeneratePulse(PPQN, globalTick);
-            } else if (_internalPulseCounter % clockDividerExternal == _externalPulseDuration) {
+            } else if (!_isHatchet && _internalPulseCounter % clockDividerExternal == _externalPulseDuration) {
                 StopWaveform();
             }
         } else {
@@ -1170,7 +1180,7 @@ void Output::Pulse(int PPQN, unsigned long globalTick) {
             if (iPeriod > 0) {
                 if ((tickCounterSwing - phaseOffsetTicks) % iPeriod == 0 || (globalTick == 0)) {
                     GeneratePulse(PPQN, globalTick);
-                } else if ((tickCounterSwing - phaseOffsetTicks) % iPeriod == _pulseDuration) {
+                } else if (!_isHatchet && (tickCounterSwing - phaseOffsetTicks) % iPeriod == _pulseDuration) {
                     StopWaveform();
                 }
             }
@@ -1211,6 +1221,28 @@ void Output::Pulse(int PPQN, unsigned long globalTick) {
     case WaveformType::SampleHold:
         GenerateSampleHold(PPQN);
         break;
+    case WaveformType::Hatchet2:
+    case WaveformType::Hatchet4: {
+        if (_waveActive) {
+            int N = (_waveformType == WaveformType::Hatchet2) ? 2 : 4;
+            int iPeriod = max(1, int(periodTicks));
+            unsigned long adjustedTick = (tickCounterSwing >= phaseOffsetTicks)
+                                             ? (tickCounterSwing - phaseOffsetTicks) : 0;
+            int tickInPeriod = (int)(adjustedTick % (unsigned long)iPeriod);
+            if (tickInPeriod < (int)_pulseDuration) {
+                // Inside the "up" window: evenly divide into N square sub-pulses at 50% duty each
+                int subPeriod   = max(1, (int)_pulseDuration / N);
+                int subDuration = max(1, subPeriod / 2);
+                _isPulseOn = (tickInPeriod % subPeriod) < subDuration;
+            } else {
+                // Inside the "down" window: always silent
+                _isPulseOn = false;
+            }
+        } else {
+            _isPulseOn = false;
+        }
+        break;
+    }
     case WaveformType::Play:
         if (_waveActive) {
             _waveValue = MaxWaveValue;
@@ -1320,7 +1352,9 @@ uint32_t Output::GetOutputLevel() {
     } else
 #endif
     {
-        if (_waveformType == WaveformType::Square) {
+        if (_waveformType == WaveformType::Square ||
+            _waveformType == WaveformType::Hatchet2 ||
+            _waveformType == WaveformType::Hatchet4) {
             adjustedLevel = _isPulseOn ? (MaxWaveValue * (_level / 100.0)) + ((_offset / 100.0) * MaxWaveValue) : _offset;
             adjustedLevel = constrain(adjustedLevel, 0, MaxWaveValue);
         } else {

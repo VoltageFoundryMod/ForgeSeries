@@ -222,6 +222,8 @@ They support the following:
 - **Exponential Envelope**: An exponential envelope curve (starts at 0% raising to 100%) with adjustable level and offset. Triggered by clock pulses.
 - **Inverted Logarithm Envelope**: An inverted logarithm envelope curve (starts at 100% decaying to 0) with adjustable level and offset. Triggered by clock pulses.
 - **Inverted Exponential Envelope**: An inverted exponential envelope curve (starts at 100% decaying to 0) with adjustable level and offset. Triggered by clock pulses.
+- **Hatchet x2**: Generates 2 square pulses in one up clock cycle. The pulse width can be adjusted by the duty cycle parameter. Level and offset can also be adjusted.
+- **Hatchet x4**: Generates 4 square pulses in one up clock cycle. The pulse width can be adjusted by the duty cycle parameter. Level and offset can also be adjusted.
 - **Noise**: A random signal with adjustable level and offset. Continuous.
 - **Smooth Noise**: A smooth random signal with adjustable level and offset. Continuous.
 - **Sample & Hold**: A sample and hold signal based on noise with adjustable level and offset. Triggered by clock pulses.
