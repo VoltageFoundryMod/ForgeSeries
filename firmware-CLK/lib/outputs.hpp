@@ -270,7 +270,12 @@ class Output {
 
   private:
     // Constants
-    const int MaxDACValue = 4095;
+    const int MaxDACValue = 3830; // Effective full-scale DAC count (~4.68V).
+                                  // 4095 drives the output op-amp into its near-rail
+                                  // saturation region, causing a visible flat top on
+                                  // continuous waveforms.  3830 stays in the linear
+                                  // output range while still covering nearly the full
+                                  // 0–5V span.
     const float MaxWaveValue = 255.0;
     static int const _dividerAmount = 21;
     float _clockDividers[_dividerAmount] = {0.0078125, 0.015625, 0.03125, 0.0625, 0.125, 0.25, 0.3333333333, 0.5, 0.6666666667, 1.0, 1.5, 2.0, 3.0, 4.0, 8.0, 16.0, 24.0, 32.0, 48.0, 64.0, 10000};
@@ -1253,7 +1258,10 @@ void Output::Pulse(int PPQN, unsigned long globalTick) {
         }
         break;
     case WaveformType::QuantizeInput:
-        _waveValue = (_inputCV / MaxDACValue) * MaxWaveValue;
+        // Divide by 4095.0f (ADC full-scale), not MaxDACValue (output ceiling).
+        // These are independent — ADC range is always 0-4095 regardless of
+        // where we cap the DAC output.
+        _waveValue = (_inputCV / 4095.0f) * MaxWaveValue;
         _isPulseOn = true;
         break;
 
@@ -1352,16 +1360,23 @@ uint32_t Output::GetOutputLevel() {
     } else
 #endif
     {
+        // floorVal: the DC floor (0V when offset=0%).
+        // ceilVal:  floor + amplitude headroom — capped at MaxWaveValue so the
+        //           combined signal never exceeds full scale regardless of offset.
+        // This prevents digital clipping when offset > 0 (previously the offset
+        // was added on top of the full-amplitude signal and then constrained,
+        // creating a flat top on the waveform).
+        float floorVal = (_offset / 100.0f) * MaxWaveValue;
+        float ceilVal  = min(MaxWaveValue, floorVal + (_level / 100.0f) * MaxWaveValue);
+
         if (_waveformType == WaveformType::Square ||
             _waveformType == WaveformType::Hatchet2 ||
             _waveformType == WaveformType::Hatchet4) {
-            adjustedLevel = _isPulseOn ? (MaxWaveValue * (_level / 100.0)) + ((_offset / 100.0) * MaxWaveValue) : _offset;
-            adjustedLevel = constrain(adjustedLevel, 0, MaxWaveValue);
+            adjustedLevel = _isPulseOn ? ceilVal : floorVal;
         } else {
-            // Take into account the wave value and the _level and _offset values
-            adjustedLevel = _waveValue * (_level / 100.0) + (_offset / 100.0) * MaxWaveValue;
-            adjustedLevel = constrain(adjustedLevel, 0, MaxWaveValue);
-            adjustedLevel = _isPulseOn ? adjustedLevel : _offset;
+            // Scale waveValue [0..MaxWaveValue] into [floorVal..ceilVal]
+            adjustedLevel = floorVal + _waveValue * (ceilVal - floorVal) / MaxWaveValue;
+            adjustedLevel = _isPulseOn ? adjustedLevel : floorVal;
         }
 
         outputLevel = adjustedLevel * MaxDACValue / MaxWaveValue;
@@ -1392,6 +1407,10 @@ uint32_t Output::GetOutputLevel() {
             // Apply quantization
             QuantizeCV(outputLevel, _oldOutputLevel, _quantizerThresholdBuff, _quantizerParams.channelSensitivity, _quantizerParams.octaveShift, &outputLevel);
         }
+
+        // Final clamp: QuantizeCV hardcodes constrain(0,4095) internally, so
+        // its output can exceed MaxDACValue.  Cap here to stay in linear range.
+        outputLevel = constrain(outputLevel, 0.0f, (float)MaxDACValue);
 
         _oldOutputLevel = outputLevel;
         return uint32_t(outputLevel);
