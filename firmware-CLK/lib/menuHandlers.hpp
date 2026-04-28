@@ -165,10 +165,10 @@ static void setBPM(int d) {
 // Group 2 — Clock dividers  (items 3–7)
 // ================================================================
 
-static void setDiv0(int d) { outputs[0].SetDivider(outputs[0].GetDividerIndex() + d); unsavedChanges = true; }
-static void setDiv1(int d) { outputs[1].SetDivider(outputs[1].GetDividerIndex() + d); unsavedChanges = true; }
-static void setDiv2(int d) { outputs[2].SetDivider(outputs[2].GetDividerIndex() + d); unsavedChanges = true; }
-static void setDiv3(int d) { outputs[3].SetDivider(outputs[3].GetDividerIndex() + d); unsavedChanges = true; }
+static void setDiv0(int d) { if (outputs[0].IsEnvelopeType()) return; outputs[0].SetDivider(outputs[0].GetDividerIndex() + d); unsavedChanges = true; }
+static void setDiv1(int d) { if (outputs[1].IsEnvelopeType()) return; outputs[1].SetDivider(outputs[1].GetDividerIndex() + d); unsavedChanges = true; }
+static void setDiv2(int d) { if (outputs[2].IsEnvelopeType()) return; outputs[2].SetDivider(outputs[2].GetDividerIndex() + d); unsavedChanges = true; }
+static void setDiv3(int d) { if (outputs[3].IsEnvelopeType()) return; outputs[3].SetDivider(outputs[3].GetDividerIndex() + d); unsavedChanges = true; }
 
 static void setExtDivider(int d) {
     externalDividerIndex = constrain(externalDividerIndex + d, 0, dividerAmount - 1);

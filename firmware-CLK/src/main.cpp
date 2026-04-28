@@ -434,12 +434,19 @@ void HandleIO() {
 void loop() {
     metrics.BeginLoopMeasurement();
 
-    // Apply deferred BPM change — UpdateBPM() calls RP2040 SDK alarm-pool functions
-    // (cancel_repeating_timer + add_repeating_timer_us) which block for ~50-100µs.
-    // Keeping that out of HandleEncoderPosition() prevents encoder edges being missed.
+    // Apply deferred BPM change — UpdateBPM() on RP2040 cancels + restarts the
+    // hardware repeating timer, creating a gap of up to 1/PPQN tick (520 µs at
+    // 120 BPM, 6.25 ms at 10 BPM) where no ISR fires and all outputs freeze.
+    // Rate-limit to at most once every 30 ms so rapid encoder spins don't stack
+    // up many consecutive timer-cancel gaps that are clearly audible.
     if (bpmNeedsUpdate) {
-        bpmNeedsUpdate = false;
-        UpdateBPM(BPM);
+        static unsigned long lastBPMApply = 0;
+        unsigned long now = millis();
+        if (now - lastBPMApply >= 30) {
+            lastBPMApply = now;
+            bpmNeedsUpdate = false;
+            UpdateBPM(BPM);
+        }
     }
 
     HandleOutputs();
@@ -460,12 +467,14 @@ void loop() {
 #endif
     // RP2040: HandleDisplay() (GFX rendering) runs on Core 1 to keep this loop tight.
 
+    #ifdef PERFORMANCE_DEBUG
     static unsigned long lastStatsTime = 0;
     if (millis() - lastStatsTime >= 5000) {
         metrics.PrintStats();
         lastStatsTime = millis();
         metrics.Reset();
     }
+    #endif
 
     metrics.EndLoopMeasurement();
 }

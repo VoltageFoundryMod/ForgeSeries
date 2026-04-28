@@ -306,12 +306,20 @@ void HandleCVTarget(int ch, float CVValue, CVTarget cvTarget) {
     case CVTarget::Output4Duty:
         outputs[3].SetDutyCycle(map(CVValue, 0, MAXDAC, 0, 100));
         break;
-    case CVTarget::Envelope1:
-        outputs[2].SetExternalTrigger(CVValue > MAXDAC / 2);
+    case CVTarget::Envelope1: {
+        // Schmitt-trigger hysteresis: higher threshold to arm, lower to release.
+        // Prevents false gate-releases from brief gate-input dips around midpoint
+        // (e.g. a clock output used as gate freezes at 0V for ~500µs during
+        // UpdateBPM timer-cancel; IIR-filtered CV can dip toward midpoint briefly).
+        bool wasTriggered = outputs[2].GetExternalTrigger();
+        outputs[2].SetExternalTrigger(CVValue > (wasTriggered ? (MAXDAC * 0.40f) : (MAXDAC * 0.60f)));
         break;
-    case CVTarget::Envelope2:
-        outputs[3].SetExternalTrigger(CVValue > MAXDAC / 2);
+    }
+    case CVTarget::Envelope2: {
+        bool wasTriggered = outputs[3].GetExternalTrigger();
+        outputs[3].SetExternalTrigger(CVValue > (wasTriggered ? (MAXDAC * 0.40f) : (MAXDAC * 0.60f)));
         break;
+    }
     case CVTarget::Output3:
         outputs[2].SetCVValue(CVValue);
         break;

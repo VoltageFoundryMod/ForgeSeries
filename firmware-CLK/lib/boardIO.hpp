@@ -48,7 +48,18 @@ void DACWriteAll(uint16_t ch0, uint16_t ch1, uint16_t ch2, uint16_t ch3) {
         Wire1.write((hwVals[i] >> 8) & 0x0F); // VREF=VDD, PD=normal, GAIN=1x, D[11:8]
         Wire1.write(hwVals[i] & 0xFF);         // D[7:0]
     }
-    Wire1.endTransmission();
+    uint8_t result = Wire1.endTransmission();
+#ifdef ENVELOPE_DEBUG
+    if (result != 0) {
+        static unsigned long _lastI2CErr = 0;
+        unsigned long _now = millis();
+        if (_now - _lastI2CErr >= 20) {
+            _lastI2CErr = _now;
+            Serial.printf("[I2C_ERR] DACWriteAll NACK/err=%d t=%lums\n", result, _now);
+        }
+    }
+#endif
+    (void)result;
 }
 
 // Write a single DAC channel; keeps other channels at their last value.
@@ -90,8 +101,9 @@ void InitWire() {
     Wire1.setSDA(I2C_DAC_SDA_PIN);
     Wire1.setSCL(I2C_DAC_SCL_PIN);
     Wire1.begin();
-    Wire1.setClock(1000000); // MCP4728 datasheet max=400kHz but silicon handles 1MHz;
-                             // reduces DACWriteAll from ~400µs to ~150µs.
+    Wire1.setClock(400000);  // MCP4728 rated max=400kHz (Fm). 1MHz caused silent I2C
+                             // data corruption: chip ACKs but misinterprets data due to
+                             // tLOW timing violation (required 1300ns, 1MHz gives 500ns).
 }
 
 // Initialize the MCP4728 DAC. Returns false if not found.
