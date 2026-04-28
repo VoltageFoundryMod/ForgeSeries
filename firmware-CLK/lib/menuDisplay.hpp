@@ -139,9 +139,9 @@ static bool MD_RenderGroup(const char* title,
                 break;
             case ROW_SINGLE:
             default:
-                MD_Row(mi.label,
-                       mi.valueFn ? mi.valueFn() : String(""), mi.valueFn != nullptr,
-                       sel, edit);
+                MD_RowAtX(mi.label,
+                          mi.valueFn ? mi.valueFn() : String(""), mi.valueFn != nullptr,
+                          mi.col1x, sel, edit);
                 break;
         }
     }

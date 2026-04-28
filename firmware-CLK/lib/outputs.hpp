@@ -212,11 +212,11 @@ class Output {
     float GetSustain() { return _envParams.sustain; }
     float GetRelease() { return _envParams.release; }
     String GetAttackDescription() {
-        return _envParams.attack > 999 ? String(_envParams.attack / 1000.0f, 1) + "s" : String(_envParams.attack) + "ms";
+        return _envParams.attack > 999 ? String(_envParams.attack / 1000.0f, 1) + "s" : String((int)_envParams.attack) + "ms";
     }
-    String GetDecayDescription() { return _envParams.decay > 999 ? String(_envParams.decay / 1000.0f, 1) + "s" : String(_envParams.decay) + "ms"; }
-    String GetSustainDescription() { return String(_envParams.sustain) + "%"; }
-    String GetReleaseDescription() { return _envParams.release > 999 ? String(_envParams.release / 1000.0f, 1) + "s" : String(_envParams.release) + "ms"; }
+    String GetDecayDescription() { return _envParams.decay > 999 ? String(_envParams.decay / 1000.0f, 1) + "s" : String((int)_envParams.decay) + "ms"; }
+    String GetSustainDescription() { return String((int)_envParams.sustain) + "%"; }
+    String GetReleaseDescription() { return _envParams.release > 999 ? String(_envParams.release / 1000.0f, 1) + "s" : String((int)_envParams.release) + "ms"; }
     void SetRetrigger(bool state) { _envParams.retrigger = state; }
     bool GetRetrigger() { return _envParams.retrigger; }
     void ToggleRetrigger() { _envParams.retrigger = !_envParams.retrigger; }

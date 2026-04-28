@@ -151,20 +151,20 @@ void HandleDisplay() {
                     display.setCursor(MD_LABEL_X, _md_rowY);
                     display.print(mi.label);
                     if (mi.valueFn) {
-                        display.setCursor(64, _md_rowY);
+                        display.setCursor(mi.col1x, _md_rowY);
                         display.print(mi.valueFn());
                     }
                     _MD_Cursor(_md_rowY, sel, edit);
                     // Don't advance — PAD shares this row
                 } else if (idx == 33) { // PAD — right half
-                    display.setCursor(64, _md_rowY);
+                    display.setCursor(50, _md_rowY);
                     display.print(mi.label);
                     if (mi.valueFn) {
-                        display.setCursor(64 + 5*6, _md_rowY);
+                        display.setCursor(50 + 4*6, _md_rowY);
                         display.print(mi.valueFn());
                     }
                     if (sel) {
-                        int cx = 64 - 8;
+                        int cx = 50 - 8;
                         if (edit)
                             display.fillTriangle(cx, _md_rowY-1, cx, _md_rowY+7, cx+4, _md_rowY+3, 1);
                         else
@@ -278,11 +278,11 @@ void HandleDisplay() {
                 } else if (idx == 56) { // Retr — right half
                     bool sel2  = (idx == menuItem);
                     bool edit2 = sel2 && (menuMode == idx);
-                    display.setCursor(64, _md_rowY);
+                    display.setCursor(70, _md_rowY);
                     display.print(mi.label);
                     if (mi.valueFn) display.print(mi.valueFn());
                     if (sel2) {
-                        int cx = 56;
+                        int cx = 62;
                         if (edit2)
                             display.fillTriangle(cx, _md_rowY-1, cx, _md_rowY+7, cx+4, _md_rowY+3, 1);
                         else
@@ -290,7 +290,7 @@ void HandleDisplay() {
                     }
                     _md_rowY += MD_ROW_H;
                 } else {
-                    MD_RowAtX(mi.label, mi.valueFn ? mi.valueFn() : String(""), mi.valueFn != nullptr, 64, sel, edit);
+                    MD_RowAtX(mi.label, mi.valueFn ? mi.valueFn() : String(""), mi.valueFn != nullptr, mi.col1x, sel, edit);
                 }
             }
             RedrawDisplay();

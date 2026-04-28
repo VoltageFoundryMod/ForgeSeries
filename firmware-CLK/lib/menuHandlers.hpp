@@ -503,28 +503,28 @@ const MenuItem MENU_ITEMS[] = {
     { "",          nullptr,      nullptr,     0,   0,   0, ROW_HIDDEN, MENU_TOGGLE, nullptr,          ToggleMasterState }, //  2  Play/Stop
 
     // ── Group 1: Clock dividers ───────────────────────────── items  3– 7
-    { "OUTPUT 1:", getDiv0,      nullptr,    84,   0,   1, ROW_SINGLE, MENU_EDIT,   setDiv0,          nullptr          }, //  3
-    { "OUTPUT 2:", getDiv1,      nullptr,    84,   0,   1, ROW_SINGLE, MENU_EDIT,   setDiv1,          nullptr          }, //  4
-    { "OUTPUT 3:", getDiv2,      nullptr,    84,   0,   1, ROW_SINGLE, MENU_EDIT,   setDiv2,          nullptr          }, //  5
-    { "OUTPUT 4:", getDiv3,      nullptr,    84,   0,   1, ROW_SINGLE, MENU_EDIT,   setDiv3,          nullptr          }, //  6
-    { "EXT. DIV:", getExtDiv,    nullptr,    84,   0,   1, ROW_SINGLE, MENU_EDIT,   setExtDivider,    nullptr          }, //  7
+    { "OUTPUT 1:", getDiv0,      nullptr,    70,   0,   1, ROW_SINGLE, MENU_EDIT,   setDiv0,          nullptr          }, //  3
+    { "OUTPUT 2:", getDiv1,      nullptr,    70,   0,   1, ROW_SINGLE, MENU_EDIT,   setDiv1,          nullptr          }, //  4
+    { "OUTPUT 3:", getDiv2,      nullptr,    70,   0,   1, ROW_SINGLE, MENU_EDIT,   setDiv2,          nullptr          }, //  5
+    { "OUTPUT 4:", getDiv3,      nullptr,    70,   0,   1, ROW_SINGLE, MENU_EDIT,   setDiv3,          nullptr          }, //  6
+    { "EXT. DIV:", getExtDiv,    nullptr,    70,   0,   1, ROW_SINGLE, MENU_EDIT,   setExtDivider,    nullptr          }, //  7
 
     // ── Group 8: Waveform (all 4 outputs) ──────────────────── items  8–11
-    { "OUT 1 WAV:", getWav0,     nullptr,    70,   0,   8, ROW_SINGLE, MENU_EDIT,   setWaveform0,     nullptr          }, //  8
-    { "OUT 2 WAV:", getWav1,     nullptr,    70,   0,   8, ROW_SINGLE, MENU_EDIT,   setWaveform1,     nullptr          }, //  9
-    { "OUT 3 WAV:", getWav2,     nullptr,    70,   0,   8, ROW_SINGLE, MENU_EDIT,   setWaveform2,     nullptr          }, // 10
-    { "OUT 4 WAV:", getWav3,     nullptr,    70,   0,   8, ROW_SINGLE, MENU_EDIT,   setWaveform3,     nullptr          }, // 11
+    { "OUTPUT 1:", getWav0,      nullptr,    66,   0,   8, ROW_SINGLE, MENU_EDIT,   setWaveform0,     nullptr          }, //  8
+    { "OUTPUT 2:", getWav1,      nullptr,    66,   0,   8, ROW_SINGLE, MENU_EDIT,   setWaveform1,     nullptr          }, //  9
+    { "OUTPUT 3:", getWav2,      nullptr,    66,   0,   8, ROW_SINGLE, MENU_EDIT,   setWaveform2,     nullptr          }, // 10
+    { "OUTPUT 4:", getWav3,      nullptr,    66,   0,   8, ROW_SINGLE, MENU_EDIT,   setWaveform3,     nullptr          }, // 11
 
     // ── Group 13: Level / Offset (all 4 outputs) ────────────── items 12–19
     // col1x=70 (LVL), col2x=100 (OFF); even items = TWOCOL, odd = HIDDEN
-    { "OUTPUT 1:", getLvl0,      getOff0,    70,  100, 13, ROW_TWOCOL, MENU_EDIT,   setLevel0,        nullptr          }, // 12
-    { "OUTPUT 1:", getLvl0,      getOff0,    70,  100, 13, ROW_HIDDEN, MENU_EDIT,   setOffset0,       nullptr          }, // 13
-    { "OUTPUT 2:", getLvl1,      getOff1,    70,  100, 13, ROW_TWOCOL, MENU_EDIT,   setLevel1,        nullptr          }, // 14
-    { "OUTPUT 2:", getLvl1,      getOff1,    70,  100, 13, ROW_HIDDEN, MENU_EDIT,   setOffset1,       nullptr          }, // 15
-    { "OUTPUT 3:", getLvl2,      getOff2,    70,  100, 13, ROW_TWOCOL, MENU_EDIT,   setLevel2,        nullptr          }, // 16
-    { "OUTPUT 3:", getLvl2,      getOff2,    70,  100, 13, ROW_HIDDEN, MENU_EDIT,   setOffset2,       nullptr          }, // 17
-    { "OUTPUT 4:", getLvl3,      getOff3,    70,  100, 13, ROW_TWOCOL, MENU_EDIT,   setLevel3,        nullptr          }, // 18
-    { "OUTPUT 4:", getLvl3,      getOff3,    70,  100, 13, ROW_HIDDEN, MENU_EDIT,   setOffset3,       nullptr          }, // 19
+    { "OUTPUT 1:", getLvl0,      getOff0,    66,  100, 13, ROW_TWOCOL, MENU_EDIT,   setLevel0,        nullptr          }, // 12
+    { "OUTPUT 1:", getLvl0,      getOff0,    66,  100, 13, ROW_HIDDEN, MENU_EDIT,   setOffset0,       nullptr          }, // 13
+    { "OUTPUT 2:", getLvl1,      getOff1,    66,  100, 13, ROW_TWOCOL, MENU_EDIT,   setLevel1,        nullptr          }, // 14
+    { "OUTPUT 2:", getLvl1,      getOff1,    66,  100, 13, ROW_HIDDEN, MENU_EDIT,   setOffset1,       nullptr          }, // 15
+    { "OUTPUT 3:", getLvl2,      getOff2,    66,  100, 13, ROW_TWOCOL, MENU_EDIT,   setLevel2,        nullptr          }, // 16
+    { "OUTPUT 3:", getLvl2,      getOff2,    66,  100, 13, ROW_HIDDEN, MENU_EDIT,   setOffset2,       nullptr          }, // 17
+    { "OUTPUT 4:", getLvl3,      getOff3,    66,  100, 13, ROW_TWOCOL, MENU_EDIT,   setLevel3,        nullptr          }, // 18
+    { "OUTPUT 4:", getLvl3,      getOff3,    66,  100, 13, ROW_HIDDEN, MENU_EDIT,   setOffset3,       nullptr          }, // 19
 
     // ── Group 2: Output state ─────────────────────────────── items 20–23
     { "OUTPUT 1:", getState0,    nullptr,    70,   0,   2, ROW_SINGLE, MENU_TOGGLE, nullptr,          toggleOut0       }, // 20
@@ -543,7 +543,7 @@ const MenuItem MENU_ITEMS[] = {
     { "ENABLED:",  getEucEn,     nullptr,    64,   0,   4, ROW_SINGLE, MENU_TOGGLE, nullptr,          toggleEuclidean  }, // 29
     { "STEPS:",    getEucSteps,  nullptr,    64,   0,   4, ROW_SINGLE, MENU_EDIT,   setEuclideanSteps,    nullptr      }, // 30
     { "HITS:",     getEucTrig,   nullptr,    64,   0,   4, ROW_SINGLE, MENU_EDIT,   setEuclideanTrig,     nullptr      }, // 31
-    { "ROT:",      getEucRot,    nullptr,    64,   0,   4, ROW_SINGLE, MENU_EDIT,   setEuclideanRot,      nullptr      }, // 32
+    { "ROT:",      getEucRot,    nullptr,    34,   0,   4, ROW_SINGLE, MENU_EDIT,   setEuclideanRot,      nullptr      }, // 32
     { "PAD:",      getEucPad,    nullptr,    64,   0,   4, ROW_SINGLE, MENU_EDIT,   setEuclideanPad,      nullptr      }, // 33
 
     // ── Group 5: Swing ────────────────────────────────────── items 34–41
@@ -564,19 +564,19 @@ const MenuItem MENU_ITEMS[] = {
     { "OUTPUT 4:", getPhase3,    nullptr,    70,   0,   6, ROW_SINGLE, MENU_EDIT,   setPhase3,        nullptr          }, // 45
 
     // ── Group 7: Duty cycle ───────────────────────────────── items 46–49
-    { "OUT 1 DUTY:", getDuty0,   nullptr,    70,   0,   7, ROW_SINGLE, MENU_EDIT,   setDuty0,         nullptr          }, // 46
-    { "OUT 2 DUTY:", getDuty1,   nullptr,    70,   0,   7, ROW_SINGLE, MENU_EDIT,   setDuty1,         nullptr          }, // 47
-    { "OUT 3 DUTY:", getDuty2,   nullptr,    70,   0,   7, ROW_SINGLE, MENU_EDIT,   setDuty2,         nullptr          }, // 48
-    { "OUT 4 DUTY:", getDuty3,   nullptr,    70,   0,   7, ROW_SINGLE, MENU_EDIT,   setDuty3,         nullptr          }, // 49
+    { "OUTPUT 1:", getDuty0,     nullptr,    70,   0,   7, ROW_SINGLE, MENU_EDIT,   setDuty0,         nullptr          }, // 46
+    { "OUTPUT 2:", getDuty1,     nullptr,    70,   0,   7, ROW_SINGLE, MENU_EDIT,   setDuty1,         nullptr          }, // 47
+    { "OUTPUT 3:", getDuty2,     nullptr,    70,   0,   7, ROW_SINGLE, MENU_EDIT,   setDuty2,         nullptr          }, // 48
+    { "OUTPUT 4:", getDuty3,     nullptr,    70,   0,   7, ROW_SINGLE, MENU_EDIT,   setDuty3,         nullptr          }, // 49
 
     // ── Group 9: Envelope ─────────────────────────────────── items 50–56
-    { "OUTPUT:",   getEnvSel,    nullptr,    64,   0,   9, ROW_SINGLE, MENU_EDIT,   setEnvOutputSel,  nullptr          }, // 50
-    { "Attack:",   getAttack,    nullptr,    64,   0,   9, ROW_SINGLE, MENU_EDIT,   setAttack,        nullptr          }, // 51
-    { "Decay:",    getDecay,     nullptr,    64,   0,   9, ROW_SINGLE, MENU_EDIT,   setDecay,         nullptr          }, // 52
-    { "Sustain:",  getSustain,   nullptr,    64,   0,   9, ROW_SINGLE, MENU_EDIT,   setSustain,       nullptr          }, // 53
-    { "Release:",  getRelease,   nullptr,    64,   0,   9, ROW_SINGLE, MENU_EDIT,   setRelease,       nullptr          }, // 54
-    { "Curv:",     getCurve,     nullptr,    64,   0,   9, ROW_SINGLE, MENU_EDIT,   setCurve,         nullptr          }, // 55
-    { "Retr:",     getRetrig,    nullptr,    64,   0,   9, ROW_SINGLE, MENU_TOGGLE, nullptr,          toggleRetrigger  }, // 56
+    { "OUTPUT:",   getEnvSel,    nullptr,    70,   0,   9, ROW_SINGLE, MENU_EDIT,   setEnvOutputSel,  nullptr          }, // 50
+    { "Attack:",   getAttack,    nullptr,    70,   0,   9, ROW_SINGLE, MENU_EDIT,   setAttack,        nullptr          }, // 51
+    { "Decay:",    getDecay,     nullptr,    70,   0,   9, ROW_SINGLE, MENU_EDIT,   setDecay,         nullptr          }, // 52
+    { "Sustain:",  getSustain,   nullptr,    70,   0,   9, ROW_SINGLE, MENU_EDIT,   setSustain,       nullptr          }, // 53
+    { "Release:",  getRelease,   nullptr,    70,   0,   9, ROW_SINGLE, MENU_EDIT,   setRelease,       nullptr          }, // 54
+    { "Curv:",     getCurve,     nullptr,    70,   0,   9, ROW_SINGLE, MENU_EDIT,   setCurve,         nullptr          }, // 55
+    { "Retr:",     getRetrig,    nullptr,    76,   0,   9, ROW_SINGLE, MENU_TOGGLE, nullptr,          toggleRetrigger  }, // 56
 
     // ── Group 10: CV inputs ───────────────────────────────── items 57–62
     // Items 57-58: full-width target rows; 59-62: two-col ATTN+OFF
@@ -588,11 +588,11 @@ const MenuItem MENU_ITEMS[] = {
     { "CV 2:",     getCVAttn1,   getCVOff1,  60,  100, 10, ROW_HIDDEN, MENU_EDIT,   setCVOffset1,     nullptr          }, // 62
 
     // ── Group 11: Quantizer ───────────────────────────────── items 63–67
-    { "OUTPUT:",      getQtzSel,  nullptr,  64,   0,  11, ROW_SINGLE, MENU_EDIT,   setQtzOutputSel,  nullptr          }, // 63
-    { "ENABLED:",     getQtzEn,   nullptr,  64,   0,  11, ROW_SINGLE, MENU_TOGGLE, nullptr,          toggleQuantizer  }, // 64
-    { "ROOT NOTE:",   getQtzNote, nullptr,  64,   0,  11, ROW_SINGLE, MENU_EDIT,   setQtzNote,       nullptr          }, // 65
-    { "SCALE:",       getQtzScale,nullptr,  64,   0,  11, ROW_SINGLE, MENU_EDIT,   setQtzScale,      nullptr          }, // 66
-    { "OCT TRANSPOSE:",getQtzOct, nullptr,  64,   0,  11, ROW_SINGLE, MENU_EDIT,   setQtzOctave,     nullptr          }, // 67
+    { "OUTPUT:",      getQtzSel,  nullptr,  80,   0,  11, ROW_SINGLE, MENU_EDIT,   setQtzOutputSel,  nullptr          }, // 63
+    { "ENABLED:",     getQtzEn,   nullptr,  80,   0,  11, ROW_SINGLE, MENU_TOGGLE, nullptr,          toggleQuantizer  }, // 64
+    { "ROOT NOTE:",   getQtzNote, nullptr,  80,   0,  11, ROW_SINGLE, MENU_EDIT,   setQtzNote,       nullptr          }, // 65
+    { "SCALE:",       getQtzScale,nullptr,  80,   0,  11, ROW_SINGLE, MENU_EDIT,   setQtzScale,      nullptr          }, // 66
+    { "OCT TRANSPOSE:",getQtzOct, nullptr,  96,   0,  11, ROW_SINGLE, MENU_EDIT,   setQtzOctave,     nullptr          }, // 67
 
     // ── Group 12: Settings / save-load ───────────────────── items 68–73
     { "TAP TEMPO",    nullptr,    nullptr,   0,   0,  12, ROW_ACTION, MENU_ACTION, nullptr,          SetTapTempo      }, // 68
