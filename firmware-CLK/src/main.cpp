@@ -82,10 +82,11 @@ bool unsavedChanges = false;         // Unsaved changes flag
 int euclideanOutputSelect = 0;       // Euclidean rhythm output index
 int quantizerOutputSelect = 0;       // Quantizer output index
 int envelopeOutputSelect = 0;        // Envelope output index
+int menuScreenTimeout = 2;           // Index into screenTimeoutOptions[]: 0=Off,1=2s,2=5s,3=10s,4=20s
 unsigned long lastEncoderUpdate = 0; // Last encoder update time
 
-// Macro to request display refresh (marks display dirty for update)
-#define REQUEST_DISPLAY_REFRESH() do { displayRefresh = 1; displayMgr.MarkDirty(); } while(0)
+// Macro to request display refresh from user interactions (marks dirty + resets timeout timer)
+#define REQUEST_DISPLAY_REFRESH() do { displayRefresh = 1; displayMgr.MarkInteraction(); } while(0)
 
 #include "menuRender.hpp"      // MenuIndicator, MenuHeader, HandleDisplay
 #include "calibration.hpp"     // RunCalibration() — output trim + CV LUT capture

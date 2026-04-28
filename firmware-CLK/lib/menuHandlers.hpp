@@ -143,6 +143,7 @@ extern bool  unsavedChanges;
 extern int   euclideanOutputSelect;
 extern int   envelopeOutputSelect;
 extern int   quantizerOutputSelect;
+extern int   menuScreenTimeout;
 extern int   menuMode;
 
 // Functions defined later in main.cpp — forward declarations only.
@@ -478,6 +479,17 @@ static String getQtzOct()   { outputs[quantizerOutputSelect].GetQuantizerOctaveS
 static char _slotBuf[4];
 static String getSaveSlot() { snprintf(_slotBuf, sizeof(_slotBuf), "%d", saveSlot); return _slotBuf; }
 
+static constexpr unsigned long TIMEOUT_OPTIONS[] = {0, 2000, 5000, 10000, 20000};
+static constexpr const char*   TIMEOUT_LABELS[]  = {"Off", "2s", "5s", "10s", "20s"};
+static constexpr int           TIMEOUT_COUNT     = 5;
+static String getTimeout() { return TIMEOUT_LABELS[constrain(menuScreenTimeout, 0, TIMEOUT_COUNT - 1)]; }
+static void setMenuTimeout(int d) {
+    int dir = (d > 0) ? 1 : -1;
+    menuScreenTimeout = (menuScreenTimeout + dir + TIMEOUT_COUNT) % TIMEOUT_COUNT;
+    displayMgr.SetMenuTimeout(TIMEOUT_OPTIONS[menuScreenTimeout]);
+    unsavedChanges = true;
+}
+
 
 // ================================================================
 // MENU_ITEMS[]  —  index 0 = menu item 1, index 65 = menu item 66.
@@ -582,12 +594,13 @@ const MenuItem MENU_ITEMS[] = {
     { "SCALE:",       getQtzScale,nullptr,  64,   0,  11, ROW_SINGLE, MENU_EDIT,   setQtzScale,      nullptr          }, // 66
     { "OCT TRANSPOSE:",getQtzOct, nullptr,  64,   0,  11, ROW_SINGLE, MENU_EDIT,   setQtzOctave,     nullptr          }, // 67
 
-    // ── Group 12: Settings / save-load ───────────────────── items 68–72
+    // ── Group 12: Settings / save-load ───────────────────── items 68–73
     { "TAP TEMPO",    nullptr,    nullptr,   0,   0,  12, ROW_ACTION, MENU_ACTION, nullptr,          SetTapTempo      }, // 68
-    { "PRESET SLOT:", getSaveSlot,nullptr,  64,   0,  12, ROW_SINGLE, MENU_EDIT,   setSaveSlot,      nullptr          }, // 69
-    { "SAVE",         nullptr,    nullptr,   0,   0,  12, ROW_ACTION, MENU_ACTION, nullptr,          actionSave       }, // 70
-    { "LOAD",         nullptr,    nullptr,   0,   0,  12, ROW_ACTION, MENU_ACTION, nullptr,          actionLoad       }, // 71
-    { "LOAD DEFAULTS",nullptr,    nullptr,   0,   0,  12, ROW_ACTION, MENU_ACTION, nullptr,          actionLoadDefaults}, // 72
+    { "SCR TIMEOUT:", getTimeout, nullptr,  64,   0,  12, ROW_SINGLE, MENU_EDIT,   setMenuTimeout,   nullptr          }, // 69
+    { "PRESET SLOT:", getSaveSlot,nullptr,  64,   0,  12, ROW_SINGLE, MENU_EDIT,   setSaveSlot,      nullptr          }, // 70
+    { "SAVE",         nullptr,    nullptr,   0,   0,  12, ROW_ACTION, MENU_ACTION, nullptr,          actionSave       }, // 71
+    { "LOAD",         nullptr,    nullptr,   0,   0,  12, ROW_ACTION, MENU_ACTION, nullptr,          actionLoad       }, // 72
+    { "LOAD DEFAULTS",nullptr,    nullptr,   0,   0,  12, ROW_ACTION, MENU_ACTION, nullptr,          actionLoadDefaults}, // 73
 };
 
 const int MENU_ITEM_COUNT = (int)(sizeof(MENU_ITEMS) / sizeof(MENU_ITEMS[0]));

@@ -27,7 +27,7 @@ private:
     unsigned long lastUpdateTime = 0;
     unsigned long lastInteractionTime = 0;
     static const unsigned long UPDATE_INTERVAL_MS = 50;  // 20Hz max refresh
-    static const unsigned long TIMEOUT_MS = 7000;  // Return to main screen
+    unsigned long timeoutMs = 5000;  // Return to main screen (0 = disabled)
 
     // State tracking
     bool isDirty = false;
@@ -36,8 +36,15 @@ private:
 public:
     DisplayManager(Adafruit_SSD1306& disp) : display(disp) {}
 
-    // Mark display as needing update (cheap call)
+    // Mark display as needing update (cheap call) — does NOT reset the interaction
+    // timer, so the screen-timeout clock keeps ticking. Use for clock/ISR-driven updates.
     void MarkDirty() {
+        isDirty = true;
+    }
+
+    // Mark display dirty AND record a user interaction (resets screen-timeout timer).
+    // Use for encoder turns, button presses, menu changes, etc.
+    void MarkInteraction() {
         isDirty = true;
         lastInteractionTime = millis();
     }
@@ -46,7 +53,7 @@ public:
     void SetUnsavedChanges(bool hasChanges) {
         if (unsavedChanges != hasChanges) {
             unsavedChanges = hasChanges;
-            MarkDirty();
+            MarkDirty();  // state change only — do not reset interaction timer
         }
     }
 
@@ -56,12 +63,16 @@ public:
         return isDirty && (now - lastUpdateTime >= UPDATE_INTERVAL_MS);
     }
 
+    // Set the menu timeout duration (0 = disabled)
+    void SetMenuTimeout(unsigned long ms) { timeoutMs = ms; }
+
     // Check if should timeout to main screen
     bool ShouldTimeout(int menuItem, int menuMode) {
+        if (timeoutMs == 0) return false;
         if (menuItem == 1 || menuItem == 2 || menuMode != 0) {
             return false;
         }
-        return (millis() - lastInteractionTime > TIMEOUT_MS);
+        return (millis() - lastInteractionTime > timeoutMs);
     }
 
     // Begin frame - clears display and prepares for drawing

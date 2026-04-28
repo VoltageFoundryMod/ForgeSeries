@@ -353,31 +353,41 @@ void HandleDisplay() {
             if (menuItem == 68) {
                 display.drawTriangle(MD_CURSOR_X, yPosition-1, MD_CURSOR_X, yPosition+7, MD_CURSOR_X+4, yPosition+3, 1);
             }
-            yPosition += MD_ROW_H * 2; // gap
-            // Preset slot
+            yPosition += MD_ROW_H; // gap
+            // Screen timeout
             display.setCursor(MD_LABEL_X, yPosition);
-            display.print("PRESET SLOT: ");
-            display.print(saveSlot);
+            display.print("SCR TIMEOUT: ");
+            display.print(getTimeout());
             if (menuItem == 69 && menuMode == 0) {
                 display.drawTriangle(MD_CURSOR_X, yPosition-1, MD_CURSOR_X, yPosition+7, MD_CURSOR_X+4, yPosition+3, 1);
             } else if (menuMode == 69) {
                 display.fillTriangle(MD_CURSOR_X, yPosition-1, MD_CURSOR_X, yPosition+7, MD_CURSOR_X+4, yPosition+3, 1);
             }
             yPosition += MD_ROW_H;
+            // Preset slot
+            display.setCursor(MD_LABEL_X, yPosition);
+            display.print("PRESET SLOT: ");
+            display.print(saveSlot);
+            if (menuItem == 70 && menuMode == 0) {
+                display.drawTriangle(MD_CURSOR_X, yPosition-1, MD_CURSOR_X, yPosition+7, MD_CURSOR_X+4, yPosition+3, 1);
+            } else if (menuMode == 70) {
+                display.fillTriangle(MD_CURSOR_X, yPosition-1, MD_CURSOR_X, yPosition+7, MD_CURSOR_X+4, yPosition+3, 1);
+            }
+            yPosition += MD_ROW_H;
             // Save
             display.setCursor(MD_LABEL_X, yPosition);
             display.print("SAVE");
-            if (menuItem == 70) display.drawTriangle(MD_CURSOR_X, yPosition-1, MD_CURSOR_X, yPosition+7, MD_CURSOR_X+4, yPosition+3, 1);
+            if (menuItem == 71) display.drawTriangle(MD_CURSOR_X, yPosition-1, MD_CURSOR_X, yPosition+7, MD_CURSOR_X+4, yPosition+3, 1);
             yPosition += MD_ROW_H;
             // Load
             display.setCursor(MD_LABEL_X, yPosition);
             display.print("LOAD");
-            if (menuItem == 71) display.drawTriangle(MD_CURSOR_X, yPosition-1, MD_CURSOR_X, yPosition+7, MD_CURSOR_X+4, yPosition+3, 1);
+            if (menuItem == 72) display.drawTriangle(MD_CURSOR_X, yPosition-1, MD_CURSOR_X, yPosition+7, MD_CURSOR_X+4, yPosition+3, 1);
             yPosition += MD_ROW_H;
             // Load defaults
             display.setCursor(MD_LABEL_X, yPosition);
             display.print("LOAD DEFAULTS");
-            if (menuItem == 72) display.drawTriangle(MD_CURSOR_X, yPosition-1, MD_CURSOR_X, yPosition+7, MD_CURSOR_X+4, yPosition+3, 1);
+            if (menuItem == 73) display.drawTriangle(MD_CURSOR_X, yPosition-1, MD_CURSOR_X, yPosition+7, MD_CURSOR_X+4, yPosition+3, 1);
             RedrawDisplay();
             return;
         }

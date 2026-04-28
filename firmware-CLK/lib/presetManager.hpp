@@ -17,8 +17,12 @@
 #include "calibrationData.hpp"  // CalibrationData, CAL_LUT_*, CAL_LUT_POINTS
 #include "clockEngine.hpp"
 #include "cvInputs.hpp"
+#include "displayManager.hpp"
 #include "outputs.hpp"
 #include "pinouts.hpp"
+
+extern DisplayManager displayMgr;  // defined in src/main.cpp
+extern int menuScreenTimeout;       // defined in src/main.cpp
 
 // ── Preset schema ─────────────────────────────────────────────────────────────
 // Number of preset slots.
@@ -47,6 +51,7 @@ struct LoadSaveParams {
     int CVInputOffset[NUM_CV_INS];
     EnvelopeParams envParams[NUM_OUTPUTS];
     QuantizerParams quantizerParams[NUM_OUTPUTS];
+    int menuScreenTimeout;  // index into screenTimeoutOptions[]
 };
 
 // CV calibration — see calibrationData.hpp for the struct definition.
@@ -77,6 +82,7 @@ LoadSaveParams LoadDefaultParams() {
         p.CVInputAttenuation[i] = 0;
         p.CVInputOffset[i]      = 0;
     }
+    p.menuScreenTimeout = 2;  // default: 5s
     return p;
 }
 
@@ -111,6 +117,7 @@ LoadSaveParams CollectParams() {
         p.CVInputAttenuation[i] = CVInputAttenuation[i];
         p.CVInputOffset[i]      = CVInputOffset[i];
     }
+    p.menuScreenTimeout = menuScreenTimeout;
     return p;
 }
 
@@ -140,4 +147,7 @@ void UpdateParameters(LoadSaveParams p) {
         CVInputAttenuation[i] = p.CVInputAttenuation[i];
         CVInputOffset[i]      = p.CVInputOffset[i];
     }
+    menuScreenTimeout = constrain(p.menuScreenTimeout, 0, 4);
+    static const unsigned long kTimeoutOpts[] = {0, 2000, 5000, 10000, 20000};
+    displayMgr.SetMenuTimeout(kTimeoutOpts[menuScreenTimeout]);
 }

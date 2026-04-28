@@ -63,6 +63,7 @@ Whenever a parameter is changed, a small circle will be shown in the top-left co
     - [Tap Tempo](#tap-tempo)
     - [CV Input Modulation](#cv-input-modulation)
     - [Quantization](#quantization)
+    - [Misc Settings](#misc-settings)
     - [Save/Load Configuration](#saveload-configuration)
     - [External Clock Sync](#external-clock-sync)
   - [Hardware Calibration](#hardware-calibration)
@@ -293,6 +294,11 @@ It's also possible to quantize an input CV signal to a specific scale and root n
 
 Eg. if you want to quantize the CV input 1 to the output 3, select the "Quantize" waveform type for output 3 and then in the CV Input Targets menu, assign CV input 1 to output 3. The quantization will be applied to the output waveform. Also select which scale and root note to be used in the Quantize menu.
 
+### Misc Settings
+
+**Main screen timeout**
+
+The module can be set to return to the main screen (the one showing the BPM and the output boxes) after a certain amount of seconds of inactivity when not editing a parameter. When a parameter is being changed (selected), the timeout doesn't apply. This can be configured in the "Screen Timeout" menu where the options are Off, 2s, 5s, 10s and 20s.
 
 ### Save/Load Configuration
 
