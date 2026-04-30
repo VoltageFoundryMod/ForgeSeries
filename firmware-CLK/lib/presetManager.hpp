@@ -28,7 +28,7 @@ extern int menuScreenTimeout;     // defined in src/main.cpp
 // Number of preset slots.
 // Slot 0 = auto-load/save on boot; slots 1–(NUM_SLOTS-1) = user presets.
 // Increasing this shifts EEPROM_CAL_BASE — re-run CV calibration after changing.
-#define NUM_SLOTS 5
+#define NUM_SLOTS 10
 #define VALID_MAGIC 0xA5 // Written to `valid` on save; 0xFF = erased flash, 0x00 = zeroed RAM
 
 struct LoadSaveParams {
