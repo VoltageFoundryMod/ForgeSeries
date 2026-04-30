@@ -92,8 +92,6 @@ class Output {
     void GenEnvelope();
     bool GetPulseState() { return _isPulseOn; }
     void SetPulse(bool state) { _isPulseOn = state; }
-    void TogglePulse() { _isPulseOn = !_isPulseOn; }
-    bool HasPulseChanged();
     // Display blink indicator: toggles once per output period in GeneratePulse().
     // Unlike _isPulseOn, this is waveform-type agnostic and doesn't alias at fast rates.
     bool GetBlinkState() { return _blinkState; }
@@ -1301,13 +1299,6 @@ void Output::SetWaveformType(WaveformType type) {
         _quantizerParams.enable = false;
         _triggerMode = false;
     }
-}
-
-// Check if the pulse state has changed
-bool Output::HasPulseChanged() {
-    bool pulseChanged = (_isPulseOn != _lastPulseState);
-    _lastPulseState = _isPulseOn;
-    return pulseChanged;
 }
 
 void Output::SetMasterState(bool state) {

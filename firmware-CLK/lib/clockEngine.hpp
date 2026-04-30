@@ -7,13 +7,14 @@
 // Calling convention: ClockPulse() is the timer ISR entry point.
 //   RP2040 : add_repeating_timer_us lambda → ClockPulse()
 
-#include <Arduino.h>
-#include <hardware/timer.h>
-static repeating_timer_t _clockTimer;
 #include "boardIO.hpp"
 #include "metrics.hpp"
 #include "outputs.hpp"
 #include "pinouts.hpp"
+#include <Arduino.h>
+#include <hardware/timer.h>
+
+static repeating_timer_t _clockTimer;
 
 // ── PPQN ─────────────────────────────────────────────────────────────────────
 // RP2040 @ 133 MHz: 960 PPQN → 208 µs/tick at 300 BPM — plenty of ISR headroom.
