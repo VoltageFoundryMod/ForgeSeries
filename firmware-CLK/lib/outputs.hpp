@@ -24,6 +24,8 @@ enum WaveformType {
     LogEnvelope,
     InvExpEnvelope,
     InvLogEnvelope,
+    Hatchet2,       // 2 square sub-pulses per clock cycle
+    Hatchet4,       // 4 square sub-pulses per clock cycle
     Noise,
     SmoothNoise,
     SampleHold,
@@ -45,6 +47,8 @@ String WaveformTypeDescriptions[] = {
     "Log Env",
     "Inv Exp Env",
     "Inv Log Env",
+    "Hatchet x2",
+    "Hatchet x4",
     "Noise",
     "SmoothNoise",
     "S&H",
@@ -90,6 +94,9 @@ class Output {
     void SetPulse(bool state) { _isPulseOn = state; }
     void TogglePulse() { _isPulseOn = !_isPulseOn; }
     bool HasPulseChanged();
+    // Display blink indicator: toggles once per output period in GeneratePulse().
+    // Unlike _isPulseOn, this is waveform-type agnostic and doesn't alias at fast rates.
+    bool GetBlinkState() { return _blinkState; }
     void SetExternalClock(bool state) { _externalClock = state; }
     void IncrementInternalCounter() { _internalPulseCounter++; }
 
@@ -103,14 +110,17 @@ class Output {
     // Divider
     int GetDividerIndex() { return _dividerIndex; }
     void SetDivider(int index) {
+#if !defined(ARDUINO_ARCH_RP2040)
+        // DigitalOut (SAMD21 only) cannot use the Env divider slot
         if (_outputType == OutputType::DigitalOut && index >= _dividerAmount - 1) {
-            // Skip envelope type for digital outputs
-            index = _dividerAmount - 2; // Set to the second-to-last divider
+            index = _dividerAmount - 2;
         }
-        _dividerIndex = constrain(index, 0, _dividerAmount - 1);
+#endif
+        // Env slot (last index) is not user-selectable; SetWaveformType uses SetDividerInternal.
+        _dividerIndex = constrain(index, 0, _dividerAmount - 2);
     }
     String GetDividerDescription() { return _dividerDescription[_dividerIndex]; }
-    int GetDividerAmounts() { return _dividerAmount; }
+    int GetDividerAmounts() { return _dividerAmount - 1; } // Env slot is not user-selectable
 
     // Duty Cycle
     int GetDutyCycle() { return _dutyCycle; }
@@ -169,10 +179,16 @@ class Output {
     void SetWaveformType(WaveformType type);
     WaveformType GetWaveformType() { return _waveformType; }
     String GetWaveformTypeDescription() { return WaveformTypeDescriptions[_waveformType]; }
+    bool IsEnvelopeType() {
+        return _waveformType == WaveformType::ADEnvelope ||
+               _waveformType == WaveformType::AREnvelope ||
+               _waveformType == WaveformType::ADSREnvelope;
+    }
 
     // Trigger mode control
     void SetTriggerMode(bool enabled) { _triggerMode = enabled; }
     bool GetTriggerMode() { return _triggerMode; }
+    bool GetExternalTrigger() { return _externaltrigger; }
     void SetExternalTrigger(bool state) {
         if (state != _externaltrigger) {
             _externaltrigger = state;
@@ -196,11 +212,11 @@ class Output {
     float GetSustain() { return _envParams.sustain; }
     float GetRelease() { return _envParams.release; }
     String GetAttackDescription() {
-        return _envParams.attack > 999 ? String(_envParams.attack / 1000.0f, 1) + "s" : String(_envParams.attack) + "ms";
+        return _envParams.attack > 999 ? String(_envParams.attack / 1000.0f, 1) + "s" : String((int)_envParams.attack) + "ms";
     }
-    String GetDecayDescription() { return _envParams.decay > 999 ? String(_envParams.decay / 1000.0f, 1) + "s" : String(_envParams.decay) + "ms"; }
-    String GetSustainDescription() { return String(_envParams.sustain) + "%"; }
-    String GetReleaseDescription() { return _envParams.release > 999 ? String(_envParams.release / 1000.0f, 1) + "s" : String(_envParams.release) + "ms"; }
+    String GetDecayDescription() { return _envParams.decay > 999 ? String(_envParams.decay / 1000.0f, 1) + "s" : String((int)_envParams.decay) + "ms"; }
+    String GetSustainDescription() { return String((int)_envParams.sustain) + "%"; }
+    String GetReleaseDescription() { return _envParams.release > 999 ? String(_envParams.release / 1000.0f, 1) + "s" : String((int)_envParams.release) + "ms"; }
     void SetRetrigger(bool state) { _envParams.retrigger = state; }
     bool GetRetrigger() { return _envParams.retrigger; }
     void ToggleRetrigger() { _envParams.retrigger = !_envParams.retrigger; }
@@ -254,11 +270,16 @@ class Output {
 
   private:
     // Constants
-    const int MaxDACValue = 4095;
+    const int MaxDACValue = 3830; // Effective full-scale DAC count (~4.68V).
+                                  // 4095 drives the output op-amp into its near-rail
+                                  // saturation region, causing a visible flat top on
+                                  // continuous waveforms.  3830 stays in the linear
+                                  // output range while still covering nearly the full
+                                  // 0–5V span.
     const float MaxWaveValue = 255.0;
-    static int const _dividerAmount = 19;
-    float _clockDividers[_dividerAmount] = {0.0078125, 0.015625, 0.03125, 0.0625, 0.125, 0.25, 0.3333333333, 0.5, 0.6666666667, 1.0, 1.5, 2.0, 3.0, 4.0, 8.0, 16.0, 24.0, 32.0, 10000};
-    String _dividerDescription[_dividerAmount] = {"/128", "/64", "/32", "/16", "/8", "/4", "/3", "/2", "/1.5", "x1", "x1.5", "x2", "x3", "x4", "x8", "x16", "x24", "x32", "Env"};
+    static int const _dividerAmount = 21;
+    float _clockDividers[_dividerAmount] = {0.0078125, 0.015625, 0.03125, 0.0625, 0.125, 0.25, 0.3333333333, 0.5, 0.6666666667, 1.0, 1.5, 2.0, 3.0, 4.0, 8.0, 16.0, 24.0, 32.0, 48.0, 64.0, 10000};
+    String _dividerDescription[_dividerAmount] = {"/128", "/64", "/32", "/16", "/8", "/4", "/3", "/2", "/1.5", "x1", "x1.5", "x2", "x3", "x4", "x8", "x16", "x24", "x32", "x48", "x64", "Env"};
     static int const MaxEuclideanSteps = 64;
 
     // The shuffle of the TR-909 delays each even-numbered 1/16th by 2/96 of a beat for shuffle setting 1,
@@ -278,6 +299,7 @@ class Output {
     int _offset = 0;              // Output voltage offset for DAC outs (default to 0%)
     bool _isPulseOn = false;      // Pulse state
     bool _lastPulseState = false; // Last pulse state
+    bool _blinkState = false;     // Display blink indicator (toggled once per output period)
     bool _state = true;           // Output state
     bool _oldState = true;        // Previous output state (for master stop)
     bool _masterState = true;     // Master output state
@@ -292,8 +314,7 @@ class Output {
     };
     int _quantizerThresholdBuff[62]; // input quantize
     bool _activeNotes[12] = {false}; // 1=note valid,0=note invalid
-    float _inputCV = 0.0f;           // Input CV value for quantizer
-    float _oldInputCV;
+    float _inputCV = 0.0f;           // Input CV value for quantizer (set by HandleCVTarget)
 
     unsigned long _internalPulseCounter = 0; // Pulse counter (used for external clock division)
     unsigned long _resetPulseStart = 0;      // Reset pulse start time
@@ -330,6 +351,7 @@ class Output {
     bool _triggerMode = false;
     bool _externaltrigger = false;
     unsigned long _envStartTime = 0;
+    unsigned long _lastTriggerTime = 0; // Debounce: time of last HandleTrigger() fire
     float _lastEnvValue = 0.0f; // Stores last envelope value for retriggering
 
     // ADSR envelope parameters
@@ -355,6 +377,12 @@ class Output {
     } _envState = Idle;
 
     // -------------- Private Functions --------------
+
+    // Bypass the user-selectable cap to allow setting the Env slot (index _dividerAmount-1).
+    // Only called by SetWaveformType when an envelope waveform is selected.
+    void SetDividerInternal(int index) {
+        _dividerIndex = constrain(index, 0, _dividerAmount - 1);
+    }
 
     // Start the waveform generation
     void StartWaveform() {
@@ -432,6 +460,11 @@ class Output {
     void StopWaveform() {
         switch (_waveformType) {
         case WaveformType::Square:
+            SetPulse(false);
+            _waveActive = false;
+            break;
+        case WaveformType::Hatchet2:
+        case WaveformType::Hatchet4:
             SetPulse(false);
             _waveActive = false;
             break;
@@ -724,13 +757,20 @@ class Output {
 
     // ----------- Envelope Generation Functions -----------
     void HandleTrigger() {
+        if (!_state) return; // Output disabled — ignore triggers
+        if (random(100) >= _pulseProbability) return; // Probability gate
         if (_triggerMode && (_waveformType == WaveformType::ADEnvelope || _waveformType == WaveformType::AREnvelope || _waveformType == WaveformType::ADSREnvelope)) {
             if (!_waveActive || _envParams.retrigger) {
+#ifdef ENVELOPE_DEBUG
+                Serial.printf("[TRIG ch%d] wActive=%d state=%d wv=%.2f t=%lums\n",
+                    _ID, (int)_waveActive, (int)_envState, _waveValue, millis());
+#endif
                 _lastEnvValue = _envParams.retrigger ? _waveValue : 0.0f;
                 _envState = EnvelopeState::Attack;
                 _envStartTime = micros();
                 _waveActive = true;
                 _isPulseOn = true;
+                _lastTriggerTime = millis(); // Record for HandleGateRelease debounce
             }
         }
     }
@@ -739,7 +779,21 @@ class Output {
         if (_triggerMode && (_waveformType == WaveformType::ADEnvelope || _waveformType == WaveformType::AREnvelope || _waveformType == WaveformType::ADSREnvelope)) {
             if (_waveformType == WaveformType::AREnvelope ||
                 _waveformType == WaveformType::ADSREnvelope) {
+                // Debounce: ignore releases that arrive within 50 ms of the last
+                // trigger. This covers the worst-case UpdateBPM timer-cancel gap
+                // (≤30 ms with the rate-limit) plus IIR filter settling time.
+                if (millis() - _lastTriggerTime < 50) {
+#ifdef ENVELOPE_DEBUG
+                    Serial.printf("[REL_DEBOUNCE ch%d] age=%lums state=%d wv=%.2f\n",
+                        _ID, millis() - _lastTriggerTime, (int)_envState, _waveValue);
+#endif
+                    return;
+                }
                 if (_waveActive && _envState != EnvelopeState::Release) {
+#ifdef ENVELOPE_DEBUG
+                    Serial.printf("[RELEASE ch%d] state=%d wv=%.2f lev=%.2f t=%lums\n",
+                        _ID, (int)_envState, _waveValue, _lastEnvValue, millis());
+#endif
                     _lastEnvValue = _waveValue;
                     _envState = EnvelopeState::Release;
                     _envStartTime = micros();
@@ -750,6 +804,9 @@ class Output {
 
     float ApplyCurve(float input, float curve) {
         // input and output are 0-1 range
+        // Clamp input so curves never produce negative waveValues (would otherwise
+        // happen when normalizedTime > 1, i.e. loop lagged past the phase duration).
+        input = constrain(input, 0.0f, 1.0f);
         if (curve == 0.5f)
             return input; // Linear
 
@@ -779,14 +836,18 @@ class Output {
             if (currentTime >= _envParams.attack) {
                 _envState = EnvelopeState::Decay;
                 _envStartTime = micros();
-                _lastEnvValue = _waveValue;
+                // Use constrained waveValue so _lastEnvValue is never above MaxWaveValue.
+                // (waveValue may be > MaxWaveValue here before the end-of-function constrain.)
+                _lastEnvValue = constrain(_waveValue, 0.0f, (float)MaxWaveValue);
             }
         } break;
 
         case EnvelopeState::Decay: {
             float normalizedTime = currentTime / _envParams.decay;
             float curvedTime = ApplyCurve(normalizedTime, _envParams.decayCurve);
-            _waveValue = MaxWaveValue * (1.0f - curvedTime);
+            // Use _lastEnvValue (actual attack peak) as starting point so the decay
+            // ramps from the true peak even if attack ended slightly below MaxWaveValue.
+            _waveValue = _lastEnvValue * (1.0f - curvedTime);
 
             if (currentTime >= _envParams.decay) {
                 _waveActive = false;
@@ -823,12 +884,27 @@ class Output {
             if (currentTime >= _envParams.attack) {
                 _envState = EnvelopeState::AttackHold;
                 _waveValue = MaxWaveValue;
-                _lastEnvValue = _waveValue;
+                _lastEnvValue = MaxWaveValue;
+                // Reset the phase timer for Release so its currentTime starts at 0
+                // when HandleGateRelease() later transitions to Release.
+                _envStartTime = micros();
             }
         } break;
 
         case EnvelopeState::AttackHold:
             _waveValue = MaxWaveValue;
+            _isPulseOn = true; // Keep output high throughout hold phase
+#ifdef ENVELOPE_DEBUG
+            {
+                static unsigned long _lastHoldGenMs = 0;
+                unsigned long _nowHoldMs = millis();
+                if (_nowHoldMs - _lastHoldGenMs >= 20) {
+                    _lastHoldGenMs = _nowHoldMs;
+                    Serial.printf("[GEN_HOLD ch%d] wv=%.2f iPO=%d wAct=%d t=%lums\n",
+                        _ID, _waveValue, (int)_isPulseOn, (int)_waveActive, _nowHoldMs);
+                }
+            }
+#endif
             break;
 
         case EnvelopeState::Release: {
@@ -870,7 +946,7 @@ class Output {
             if (currentTime >= _envParams.attack) {
                 _envState = EnvelopeState::Decay;
                 _envStartTime = micros();
-                _lastEnvValue = _waveValue;
+                _lastEnvValue = constrain(_waveValue, 0.0f, (float)MaxWaveValue);
             }
         } break;
 
@@ -878,7 +954,9 @@ class Output {
             float normalizedTime = currentTime / _envParams.decay;
             float curvedTime = ApplyCurve(normalizedTime, _envParams.decayCurve);
             float sustainLevel = MaxWaveValue * (_envParams.sustain / 100.0f);
-            _waveValue = MaxWaveValue - ((MaxWaveValue - sustainLevel) * curvedTime);
+            // Use _lastEnvValue (actual attack peak) so decay starts from the true
+            // peak rather than MaxWaveValue — same fix as GenerateADEnvelope().
+            _waveValue = _lastEnvValue - ((_lastEnvValue - sustainLevel) * curvedTime);
 
             if (currentTime >= _envParams.decay) {
                 _envState = EnvelopeState::Sustain;
@@ -927,16 +1005,63 @@ void Output::SetupQuantizer() {
 void Output::GenEnvelope() {
     // Handle envelope generation based on trigger state
     if (_triggerMode) {
+
+#ifdef ENVELOPE_DEBUG
+        // Warn if waveValue drops below 50% during a phase that should be held high.
+        if (_waveActive && _waveValue < MaxWaveValue * 0.5f &&
+            (_envState == EnvelopeState::AttackHold ||
+             _envState == EnvelopeState::Sustain)) {
+            static unsigned long _lastDbgMs = 0;
+            unsigned long _nowMs = millis();
+            if (_nowMs - _lastDbgMs >= 10) {
+                _lastDbgMs = _nowMs;
+                Serial.printf("[ENV_DROP ch%d] state=%d wv=%.2f lEv=%.2f iPO=%d t=%lums\n",
+                    _ID, (int)_envState, _waveValue, _lastEnvValue,
+                    (int)_isPulseOn, _nowMs);
+            }
+        }
+#endif
+
         switch (_waveformType) {
-        case WaveformType::ADEnvelope:
+        case WaveformType::ADEnvelope: {
+#ifdef ENVELOPE_DEBUG
+            EnvelopeState _prevState = _envState;
+#endif
             GenerateADEnvelope();
+#ifdef ENVELOPE_DEBUG
+            if (_envState != _prevState)
+                Serial.printf("[TRANS ch%d] %d->%d wv=%.2f lEv=%.2f iPO=%d t=%lums\n",
+                    _ID, (int)_prevState, (int)_envState, _waveValue, _lastEnvValue,
+                    (int)_isPulseOn, millis());
+#endif
             break;
-        case WaveformType::AREnvelope:
+        }
+        case WaveformType::AREnvelope: {
+#ifdef ENVELOPE_DEBUG
+            EnvelopeState _prevState = _envState;
+#endif
             GenerateAREnvelope();
+#ifdef ENVELOPE_DEBUG
+            if (_envState != _prevState)
+                Serial.printf("[TRANS ch%d] %d->%d wv=%.2f lEv=%.2f iPO=%d t=%lums\n",
+                    _ID, (int)_prevState, (int)_envState, _waveValue, _lastEnvValue,
+                    (int)_isPulseOn, millis());
+#endif
             break;
-        case WaveformType::ADSREnvelope:
+        }
+        case WaveformType::ADSREnvelope: {
+#ifdef ENVELOPE_DEBUG
+            EnvelopeState _prevState = _envState;
+#endif
             GenerateADSREnvelope();
+#ifdef ENVELOPE_DEBUG
+            if (_envState != _prevState)
+                Serial.printf("[TRANS ch%d] %d->%d wv=%.2f lEv=%.2f iPO=%d t=%lums\n",
+                    _ID, (int)_prevState, (int)_envState, _waveValue, _lastEnvValue,
+                    (int)_isPulseOn, millis());
+#endif
             break;
+        }
         default:
             // Handle other waveforms as before
             break;
@@ -1012,24 +1137,58 @@ void Output::Pulse(int PPQN, unsigned long globalTick) {
     // Calculate the clock divider for external clock
     int clockDividerExternal = 1 / _clockDividers[_dividerIndex];
 
+    // Compute display blink state deterministically from the tick counter so
+    // outputs with identical settings are always in phase and a tickCounter
+    // reset (play start, load defaults, first external sync) auto-syncs all.
+    // Cap the blink rate at x8 (PPQN/8 ticks per period): faster multipliers
+    // alias against the ~20 Hz display refresh and appear to blink slower.
+    // Envelope outputs follow _waveActive so the indicator is filled while the
+    // envelope is running and outline when idle — no fast-blinking from the Env
+    // divider slot (clockDivider=10000).
+    if (_triggerMode) {
+        _blinkState = _waveActive;
+    } else {
+        const float blinkMinPeriod = PPQN / 8.0f;  // x8 is the fastest visible blink rate
+        if (_externalClock && _clockDividers[_dividerIndex] < 1) {
+            unsigned long blinkDivider = max((unsigned long)clockDividerExternal, (unsigned long)8);
+            _blinkState = ((_internalPulseCounter / blinkDivider) % 2 == 0);
+        } else {
+            float blinkPeriod = max(periodTicks, blinkMinPeriod);
+            unsigned long adjustedTick = (tickCounterSwing >= phaseOffsetTicks)
+                                             ? (tickCounterSwing - phaseOffsetTicks)
+                                             : 0;
+            _blinkState = ((adjustedTick / (unsigned long)blinkPeriod) % 2 == 0);
+        }
+    }
+
     // Calculate the pulse duration (in ticks) based on the duty cycle
     unsigned int _pulseDuration = int(periodTicks * (_dutyCycle / 100.0));
     unsigned int _externalPulseDuration = int(clockDividerExternal * (_dutyCycle / 100.0));
 
-    // If using an external clock, generate a pulse based on the internal pulse counter
-    // dirty workaround to make this work with clock dividers
-    if (_externalClock && _clockDividers[_dividerIndex] < 1) {
-        if (_internalPulseCounter % clockDividerExternal == 0 || _internalPulseCounter == 0) {
-            GeneratePulse(PPQN, globalTick);
-        } else if (_internalPulseCounter % clockDividerExternal == _externalPulseDuration) {
-            StopWaveform();
-        }
-    } else {
-        // Handle internal clock timing
-        if ((tickCounterSwing - phaseOffsetTicks) % int(periodTicks) == 0 || (globalTick == 0)) {
-            GeneratePulse(PPQN, globalTick);
-        } else if ((tickCounterSwing - phaseOffsetTicks) % int(periodTicks) == _pulseDuration) {
-            StopWaveform();
+    // Trigger-mode outputs (AD/AR/ADSR envelopes) are fired exclusively via
+    // SetExternalTrigger() → HandleTrigger(). Skip all clock-based triggering
+    // to avoid the Env divider slot (clockDivider=10000 → periodTicks<1 →
+    // int(periodTicks)==0 → % 0 UB fires GeneratePulse() every tick).
+    if (!_triggerMode) {
+        bool _isHatchet = (_waveformType == WaveformType::Hatchet2 || _waveformType == WaveformType::Hatchet4);
+        // If using an external clock, generate a pulse based on the internal pulse counter
+        // dirty workaround to make this work with clock dividers
+        if (_externalClock && _clockDividers[_dividerIndex] < 1) {
+            if (_internalPulseCounter % clockDividerExternal == 0 || _internalPulseCounter == 0) {
+                GeneratePulse(PPQN, globalTick);
+            } else if (!_isHatchet && _internalPulseCounter % clockDividerExternal == _externalPulseDuration) {
+                StopWaveform();
+            }
+        } else {
+            // Guard against periodTicks < 1 (would make int(periodTicks)==0, causing % 0 UB)
+            int iPeriod = int(periodTicks);
+            if (iPeriod > 0) {
+                if ((tickCounterSwing - phaseOffsetTicks) % iPeriod == 0 || (globalTick == 0)) {
+                    GeneratePulse(PPQN, globalTick);
+                } else if (!_isHatchet && (tickCounterSwing - phaseOffsetTicks) % iPeriod == _pulseDuration) {
+                    StopWaveform();
+                }
+            }
         }
     }
     // Handle the waveform generation
@@ -1067,6 +1226,28 @@ void Output::Pulse(int PPQN, unsigned long globalTick) {
     case WaveformType::SampleHold:
         GenerateSampleHold(PPQN);
         break;
+    case WaveformType::Hatchet2:
+    case WaveformType::Hatchet4: {
+        if (_waveActive) {
+            int N = (_waveformType == WaveformType::Hatchet2) ? 2 : 4;
+            int iPeriod = max(1, int(periodTicks));
+            unsigned long adjustedTick = (tickCounterSwing >= phaseOffsetTicks)
+                                             ? (tickCounterSwing - phaseOffsetTicks) : 0;
+            int tickInPeriod = (int)(adjustedTick % (unsigned long)iPeriod);
+            if (tickInPeriod < (int)_pulseDuration) {
+                // Inside the "up" window: evenly divide into N square sub-pulses at 50% duty each
+                int subPeriod   = max(1, (int)_pulseDuration / N);
+                int subDuration = max(1, subPeriod / 2);
+                _isPulseOn = (tickInPeriod % subPeriod) < subDuration;
+            } else {
+                // Inside the "down" window: always silent
+                _isPulseOn = false;
+            }
+        } else {
+            _isPulseOn = false;
+        }
+        break;
+    }
     case WaveformType::Play:
         if (_waveActive) {
             _waveValue = MaxWaveValue;
@@ -1077,7 +1258,10 @@ void Output::Pulse(int PPQN, unsigned long globalTick) {
         }
         break;
     case WaveformType::QuantizeInput:
-        _waveValue = (_inputCV / MaxDACValue) * MaxWaveValue;
+        // Divide by 4095.0f (ADC full-scale), not MaxDACValue (output ceiling).
+        // These are independent — ADC range is always 0-4095 regardless of
+        // where we cap the DAC output.
+        _waveValue = (_inputCV / 4095.0f) * MaxWaveValue;
         _isPulseOn = true;
         break;
 
@@ -1106,7 +1290,7 @@ void Output::SetWaveformType(WaveformType type) {
         _lastEnvValue = 0.0f;
         _envStartTime = 0;
         _triggerMode = true;
-        SetDivider(18);
+        SetDividerInternal(_dividerAmount - 1);  // Env slot (always the last entry)
     } else if (_waveformType == WaveformType::QuantizeInput) {
         _waveActive = true;
         _triggerMode = false;
@@ -1170,25 +1354,63 @@ uint32_t Output::GetOutputLevel() {
     float adjustedLevel;
     float outputLevel;
 
+#if !defined(ARDUINO_ARCH_RP2040)
     if (_outputType == OutputType::DigitalOut) {
         return _isPulseOn ? HIGH : LOW;
-    } else {
-        if (_waveformType == WaveformType::Square) {
-            adjustedLevel = _isPulseOn ? (MaxWaveValue * (_level / 100.0)) + ((_offset / 100.0) * MaxWaveValue) : _offset;
-            adjustedLevel = constrain(adjustedLevel, 0, MaxWaveValue);
+    } else
+#endif
+    {
+        // floorVal: the DC floor (0V when offset=0%).
+        // ceilVal:  floor + amplitude headroom — capped at MaxWaveValue so the
+        //           combined signal never exceeds full scale regardless of offset.
+        // This prevents digital clipping when offset > 0 (previously the offset
+        // was added on top of the full-amplitude signal and then constrained,
+        // creating a flat top on the waveform).
+        float floorVal = (_offset / 100.0f) * MaxWaveValue;
+        float ceilVal  = min(MaxWaveValue, floorVal + (_level / 100.0f) * MaxWaveValue);
+
+        if (_waveformType == WaveformType::Square ||
+            _waveformType == WaveformType::Hatchet2 ||
+            _waveformType == WaveformType::Hatchet4) {
+            adjustedLevel = _isPulseOn ? ceilVal : floorVal;
         } else {
-            // Take into account the wave value and the _level and _offset values
-            adjustedLevel = _waveValue * (_level / 100.0) + (_offset / 100.0) * MaxWaveValue;
-            adjustedLevel = constrain(adjustedLevel, 0, MaxWaveValue);
-            adjustedLevel = _isPulseOn ? adjustedLevel : _offset;
+            // Scale waveValue [0..MaxWaveValue] into [floorVal..ceilVal]
+            adjustedLevel = floorVal + _waveValue * (ceilVal - floorVal) / MaxWaveValue;
+            adjustedLevel = _isPulseOn ? adjustedLevel : floorVal;
         }
 
         outputLevel = adjustedLevel * MaxDACValue / MaxWaveValue;
+
+#ifdef ENVELOPE_DEBUG
+        // Probe: log ALL GetOutputLevel calls during AttackHold — regardless of
+        // _waveActive — to catch if the hold phase ever outputs unexpectedly low.
+        if (_triggerMode && (_envState == EnvelopeState::AttackHold || _envState == EnvelopeState::Sustain)) {
+            static unsigned long _lastHoldDbgMs = 0;
+            unsigned long _nowMs = millis();
+            if (_nowMs - _lastHoldDbgMs >= 20) {
+                _lastHoldDbgMs = _nowMs;
+                Serial.printf("[HOLD_OUT ch%d] state=%d wAct=%d wv=%.2f adj=%.2f out=%.0f iPO=%d lv=%d t=%lums\n",
+                    _ID, (int)_envState, (int)_waveActive, _waveValue, adjustedLevel, outputLevel,
+                    (int)_isPulseOn, _level, _nowMs);
+            }
+        }
+        // Also catch unexpected low output during Attack (but only at > halfway through attack,
+        // i.e. wv should be above 50% by now if it's a late-attack drop).
+        if (_triggerMode && _waveActive && outputLevel < MaxDACValue * 0.5f &&
+            _envState == EnvelopeState::Attack && _waveValue > MaxWaveValue * 0.5f) {
+            Serial.printf("[ATTACK_DROP ch%d] wv=%.2f out=%.0f t=%lums\n",
+                _ID, _waveValue, outputLevel, millis());
+        }
+#endif
 
         if (_quantizerParams.enable) {
             // Apply quantization
             QuantizeCV(outputLevel, _oldOutputLevel, _quantizerThresholdBuff, _quantizerParams.channelSensitivity, _quantizerParams.octaveShift, &outputLevel);
         }
+
+        // Final clamp: QuantizeCV hardcodes constrain(0,4095) internally, so
+        // its output can exceed MaxDACValue.  Cap here to stay in linear range.
+        outputLevel = constrain(outputLevel, 0.0f, (float)MaxDACValue);
 
         _oldOutputLevel = outputLevel;
         return uint32_t(outputLevel);
