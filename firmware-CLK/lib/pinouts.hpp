@@ -26,9 +26,6 @@
 #define ENC_PIN_2 2  // GPIO2 = D8
 #define ENCODER_SW 3 // GPIO3 = D10
 
-// MCP4728 I2C address (all 4 outputs go through this DAC)
-#define MCP4728_ADDR 0x60
-
 // No GPIO output pins — all outputs via MCP4728
 #define NUM_CV_INS 2 // Modulation CVs (IN1/CLK_IN_PIN is clock-trigger only)
 #define NUM_OUTPUTS 4

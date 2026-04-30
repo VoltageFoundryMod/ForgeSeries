@@ -2,7 +2,10 @@
 
 // DAC resolution constants — shared across all platforms
 #define DAC_RESOLUTION (12)
-#define MAXDAC 4095
+#define MAXDAC 4095 // This is the maximum value for a 12-bit DAC, which is 2^12 - 1 = 4095.
+#define MAXADC 4095 // This is the maximum value for a 12-bit ADC, which is also 4095 which RP2040 supports.
+// MCP4728 I2C address (all 4 outputs go through this DAC)
+#define MCP4728_ADDR 0x60
 
 #include <Adafruit_MCP4728.h>
 #include <Arduino.h>
@@ -83,10 +86,6 @@ bool InitDAC() {
 // Calibration helpers ────────────────────────────────────────────────
 extern CalibrationData cal;
 
-// Returns the latest calibrated ADC reading for a CV channel (0–4095).
-// Implemented in cvInputs.hpp (AdjustADCReadings writes channelADC[]).
-float GetCVReading(int ch);
-
 // Write all 4 DAC channels.
 // Uses MCP4728 Multi-Write command in a single I2C transaction (one
 // START/STOP), which is ~3x faster than four separate setChannelValue() calls.
@@ -110,17 +109,6 @@ void DACWriteAll(uint16_t ch0, uint16_t ch1, uint16_t ch2, uint16_t ch3) {
         Wire1.write(hwVals[i] & 0xFF); // D[7:0]
     }
     uint8_t result = Wire1.endTransmission();
-#ifdef ENVELOPE_DEBUG
-    if (result != 0) {
-        static unsigned long _lastI2CErr = 0;
-        unsigned long _now = millis();
-        if (_now - _lastI2CErr >= 20) {
-            _lastI2CErr = _now;
-            Serial.printf("[I2C_ERR] DACWriteAll NACK/err=%d t=%lums\n", result,
-                          _now);
-        }
-    }
-#endif
     (void)result;
 }
 
@@ -130,15 +118,5 @@ void DACWrite(int channel, uint32_t value) {
         return;
     _dacShadow[channel] = (uint16_t)value;
     dac4.setChannelValue(_chanMap[channel], _dacShadow[channel], MCP4728_VREF_VDD,
-                         MCP4728_GAIN_1X);
-}
-
-// ── Legacy SetPin shim (keeps outputs.hpp calling convention working) ──
-// Maps the old 4-output index to MCP4728 channels via _chanMap.
-void SetPin(int pin, uint32_t value) {
-    if (pin < 0 || pin > 3)
-        return;
-    _dacShadow[pin] = (uint16_t)value;
-    dac4.setChannelValue(_chanMap[pin], _dacShadow[pin], MCP4728_VREF_VDD,
                          MCP4728_GAIN_1X);
 }
