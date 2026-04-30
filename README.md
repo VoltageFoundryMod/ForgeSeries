@@ -2,11 +2,11 @@
 
 ![Voltage Foundry Modular Logo](./VFM_Logo.png)
 
-This repository hosts the **Forge** series of modules for the Eurorack format. The **Forge** series is a collection of firmwares developed for the Forge V1 platform based on the Seeeduino Xiao and MCP4725 DAC. The modules are designed to be easy to build and modify and be built with through-hole components. The firmware is based on the Arduino platform.
+This repository hosts the **Forge** series of modules for the Eurorack format. The **Forge** series is a collection of firmwares developed for the Forge V1 platform based on the Seeeduino Xiao and MCP4725 DAC and Forge V2 hardware based on the Seeeduino Xiao RP2040 anf the MCP4728 DAC.
+
+The modules are designed to be easy to build and modify and be built with through-hole components. The firmware is based on the Arduino platform.
 
 The concept is to have a generic hardware with a display, rotary encoder, trigger inputs and output, CV inputs and outputs allowing different modules by changing the firmware.
-
-The module's core uses a Seeeduino Xiao (SAMD21/Cortex M0 chip) and a MCP4725 DAC.
 
 This project currently provides the following modules:
 
@@ -32,22 +32,21 @@ Each new module firmware will be in a separate folder which can be built and upl
 
 Power supply can be select from an on-board jumper where closing the the SEL with REG jumper, will take power from eurorack 12V supply and closing the SEL with BOARD jumper, will take power from 5V (requires 16 pin cable). It can also be powered by the USB-C jack on the Seeeduino Xiao.
 
-## Project State
+## Project State and Compatibility
 
 - ✅ - Working
 - ❎ - Not tested
 - 🚧 - Under development
 - ❓ - Works with issues
 
-| Firmware             | Works | Remarks                           |
-| -------------------- | ----- | --------------------------------- |
-| Hardware             | ✅     |                                   |
-| Clock Generator      | ✅     |                                   |
-| Dual Quantizer       | ✅     |                                   |
-| Scope                | ❓     | Spectrum Analyzer not working yet |
-| Dual Sequencer       | 🚧     |                                   |
-| Sequencer            | ❎     | Original firmware, not tested     |
-| Generative Sequencer | ❎     | Original firmware, not tested     |
+| Firmware             | State | Remarks                                  |
+| -------------------- | ----- | ---------------------------------------- |
+| ClockForge           | ✅     | V1 HW with 1.x FW, V2 HW with 2.x FW     |
+| Dual Quantizer       | ✅     | Only works on V1 hardware                |
+| Scope                | ❓     | V1 HW, Spectrum Analyzer not working yet |
+| Dual Sequencer       | 🚧     |                                          |
+| Sequencer            | ❎     | V1 HW, Original firmware, not tested     |
+| Generative Sequencer | ❎     | V1 HW, Original firmware, not tested     |
 
 ## Simulations
 
@@ -56,14 +55,17 @@ Power supply can be select from an on-board jumper where closing the the SEL wit
 ## Hardware and PCB
 
 You can find the schematic and BOM in the [Hardware](./Hardware/) folder.
-For the PCBs, the module has one main circuit PCB, one control circuit PCB and one panel PCB. The files are available in the [gerbers](./Hardware/gerbers/) directory.
+For the PCBs, the module has one main circuit PCB, one control circuit PCB and one panel PCB. The files are available in the [gerbers](./Hardware/gerbers/) directory. There are files for the main board V1 and V2. The control board and panel are the same for both versions.
+
+Check which Firmware is compatible with which hardware version in the table above before ordering the PCBs, as the main board V2 is only compatible with ClockForge 2.x firmware and not with the other firmwares as of now.
+
 You can order them on any common PCB manufacturing service, I used [JLCPCB](https://jlcpcb.com/). I made the circuits pcbs under 100mm to get the discount price.
 
 If the panel size is not correctly detected by JLC manually put 30x128.5 mm.
 
 When ordering the display module, make sure to choose an 0.96 I2C oled module that has the pinout specified as GND-VCC-SCL-SDA as opposed to VCC-GND-SCL-SDA (both exist and the latter won't work).
 
-Also make sure you order a Seediuno XIAO (with a SAMD21/Cortex M0 chip) as opposed to the XIAO esp32c3 or the XIAO rp2040, those are different chips.
+Also make sure you order a Seediuno XIAO (with a SAMD21/Cortex M0 chip) for V1 main board or XIAO rp2040 for V2 main board, those are different chips.
 
 <img src="images/display.jpg" alt="Display Module" width="20%" height="20%">
 
@@ -71,7 +73,7 @@ Also make sure you order a Seediuno XIAO (with a SAMD21/Cortex M0 chip) as oppos
 
 <img src="images/back.jpg" alt="Module Back" width="20%" height="20%">
 
-Pinout Diagram:
+Output Diagram:
 
 ```text
 |--------------------|
@@ -96,6 +98,16 @@ Pinout Diagram:
 - 6 - Analog Out 1 (Internal DAC)
 - 7 - Analog Out 2 (External DAC)
 
+or for the V2 main board:
+
+- 1 - Trigger / Clock Input
+- 2 - CV In 1
+- 3 - CV In 2
+- 4 - Analog Out 1
+- 5 - Analog Out 2
+- 6 - Analog Out 3
+- 7 - Analog Out 4
+
 ## Assembly
 
 When assembling, you can either use a header for the screen or solder it directly, as it is a litte too tall.
@@ -112,6 +124,8 @@ Vin(5v) *(R21(33k)/R21(33k)+R19(18k) = Vout
 3.3v to 5v(scale up)
 5v/3.3v = 1.51515
 0.51515 = 5k(adjustable)/6.8k
+
+The V2 board and 2.0 firmware have an internal calibration mode that allows you to set the input compensation and output gain without needing to do the calculations, so it should be easier to calibrate via it's menus. The output calibration still needs to be done by adjusting the trimmers, but the input compensation can be set in the menu and saved to EEPROM.
 
 ## Acknowledgements
 

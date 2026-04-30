@@ -1,0 +1,43 @@
+﻿Bill of Materials (BOM):
+
+On Main Board:
+
+1x Seeedstudio XIAO RP2040
+2x 100n Capacitor ceramic disc
+1x 10u 25V Capacitor electrolytic radial
+1x MCP4758 on breakout board (<https://pt.aliexpress.com/item/1005007635284632.html>)
+4x 470R Resistor
+4x 6k8 Resistor
+4x 10k Resistor
+4x 5k adjustable trimmer (multi turn vertical)
+1x MCP6004 DIP-14 op-amp
+1x DIP-14 socket
+1x 7805 Regulator TO-220
+
+1x 3 pin header with Jumper for power selection
+2x 1x8 pin header and socket for board interconnection
+1x 2x8 pin header for power input
+2x 1x7 pin socket for Seeed Xiao board
+
+If using existing control boards, replace the two 470R resistors (R13 and R20, close to bottom jacks) with a jumper as this new board already includes them. If building new control boards, just use a jumper in place of these two resistors.
+
+
+Control Board:
+
+2x Resistor 330R
+2x Resistor 470R
+2x Resistor 3.3K
+2x Resistor 18K
+3x Resistor 33K
+4x 10n Capacitor ceramic disc
+6x BAT43 Diode
+1x Alps EC11 Rotary Encoder with push switch
+7x Thonkiconn 3.5mm Jack
+1x SSD1306 0.96" I2C OLED display module (with GND-VCC-SCL-SDA pinout)
+
+Common:
+
+1x 3 pin header with Jumper for power selection
+2x 1x8 pin header and socket for board interconnection
+1x 2x8 pin header for power input
+2x 1x7 pin socket for Seeed Xiao board
