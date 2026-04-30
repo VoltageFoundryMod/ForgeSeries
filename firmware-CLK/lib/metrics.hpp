@@ -2,9 +2,6 @@
 #define METRICS_HPP
 
 #include <Arduino.h>
-#if !defined(ARDUINO_ARCH_RP2040)
-#include <malloc.h>
-#endif
 
 /**
  * Performance Metrics System
@@ -70,15 +67,9 @@ class PerformanceMetrics {
 
     // Memory tracking
     uint32_t GetFreeRAM() {
-#if defined(ARDUINO_ARCH_RP2040)
         // RP2040: use heap_end / stack pointer estimate
         extern char __StackLimit, __bss_end__;
         return &__StackLimit - &__bss_end__;
-#else
-        // SAMD21: mallinfo-based estimate
-        struct mallinfo mi = mallinfo();
-        return 32768 - mi.uordblks - 4096;
-#endif
     }
 
   public:

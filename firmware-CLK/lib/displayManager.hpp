@@ -113,7 +113,6 @@ class DisplayManager {
         return true;
     }
 
-    // End frame - performs the actual I2C transmission (single-core / SAMD21).
     // On RP2040, prefer PrepareFrame() + let Core 1 call display.display().
     // Returns true if display was actually transmitted (for metrics)
     bool EndFrame() {

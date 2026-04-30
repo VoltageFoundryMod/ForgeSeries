@@ -55,13 +55,9 @@ static void _CalHeader(const char *title) {
 
 // Flush display buffer — Core 1 owns Wire on RP2040, so signal it.
 static void _CalFlush() {
-#if defined(ARDUINO_ARCH_RP2040)
     extern volatile bool _displayFrameReady;
     _displayFrameReady = true;
     delay(35); // ~28ms for 128×64 @ 400kHz I2C
-#else
-    display.display();
-#endif
 }
 
 // Block until the encoder button is pressed then released (with debounce).
@@ -90,18 +86,14 @@ static uint16_t _CalReadADC(int pin) {
 
 // Set Out1 and Out2 to the same DAC value, zero Out3/Out4, wait for settling.
 static void _CalSetOutputs(uint16_t dacVal) {
-#if defined(ARDUINO_ARCH_RP2040)
     DACWriteAll(dacVal, dacVal, 0, 0);
-#endif
     delay(CAL_SETTLE_MS);
 }
 
 // ── Phase 1: Output trim
 // ──────────────────────────────────────────────────────
 static void _CalOutputTrim() {
-#if defined(ARDUINO_ARCH_RP2040)
     DACWriteAll(MAXDAC, MAXDAC, MAXDAC, MAXDAC);
-#endif
 
     _CalHeader("1/3  OUTPUT TRIM");
     display.setTextSize(1);
@@ -116,9 +108,7 @@ static void _CalOutputTrim() {
 
     _CalWaitClick();
 
-#if defined(ARDUINO_ARCH_RP2040)
     DACWriteAll(0, 0, 0, 0);
-#endif
     delay(50);
 }
 
@@ -169,9 +159,7 @@ static void _CalCaptureBothChannels(CalibrationData &newCal) {
     }
 
     // Zero outputs when done
-#if defined(ARDUINO_ARCH_RP2040)
     DACWriteAll(0, 0, 0, 0);
-#endif
     delay(50);
 }
 
@@ -233,9 +221,5 @@ void RunCalibration() {
     _CalFlush();
     delay(1500);
 
-#if defined(ARDUINO_ARCH_RP2040)
     rp2040.reboot();
-#else
-    NVIC_SystemReset();
-#endif
 }

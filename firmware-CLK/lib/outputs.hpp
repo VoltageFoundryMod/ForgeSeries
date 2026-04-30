@@ -110,12 +110,6 @@ class Output {
     // Divider
     int GetDividerIndex() { return _dividerIndex; }
     void SetDivider(int index) {
-#if !defined(ARDUINO_ARCH_RP2040)
-        // DigitalOut (SAMD21 only) cannot use the Env divider slot
-        if (_outputType == OutputType::DigitalOut && index >= _dividerAmount - 1) {
-            index = _dividerAmount - 2;
-        }
-#endif
         // Env slot (last index) is not user-selectable; SetWaveformType uses SetDividerInternal.
         _dividerIndex = constrain(index, 0, _dividerAmount - 2);
     }
@@ -1357,11 +1351,6 @@ uint32_t Output::GetOutputLevel() {
     float adjustedLevel;
     float outputLevel;
 
-#if !defined(ARDUINO_ARCH_RP2040)
-    if (_outputType == OutputType::DigitalOut) {
-        return _isPulseOn ? HIGH : LOW;
-    } else
-#endif
     {
         // floorVal: the DC floor (0V when offset=0%).
         // ceilVal:  floor + amplitude headroom — capped at MaxWaveValue so the

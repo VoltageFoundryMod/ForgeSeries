@@ -105,15 +105,7 @@ int CVTargetLength =
     sizeof(CVTargetDescription) / sizeof(CVTargetDescription[0]);
 
 // ── CV oversample count
-// ─────────────────────────────────────────────────────── RP2040 ADC is noisier
-// than SAMD21 (no hardware averaging). 8x software oversampling halves the
-// noise floor (~1.4 effective bits gained). SAMD21 uses 128x hardware averaging
-// in InitIO(), so 1 read is sufficient.
-#if defined(ARDUINO_ARCH_RP2040)
 static constexpr int CV_OVERSAMPLE_SAMPLES = 8;
-#else
-static constexpr int CV_OVERSAMPLE_SAMPLES = 1;
-#endif
 
 // ── CV input state globals
 // ────────────────────────────────────────────────────
@@ -142,7 +134,6 @@ void HandleCVTarget(int ch, float CVValue, CVTarget cvTarget);
 // ─────────────────────────────────────────────────────────────────────────────
 void AdjustADCReadings(int CV_IN_PIN, int ch) {
     // Average multiple samples to reduce RP2040 ADC noise.
-    // SAMD21 uses hardware 128x averaging so CV_OVERSAMPLE_SAMPLES == 1 there.
     int32_t sum = 0;
     for (int i = 0; i < CV_OVERSAMPLE_SAMPLES; i++) {
         sum += analogRead(CV_IN_PIN);

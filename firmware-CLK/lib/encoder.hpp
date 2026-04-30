@@ -1,8 +1,4 @@
 // Rotary encoder setting
-// ENCODER_OPTIMIZE_INTERRUPTS disabled - interrupts interfere with waveform timing
-// Using polling mode instead (called in main loop at ~745Hz, fast enough)
-// #define ENCODER_OPTIMIZE_INTERRUPTS
-#if defined(ARDUINO_ARCH_RP2040)
 // RP2040: PJRC Encoder uses architecture-specific macros not available on RP2040.
 // Use a minimal polling-based shim with the same read() API.
 // IMPORTANT: constructor must NOT call pinMode/digitalRead — pins are not ready
@@ -40,6 +36,3 @@ class Encoder {
         return _pos;
     }
 };
-#else
-#include <Encoder.h>
-#endif

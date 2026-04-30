@@ -6,17 +6,10 @@
 // Depends on: outputs[] and metrics (extern, defined in main.cpp).
 // Calling convention: ClockPulse() is the timer ISR entry point.
 //   RP2040 : add_repeating_timer_us lambda → ClockPulse()
-//   SAMD21 : TimerTcc0.attachInterrupt(ClockPulse)
 
 #include <Arduino.h>
-
-#if defined(ARDUINO_ARCH_RP2040)
 #include <hardware/timer.h>
 static repeating_timer_t _clockTimer;
-#else
-#include <TimerTCC0.h>
-#endif
-
 #include "boardIO.hpp"
 #include "metrics.hpp"
 #include "outputs.hpp"
@@ -24,13 +17,8 @@ static repeating_timer_t _clockTimer;
 
 // ── PPQN ─────────────────────────────────────────────────────────────────────
 // RP2040 @ 133 MHz: 960 PPQN → 208 µs/tick at 300 BPM — plenty of ISR headroom.
-// SAMD21 @ 48 MHz:  192 PPQN → 1042 µs/tick at 300 BPM — unchanged.
 // 5× higher resolution = 5× smoother waveform steps at all BPMs.
-#if defined(ARDUINO_ARCH_RP2040)
 #define PPQN 960
-#else
-#define PPQN 192
-#endif
 
 // ── BPM & timer globals
 // ───────────────────────────────────────────────────────
@@ -206,7 +194,6 @@ void HandleExternalClock() {
 // ─────────────────────────────────────────────────────────────────────────────
 void UpdateBPM(unsigned int newBPM) {
     BPM = constrain(newBPM, minBPM, maxBPM);
-#if defined(ARDUINO_ARCH_RP2040)
     cancel_repeating_timer(&_clockTimer);
     int64_t intervalUs = 60000000LL / BPM / PPQN;
     add_repeating_timer_us(
@@ -216,9 +203,6 @@ void UpdateBPM(unsigned int newBPM) {
             return true;
         },
         nullptr, &_clockTimer);
-#else
-    TimerTcc0.setPeriod(60L * 1000 * 1000 / BPM / PPQN / 4);
-#endif
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -236,16 +220,6 @@ void ClockPulse() {
     // with the actual pulse state. The display manager's 50ms time gate limits
     // the real rendering rate regardless of how often this is set.
     displayRefresh = 1;
-
-#if !defined(ARDUINO_ARCH_RP2040)
-    // SAMD21: outputs 0-1 are DigitalOut — safe to drive from ISR
-    // DAC outputs 2-3 are updated in main loop HandleOutputs()
-    SetPin(0, outputs[0].GetOutputLevel());
-    SetPin(1, outputs[1].GetOutputLevel());
-#endif
-    // RP2040: ALL outputs are MCP4728 I2C DAC — I2C must NOT be called from
-    // an interrupt context (deadlock). All 4 outputs flushed in HandleOutputs().
-
     metrics.EndISRMeasurement();
 }
 
@@ -253,7 +227,6 @@ void ClockPulse() {
 // Start the hardware timer at the current BPM
 // ─────────────────────────────────────────────────────────────────────────────
 void InitializeTimer() {
-#if defined(ARDUINO_ARCH_RP2040)
     int64_t intervalUs = 60000000LL / BPM / PPQN;
     if (intervalUs <= 0)
         intervalUs = 60000000LL / 120 / PPQN; // fallback 120 BPM
@@ -264,11 +237,6 @@ void InitializeTimer() {
             return true;
         },
         nullptr, &_clockTimer);
-#else
-    TimerTcc0.initialize();
-    TimerTcc0.attachInterrupt(ClockPulse);
-    NVIC_SetPriority(TCC0_IRQn, 0); // Highest priority (0)
-#endif
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
