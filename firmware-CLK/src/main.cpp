@@ -8,7 +8,7 @@
 // Wire1 (GPIO0/1) = DAC only,     used exclusively by Core 0 at runtime.
 // Separate hardware I2C blocks + separate cores = zero conflict, no mutex needed.
 static volatile bool _displayFrameReady = false;
-static volatile bool _displayLocked = false;  // Core 0 sets to pause Core 1 GFX rendering
+static volatile bool _displayLocked = false; // Core 0 sets to pause Core 1 GFX rendering
 #endif
 
 #include <Adafruit_GFX.h>
@@ -17,20 +17,20 @@ static volatile bool _displayLocked = false;  // Core 0 sets to pause Core 1 GFX
 
 // Load local libraries
 #include "boardIO.hpp"
-#include "encoder.hpp"
 #include "clockEngine.hpp"
 #include "cvInputs.hpp"
 #include "displayManager.hpp"
-#include "storage.hpp"    // includes presetManager.hpp transitively
+#include "encoder.hpp"
+#include "menuDefinitions.hpp" // MenuItem struct
+#include "menuDisplay.hpp"     // MD_* display primitives (depends on menuHandlers.hpp)
+#include "menuHandlers.hpp"    // MENU_ITEMS[] + setter/action implementations
 #include "metrics.hpp"
 #include "outputs.hpp"
 #include "pinouts.hpp"
 #include "splash.hpp"
+#include "storage.hpp" // includes presetManager.hpp transitively
 #include "utils.hpp"
 #include "version.hpp"
-#include "menuDefinitions.hpp" // MenuItem struct
-#include "menuHandlers.hpp"    // MENU_ITEMS[] + setter/action implementations
-#include "menuDisplay.hpp"     // MD_* display primitives (depends on menuHandlers.hpp)
 
 // Configuration
 #define OLED_ADDRESS 0x3C
@@ -45,8 +45,8 @@ DisplayManager displayMgr(display);
 
 // Rotary encoder object
 Encoder encoder(ENC_PIN_1, ENC_PIN_2); // rotary encoder library setting
-float oldPosition = 0;  // last acted-on raw encoder count
-float newPosition = 0;  // current raw encoder count
+float oldPosition = 0;                 // last acted-on raw encoder count
+float newPosition = 0;                 // current raw encoder count
 
 // Performance metrics
 PerformanceMetrics metrics;
@@ -54,7 +54,7 @@ PerformanceMetrics metrics;
 // Output objects
 Output outputs[NUM_OUTPUTS] = {
 #if defined(ARDUINO_ARCH_RP2040)
-    Output(1, OutputType::DACOut),  // All outputs via MCP4728 on RP2040
+    Output(1, OutputType::DACOut), // All outputs via MCP4728 on RP2040
     Output(2, OutputType::DACOut),
 #else
     Output(1, OutputType::DigitalOut),
@@ -86,10 +86,14 @@ int menuScreenTimeout = 2;           // Index into screenTimeoutOptions[]: 0=Off
 unsigned long lastEncoderUpdate = 0; // Last encoder update time
 
 // Macro to request display refresh from user interactions (marks dirty + resets timeout timer)
-#define REQUEST_DISPLAY_REFRESH() do { displayRefresh = 1; displayMgr.MarkInteraction(); } while(0)
+#define REQUEST_DISPLAY_REFRESH()     \
+    do {                              \
+        displayRefresh = 1;           \
+        displayMgr.MarkInteraction(); \
+    } while (0)
 
-#include "menuRender.hpp"      // MenuIndicator, MenuHeader, HandleDisplay
-#include "calibration.hpp"     // RunCalibration() — output trim + CV LUT capture
+#include "calibration.hpp" // RunCalibration() — output trim + CV LUT capture
+#include "menuRender.hpp"  // MenuIndicator, MenuHeader, HandleDisplay
 
 // Calibration data (loaded from EEPROM at boot; updated by RunCalibration())
 CalibrationData cal;
@@ -119,20 +123,27 @@ void HandleEncoderClick() {
             if (menuItem >= 1 && menuItem <= MENU_ITEM_COUNT) {
                 const MenuItem &mi = MENU_ITEMS[menuItem - 1];
                 if (mi.type == MENU_ACTION || mi.type == MENU_TOGGLE) {
-                    if (mi.action) mi.action();
+                    if (mi.action)
+                        mi.action();
                 } else { // MENU_EDIT
                     menuMode = menuItem;
                     // Fix: initialize pending state for CV target editing
                     // (original code had this as dead code inside menuMode==0 branch).
-                    if (menuItem == 57) { pendingCVInputTarget[0] = CVInputTarget[0]; }
-                    else if (menuItem == 58) { pendingCVInputTarget[1] = CVInputTarget[1]; }
+                    if (menuItem == 57) {
+                        pendingCVInputTarget[0] = CVInputTarget[0];
+                    } else if (menuItem == 58) {
+                        pendingCVInputTarget[1] = CVInputTarget[1];
+                    }
                 }
             }
         } else {
             // Commit changes and exit edit mode.
             // CV target items copy the pending selection back to the live value.
-            if (menuMode == 57) { CVInputTarget[0] = pendingCVInputTarget[0]; }
-            else if (menuMode == 58) { CVInputTarget[1] = pendingCVInputTarget[1]; }
+            if (menuMode == 57) {
+                CVInputTarget[0] = pendingCVInputTarget[0];
+            } else if (menuMode == 58) {
+                CVInputTarget[1] = pendingCVInputTarget[1];
+            }
             menuMode = 0;
         }
     }
@@ -198,7 +209,6 @@ void HandleEncoderPosition() {
     metrics.EndEncoderMeasurement();
 }
 
-
 // Show a brief full-screen message (e.g. "SAVED", "LOADED") then return.
 // On RP2040: signals Core 1 to flush via Wire — Core 0 never touches the Wire bus.
 // On SAMD21: flushes inline as usual.
@@ -208,7 +218,7 @@ void ShowTemporaryMessage(const char *msg, uint32_t durationMs) {
     // Use _displayLocked rather than touching Wire from Core 0.
 #if defined(ARDUINO_ARCH_RP2040)
     _displayLocked = true;
-    delay(10);  // Let Core 1 finish any in-flight HandleDisplay() call (~1ms max)
+    delay(10); // Let Core 1 finish any in-flight HandleDisplay() call (~1ms max)
 #endif
 
     display.clearDisplay();
@@ -217,7 +227,7 @@ void ShowTemporaryMessage(const char *msg, uint32_t durationMs) {
     display.setCursor(x, SCREEN_HEIGHT / 2 - 8);
     display.print(msg);
 #if defined(ARDUINO_ARCH_RP2040)
-    _displayFrameReady = true;  // Core 1 flushes over Wire — no Wire call from Core 0
+    _displayFrameReady = true; // Core 1 flushes over Wire — no Wire call from Core 0
 #else
     display.display();
 #endif
@@ -228,9 +238,9 @@ void ShowTemporaryMessage(const char *msg, uint32_t durationMs) {
     }
 
 #if defined(ARDUINO_ARCH_RP2040)
-    _displayLocked = false;     // Resume normal Core 1 rendering
+    _displayLocked = false; // Resume normal Core 1 rendering
 #endif
-    REQUEST_DISPLAY_REFRESH();  // Force a clean redraw after returning
+    REQUEST_DISPLAY_REFRESH(); // Force a clean redraw after returning
 }
 
 // Redraw the display.
@@ -239,13 +249,13 @@ void ShowTemporaryMessage(const char *msg, uint32_t durationMs) {
 // SAMD21: single-core, flush inline.
 void RedrawDisplay() {
     metrics.BeginDisplayMeasurement();
-    displayMgr.PrepareFrame();   // DrawOverlays + CommitFrame, no display.display()
+    displayMgr.PrepareFrame(); // DrawOverlays + CommitFrame, no display.display()
     metrics.EndDisplayMeasurement();
     displayRefresh = 0;
 #if defined(ARDUINO_ARCH_RP2040)
-    _displayFrameReady = true;  // Signal Core 1 to call display.display() over Wire
+    _displayFrameReady = true; // Signal Core 1 to call display.display() over Wire
 #else
-    display.display();           // SAMD21: single-core, flush inline
+    display.display(); // SAMD21: single-core, flush inline
 #endif
 }
 
@@ -307,8 +317,10 @@ void setup() {
     // unconditionally so the module boots normally even without a connected PC.
     {
         uint32_t _t = millis();
-        while (!Serial && (millis() - _t) < 3000) { /* wait */ }
-        if (Serial) delay(100); // Let TX path stabilize after CDC connects
+        while (!Serial && (millis() - _t) < 3000) { /* wait */
+        }
+        if (Serial)
+            delay(100); // Let TX path stabilize after CDC connects
     }
 #endif
     Serial.println("\n\n--- Starting ClockForge ---");
@@ -316,9 +328,9 @@ void setup() {
 
     Serial.println("Initializing encoder and I2C...");
 #if defined(ARDUINO_ARCH_RP2040)
-    delay(500);               // Give USB-CDC time to enumerate
-    encoder.begin();          // Deferred pin init for RP2040 (safe here, after runtime ready)
-    InitWire();               // Configure SDA/SCL and Wire.begin() — shared by display + DAC
+    delay(500);      // Give USB-CDC time to enumerate
+    encoder.begin(); // Deferred pin init for RP2040 (safe here, after runtime ready)
+    InitWire();      // Configure SDA/SCL and Wire.begin() — shared by display + DAC
 #endif
 
     Serial.println("Initializing storage...");
@@ -335,12 +347,14 @@ void setup() {
         // Can't show on display — blink LED instead as distress signal
         pinMode(LED_BUILTIN, OUTPUT);
         while (1) {
-            digitalWrite(LED_BUILTIN, HIGH); delay(200);
-            digitalWrite(LED_BUILTIN, LOW);  delay(200);
+            digitalWrite(LED_BUILTIN, HIGH);
+            delay(200);
+            digitalWrite(LED_BUILTIN, LOW);
+            delay(200);
         }
     }
 #if !defined(ARDUINO_ARCH_RP2040)
-    Wire.setClock(1000000);  // SAMD21 only — 1MHz I2C (RP2040 already set to 400KHz in InitWire)
+    Wire.setClock(1000000); // SAMD21 only — 1MHz I2C (RP2040 already set to 400KHz in InitWire)
 #endif
     display.clearDisplay();
     display.setTextWrap(false);
@@ -368,7 +382,8 @@ void setup() {
                 Serial.printf("  Found device at 0x%02X\n", addr);
             }
         }
-        while (1);  // Halt — DAC is required for all outputs
+        while (1)
+            ; // Halt — DAC is required for all outputs
     }
 #endif
 
@@ -406,7 +421,7 @@ void setup() {
     // the timer starts (so RunCalibration() can block freely).
     if (digitalRead(ENCODER_SW) == LOW) {
         Serial.println("Encoder held at boot — entering calibration mode.");
-        RunCalibration();  // blocks; reboots at end
+        RunCalibration(); // blocks; reboots at end
         // never returns
     }
 
@@ -457,7 +472,8 @@ void loop() {
     HandleExternalClock();
     // Clock and CV handlers set displayRefresh=1 but cannot call displayMgr.MarkDirty().
     // Propagate here so HandleDisplay() actually fires (it requires both flags).
-    if (displayRefresh) displayMgr.MarkDirty();
+    if (displayRefresh)
+        displayMgr.MarkDirty();
 
 #if !defined(ARDUINO_ARCH_RP2040)
     // SAMD21: single-core, GFX + display flush in main loop with frame-skip.
@@ -468,14 +484,14 @@ void loop() {
 #endif
     // RP2040: HandleDisplay() (GFX rendering) runs on Core 1 to keep this loop tight.
 
-    #ifdef PERFORMANCE_DEBUG
+#ifdef PERFORMANCE_DEBUG
     static unsigned long lastStatsTime = 0;
     if (millis() - lastStatsTime >= 5000) {
         metrics.PrintStats();
         lastStatsTime = millis();
         metrics.Reset();
     }
-    #endif
+#endif
 
     metrics.EndLoopMeasurement();
 }
@@ -500,7 +516,7 @@ void loop1() {
     if (_displayFrameReady) {
         _displayFrameReady = false;
         metrics.BeginCore1FlushMeasurement();
-        display.display();   // Wire (GPIO6/7, I2C1), Core 1 only
+        display.display(); // Wire (GPIO6/7, I2C1), Core 1 only
         metrics.EndCore1FlushMeasurement();
     }
 }

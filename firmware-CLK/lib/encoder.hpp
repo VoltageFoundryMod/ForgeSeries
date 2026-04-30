@@ -11,7 +11,8 @@ class Encoder {
     int _pin1, _pin2;
     long _pos = 0;
     bool _last1 = false, _last2 = false;
-public:
+
+  public:
     Encoder(int p1, int p2) : _pin1(p1), _pin2(p2) {}
     void begin() {
         pinMode(_pin1, INPUT_PULLUP);
@@ -28,11 +29,10 @@ public:
         // Invalid/bounce transitions produce 0 — no spurious counts.
         // _pos is negated (CW = negative) to match hardware wiring convention.
         static const int8_t table[16] = {
-             0, -1,  1,  0,
-             1,  0,  0, -1,
-            -1,  0,  0,  1,
-             0,  1, -1,  0
-        };
+            0, -1, 1, 0,
+            1, 0, 0, -1,
+            -1, 0, 0, 1,
+            0, 1, -1, 0};
         uint8_t idx = (_last1 << 3) | (_last2 << 2) | (cur1 << 1) | (uint8_t)cur2;
         _pos -= table[idx]; // Negate: CW produces negative counts
         _last1 = cur1;

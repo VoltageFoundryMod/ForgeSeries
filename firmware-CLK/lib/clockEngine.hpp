@@ -32,38 +32,43 @@ static repeating_timer_t _clockTimer;
 #define PPQN 192
 #endif
 
-// ── BPM & timer globals ───────────────────────────────────────────────────────
-unsigned int BPM            = 120;
+// ── BPM & timer globals
+// ───────────────────────────────────────────────────────
+unsigned int BPM = 120;
 unsigned int lastInternalBPM = 120;
-unsigned int const minBPM   = 10;
-unsigned int const maxBPM   = 300;
+unsigned int const minBPM = 10;
+unsigned int const maxBPM = 300;
 
 // ── Tick counter (incremented every PPQN tick in ClockPulse ISR) ─────────────
 volatile unsigned long tickCounter = 0;
 
-// ── External clock state ──────────────────────────────────────────────────────
-// clockInterval and lastClockInterruptTime are in MICROSECONDS for better
-// BPM precision. HandleExternalClock() also uses micros().
-volatile unsigned long clockInterval          = 0;  // µs between processed QN pulses
-volatile unsigned long lastClockInterruptTime = 0;  // µs timestamp of last valid edge
-volatile bool          usingExternalClock     = false;
-volatile unsigned long externalTickCounter    = 0;
-bool                   extClockBlinkState     = false;  // toggled each QN for the blink indicator
+// ── External clock state
+// ────────────────────────────────────────────────────── clockInterval and
+// lastClockInterruptTime are in MICROSECONDS for better BPM precision.
+// HandleExternalClock() also uses micros().
+volatile unsigned long clockInterval = 0; // µs between processed QN pulses
+volatile unsigned long lastClockInterruptTime =
+    0; // µs timestamp of last valid edge
+volatile bool usingExternalClock = false;
+volatile unsigned long externalTickCounter = 0;
+bool extClockBlinkState = false; // toggled each QN for the blink indicator
 
 static int const dividerAmount = 7;
-int    externalClockDividers[dividerAmount]       = {1, 2, 4, 8, 16, 24, 48};
-// Labels reflect the number of pulses-per-quarter-note the attached clock sends.
-// Example: Pamela's Pro Workout default output → 24PPQN.
-String externalDividerDescription[dividerAmount] = {"1PPQN", "2PPQN", "4PPQN", "8PPQN", "16PPQN", "24PPQN", "48PPQN"};
-int    externalDividerIndex                      = 0;
+int externalClockDividers[dividerAmount] = {1, 2, 4, 8, 16, 24, 48};
+// Labels reflect the number of pulses-per-quarter-note the attached clock
+// sends. Example: Pamela's Pro Workout default output → 24PPQN.
+String externalDividerDescription[dividerAmount] = {
+    "1PPQN", "2PPQN", "4PPQN", "8PPQN", "16PPQN", "24PPQN", "48PPQN"};
+int externalDividerIndex = 0;
 
 // ── extern refs to objects defined in main.cpp ───────────────────────────────
-extern Output            outputs[NUM_OUTPUTS];
+extern Output outputs[NUM_OUTPUTS];
 extern PerformanceMetrics metrics;
-extern bool              displayRefresh;
-extern bool              unsavedChanges;
+extern bool displayRefresh;
+extern bool unsavedChanges;
 
-// Set by encoder handler; applied by loop() so SDK timer calls never block encoder polling.
+// Set by encoder handler; applied by loop() so SDK timer calls never block
+// encoder polling.
 bool bpmNeedsUpdate = false;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -83,7 +88,8 @@ void ClockReceived() {
     unsigned long currentTime = micros();
 
     // Debounce: ignore edges closer than 1 ms (protects against switch bounce
-    // and shields the fast 48PPQN path, whose minimum interval at 300 BPM is ~4 ms)
+    // and shields the fast 48PPQN path, whose minimum interval at 300 BPM is ~4
+    // ms)
     if (currentTime - lastClockInterruptTime < 1000UL) {
         return;
     }
@@ -94,8 +100,10 @@ void ClockReceived() {
     // Reject intervals that are too short (noise) or unreasonably long.
     // Upper bound: the longest possible valid interval = 1PPQN at minBPM.
     // Using the selected divider: max_interval_µs = 60,000,000 / (minBPM * 1)
-    // We use divider=1 as the reference so the filter accepts any configured PPQN.
-    const unsigned long maxValidInterval = 60000000UL / minBPM; // µs, conservatively for 1PPQN
+    // We use divider=1 as the reference so the filter accepts any configured
+    // PPQN.
+    const unsigned long maxValidInterval =
+        60000000UL / minBPM; // µs, conservatively for 1PPQN
     if (interval < 2000UL || interval > maxValidInterval) {
         return;
     }
@@ -112,18 +120,22 @@ void ClockReceived() {
     unsigned long averageInterval = 0;
     int validIntervals = 0;
     for (int i = 0; i < 3; i++) {
-        if (intervals[i] > 0 && abs((long)intervals[i] - (long)interval) < (long)(interval / 2)) {
+        if (intervals[i] > 0 &&
+            abs((long)intervals[i] - (long)interval) < (long)(interval / 2)) {
             averageInterval += intervals[i];
             validIntervals++;
         }
     }
-    if (validIntervals == 0) return;
+    if (validIntervals == 0)
+        return;
     averageInterval /= validIntervals;
 
     // Only act on every N-th pulse where N = divider (= pulses per quarter note)
     if (externalTickCounter % externalClockDividers[externalDividerIndex] == 0) {
         // QN period in µs = inter-pulse interval × pulses-per-QN
-        unsigned long qnPeriodUs = averageInterval * (unsigned long)externalClockDividers[externalDividerIndex];
+        unsigned long qnPeriodUs =
+            averageInterval *
+            (unsigned long)externalClockDividers[externalDividerIndex];
         clockInterval = qnPeriodUs;
 
         unsigned int newBPM = (unsigned int)roundf(60000000.0f / (float)qnPeriodUs);
@@ -133,7 +145,8 @@ void ClockReceived() {
         // Capture the current internal BPM before it is replaced, so we can
         // restore it when the external clock disconnects. Do this once, on the
         // first pulse of each new sync session (mode transition).
-        if (!wasExternal) lastInternalBPM = BPM;
+        if (!wasExternal)
+            lastInternalBPM = BPM;
         for (int i = 0; i < NUM_OUTPUTS; i++) {
             outputs[i].SetExternalClock(true);
             outputs[i].IncrementInternalCounter();
@@ -142,10 +155,12 @@ void ClockReceived() {
         // Reset the internal tick counter only on the FIRST sync (mode transition).
         // Resetting it every QN causes waveform phase glitches for dividers slower
         // than x1, where the output period spans multiple QNs.
-        if (!wasExternal) tickCounter = 0;
+        if (!wasExternal)
+            tickCounter = 0;
         interrupts();
 
-        // Toggle the blink indicator on every QN pulse (drives the E blink on main screen).
+        // Toggle the blink indicator on every QN pulse (drives the E blink on main
+        // screen).
         extClockBlinkState = !extClockBlinkState;
         displayRefresh = 1;
 
@@ -163,12 +178,14 @@ void ClockReceived() {
 // Called every loop() to detect external clock timeout and revert to internal
 // ─────────────────────────────────────────────────────────────────────────────
 void HandleExternalClock() {
-    if (!usingExternalClock) return;
+    if (!usingExternalClock)
+        return;
     unsigned long currentTime = micros();
     // Adaptive timeout: wait at least 2 full QN periods before declaring the
     // clock lost, but clamp the result to 1.5 s – 3 s so slow sources (1PPQN
     // at low BPM) still feel responsive without false-triggering on fast ones.
-    unsigned long timeoutUs = constrain(2UL * clockInterval, 1500000UL, 3000000UL);
+    unsigned long timeoutUs =
+        constrain(2UL * clockInterval, 1500000UL, 3000000UL);
     if ((currentTime - lastClockInterruptTime) > timeoutUs) {
         usingExternalClock = false;
         BPM = lastInternalBPM;
@@ -178,7 +195,7 @@ void HandleExternalClock() {
         }
         // Reset the ring buffer so stale intervals don't affect the next sync
         externalTickCounter = 0;
-        extClockBlinkState  = false;  // reset so next sync starts at a known state
+        extClockBlinkState = false; // reset so next sync starts at a known state
         displayRefresh = 1;
         DEBUG_PRINT("External clock disconnected");
     }
@@ -192,7 +209,13 @@ void UpdateBPM(unsigned int newBPM) {
 #if defined(ARDUINO_ARCH_RP2040)
     cancel_repeating_timer(&_clockTimer);
     int64_t intervalUs = 60000000LL / BPM / PPQN;
-    add_repeating_timer_us(-intervalUs, [](repeating_timer_t *) -> bool { ClockPulse(); return true; }, nullptr, &_clockTimer);
+    add_repeating_timer_us(
+        -intervalUs,
+        [](repeating_timer_t *) -> bool {
+            ClockPulse();
+            return true;
+        },
+        nullptr, &_clockTimer);
 #else
     TimerTcc0.setPeriod(60L * 1000 * 1000 / BPM / PPQN / 4);
 #endif
@@ -232,11 +255,15 @@ void ClockPulse() {
 void InitializeTimer() {
 #if defined(ARDUINO_ARCH_RP2040)
     int64_t intervalUs = 60000000LL / BPM / PPQN;
-    if (intervalUs <= 0) intervalUs = 60000000LL / 120 / PPQN;  // fallback 120 BPM
-    add_repeating_timer_us(-intervalUs, [](repeating_timer_t *) -> bool {
-        ClockPulse();
-        return true;
-    }, nullptr, &_clockTimer);
+    if (intervalUs <= 0)
+        intervalUs = 60000000LL / 120 / PPQN; // fallback 120 BPM
+    add_repeating_timer_us(
+        -intervalUs,
+        [](repeating_timer_t *) -> bool {
+            ClockPulse();
+            return true;
+        },
+        nullptr, &_clockTimer);
 #else
     TimerTcc0.initialize();
     TimerTcc0.attachInterrupt(ClockPulse);
@@ -248,12 +275,14 @@ void InitializeTimer() {
 // Tap tempo — compute BPM from the last 3 taps
 // ─────────────────────────────────────────────────────────────────────────────
 static unsigned long _tapLastTime = 0;
-static unsigned long _tapTimes[3]  = {0, 0, 0};
-static int           _tapIndex     = 0;
+static unsigned long _tapTimes[3] = {0, 0, 0};
+static int _tapIndex = 0;
 void SetTapTempo() {
-    if (usingExternalClock) return;
+    if (usingExternalClock)
+        return;
     unsigned long now = millis();
-    if (now - _tapLastTime > 2000) _tapIndex = 0;
+    if (now - _tapLastTime > 2000)
+        _tapIndex = 0;
     if (_tapIndex < 3) {
         _tapTimes[_tapIndex] = now;
         _tapIndex++;

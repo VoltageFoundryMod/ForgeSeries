@@ -7,33 +7,35 @@
 //
 // Phase 1 — Output trim:
 //   All 4 outputs driven to MAXDAC (5V after hardware trimming).
-//   User adjusts the on-board trimmers with a multimeter until each jack reads 5.00V.
-//   Press encoder to proceed.
+//   User adjusts the on-board trimmers with a multimeter until each jack
+//   reads 5.00V. Press encoder to proceed.
 //
 // Phase 2 — CV input LUT capture (both channels simultaneously):
 //   User connects Out1 → CV1 and Out2 → CV2 with two patch cables.
 //   Firmware drives Out1 and Out2 together through 7 voltage steps (0–5V).
-//   At each step: waits 200ms for settling, then averages 256 ADC samples per channel.
-//   Both channels are captured in a single pass — no second connection needed.
-//   When done: user sees a summary and presses the encoder to confirm save → reboot.
+//   At each step: waits 200ms for settling, then averages 256 ADC samples per
+//   channel. Both channels are captured in a single pass — no second connection
+//   needed. When done: user sees a summary and presses the encoder to confirm
+//   save → reboot.
 //
 // CalibrationData lives at EEPROM_CAL_BASE (past all preset slots) and survives
 // firmware flashes — EEPROM.commit() is the only thing that writes to flash.
 
-#include <Arduino.h>
 #include <Adafruit_SSD1306.h>
+#include <Arduino.h>
 
 #include "boardIO.hpp"
 #include "presetManager.hpp"
 
 // Forward declarations from main.cpp
 extern Adafruit_SSD1306 display;
-extern CalibrationData  cal;
+extern CalibrationData cal;
 extern void SaveCalibration(const CalibrationData &);
 
 // ── Calibration constants ────────────────────────────────────────────────────
-static const int CAL_ADC_SAMPLES = 256;  // samples averaged per LUT point per channel
-static const int CAL_SETTLE_MS   = 200;  // ms after setting DAC before reading ADC
+static const int CAL_ADC_SAMPLES =
+    256;                              // samples averaged per LUT point per channel
+static const int CAL_SETTLE_MS = 200; // ms after setting DAC before reading ADC
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -56,7 +58,7 @@ static void _CalFlush() {
 #if defined(ARDUINO_ARCH_RP2040)
     extern volatile bool _displayFrameReady;
     _displayFrameReady = true;
-    delay(35);  // ~28ms for 128×64 @ 400kHz I2C
+    delay(35); // ~28ms for 128×64 @ 400kHz I2C
 #else
     display.display();
 #endif
@@ -64,11 +66,14 @@ static void _CalFlush() {
 
 // Block until the encoder button is pressed then released (with debounce).
 static void _CalWaitClick() {
-    while (digitalRead(ENCODER_SW) == LOW)  delay(10);  // wait for release if still held
+    while (digitalRead(ENCODER_SW) == LOW)
+        delay(10); // wait for release if still held
     delay(20);
-    while (digitalRead(ENCODER_SW) == HIGH) delay(10);  // wait for press
+    while (digitalRead(ENCODER_SW) == HIGH)
+        delay(10); // wait for press
     delay(20);
-    while (digitalRead(ENCODER_SW) == LOW)  delay(10);  // wait for release
+    while (digitalRead(ENCODER_SW) == LOW)
+        delay(10); // wait for release
     delay(20);
 }
 
@@ -91,7 +96,8 @@ static void _CalSetOutputs(uint16_t dacVal) {
     delay(CAL_SETTLE_MS);
 }
 
-// ── Phase 1: Output trim ──────────────────────────────────────────────────────
+// ── Phase 1: Output trim
+// ──────────────────────────────────────────────────────
 static void _CalOutputTrim() {
 #if defined(ARDUINO_ARCH_RP2040)
     DACWriteAll(MAXDAC, MAXDAC, MAXDAC, MAXDAC);
@@ -136,16 +142,16 @@ static void _CalPatchInstruction() {
 static void _CalCaptureBothChannels(CalibrationData &newCal) {
     for (int p = 0; p < CAL_LUT_POINTS; p++) {
         uint16_t dacVal = CAL_LUT_DAC[p];
-        uint16_t mv     = CAL_LUT_MV[p];
+        uint16_t mv = CAL_LUT_MV[p];
 
-        _CalSetOutputs(dacVal);  // drives Out1+Out2; also waits CAL_SETTLE_MS
+        _CalSetOutputs(dacVal); // drives Out1+Out2; also waits CAL_SETTLE_MS
 
         // Progress screen
         _CalHeader("3/3  CV INPUT CAL");
         display.setTextSize(1);
         display.setCursor(0, 13);
-        display.printf("Step %d/%d:  %d.%02dV\n",
-            p + 1, CAL_LUT_POINTS, mv / 1000, (mv % 1000) / 10);
+        display.printf("Step %d/%d:  %d.%02dV\n", p + 1, CAL_LUT_POINTS, mv / 1000,
+                       (mv % 1000) / 10);
         display.println("Reading inputs...");
         display.println("");
         // Progress bar
@@ -157,8 +163,8 @@ static void _CalCaptureBothChannels(CalibrationData &newCal) {
         // Sample both channels simultaneously
         for (int ch = 0; ch < NUM_CV_INS; ch++) {
             newCal.cvLUT[ch][p] = _CalReadADC(CV_IN_PINS[ch]);
-            Serial.printf("  CV%d LUT[%d]: %dmV -> DAC=%d -> ADC=%d\n",
-                ch + 1, p, mv, dacVal, newCal.cvLUT[ch][p]);
+            Serial.printf("  CV%d LUT[%d]: %dmV -> DAC=%d -> ADC=%d\n", ch + 1, p, mv,
+                          dacVal, newCal.cvLUT[ch][p]);
         }
     }
 
@@ -169,7 +175,8 @@ static void _CalCaptureBothChannels(CalibrationData &newCal) {
     delay(50);
 }
 
-// ── Main entry point ──────────────────────────────────────────────────────────
+// ── Main entry point
+// ──────────────────────────────────────────────────────────
 void RunCalibration() {
     Serial.println("Entering calibration mode...");
 
@@ -202,9 +209,8 @@ void RunCalibration() {
     display.setCursor(0, 13);
     display.println("Calibration done!");
     for (int ch = 0; ch < NUM_CV_INS; ch++) {
-        display.printf("CV%d: 0V=%4d 5V=%4d\n", ch + 1,
-            newCal.cvLUT[ch][0],
-            newCal.cvLUT[ch][CAL_LUT_POINTS - 1]);
+        display.printf("CV%d: 0V=%4d 5V=%4d\n", ch + 1, newCal.cvLUT[ch][0],
+                       newCal.cvLUT[ch][CAL_LUT_POINTS - 1]);
     }
     display.println("");
     display.println("Click enc. to save");

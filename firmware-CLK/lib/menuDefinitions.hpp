@@ -13,23 +13,23 @@ enum MenuItemType : uint8_t {
 
 // How the item is rendered on-screen.
 enum RowStyle : uint8_t {
-    ROW_SINGLE,   // label left, value right-aligned at VALUE_X
-    ROW_TWOCOL,   // two values rendered at col1x / col2x (used for swing, lvl/off, CV attn)
-    ROW_ACTION,   // label only, no value (tap tempo, save, load)
-    ROW_HIDDEN,   // item belongs to a page but has no dedicated row (e.g. BPM page)
+    ROW_SINGLE, // label left, value right-aligned at VALUE_X
+    ROW_TWOCOL, // two values rendered at col1x / col2x (used for swing, lvl/off, CV attn)
+    ROW_ACTION, // label only, no value (tap tempo, save, load)
+    ROW_HIDDEN, // item belongs to a page but has no dedicated row (e.g. BPM page)
 };
 
 struct MenuItem {
-    const char*  label;              // Left-side display text (static string)
-    String       (*valueFn)();       // Right-side / col1 value string (nullptr = no value)
-    String       (*valueFn2)();      // Second column value (ROW_TWOCOL only; nullptr otherwise)
-    uint8_t      col1x;              // X pixel for valueFn  (meaningful for ROW_TWOCOL)
-    uint8_t      col2x;              // X pixel for valueFn2 (meaningful for ROW_TWOCOL)
-    uint8_t      group;              // Items sharing the same group render on one page
-    RowStyle     rowStyle;
+    const char *label;    // Left-side display text (static string)
+    String (*valueFn)();  // Right-side / col1 value string (nullptr = no value)
+    String (*valueFn2)(); // Second column value (ROW_TWOCOL only; nullptr otherwise)
+    uint8_t col1x;        // X pixel for valueFn  (meaningful for ROW_TWOCOL)
+    uint8_t col2x;        // X pixel for valueFn2 (meaningful for ROW_TWOCOL)
+    uint8_t group;        // Items sharing the same group render on one page
+    RowStyle rowStyle;
     MenuItemType type;
-    void (*setter)(int delta);       // MENU_EDIT: called with ±(int)speedFactor on rotate
-    void (*action)();                // MENU_ACTION / MENU_TOGGLE: called on click
+    void (*setter)(int delta); // MENU_EDIT: called with ±(int)speedFactor on rotate
+    void (*action)();          // MENU_ACTION / MENU_TOGGLE: called on click
 };
 
 // Defined in menuHandlers.hpp (included once, from main.cpp).

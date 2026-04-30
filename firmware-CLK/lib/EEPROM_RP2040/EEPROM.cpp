@@ -20,8 +20,8 @@
     Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include <Arduino.h>
 #include "EEPROM.h"
+#include <Arduino.h>
 #include <hardware/flash.h>
 #include <hardware/sync.h>
 
@@ -45,7 +45,7 @@ void EEPROMClass::begin(size_t size) {
         size = 4096;
     }
 
-    size = (size + 255) & (~255);  // Flash writes limited to 256 byte boundaries
+    size = (size + 255) & (~255); // Flash writes limited to 256 byte boundaries
 
     // In case begin() is called a 2nd+ time, don't reallocate if size is the same
     if (_data && size != _size) {
@@ -59,7 +59,7 @@ void EEPROMClass::begin(size_t size) {
 
     memcpy(_data, _sector, _size);
 
-    _dirty = false; //make sure dirty is cleared in case begin() is called 2nd+ time
+    _dirty = false; // make sure dirty is cleared in case begin() is called 2nd+ time
 }
 
 bool EEPROMClass::end() {
@@ -100,7 +100,7 @@ void EEPROMClass::write(int const address, uint8_t const value) {
     }
 
     // Optimise _dirty. Only flagged if data written is different.
-    uint8_t* pData = &_data[address];
+    uint8_t *pData = &_data[address];
     if (*pData != value) {
         *pData = value;
         _dirty = true;
@@ -133,12 +133,12 @@ bool EEPROMClass::commit() {
     return true;
 }
 
-uint8_t * EEPROMClass::getDataPtr() {
+uint8_t *EEPROMClass::getDataPtr() {
     _dirty = true;
     return &_data[0];
 }
 
-uint8_t const * EEPROMClass::getConstDataPtr() const {
+uint8_t const *EEPROMClass::getConstDataPtr() const {
     return &_data[0];
 }
 

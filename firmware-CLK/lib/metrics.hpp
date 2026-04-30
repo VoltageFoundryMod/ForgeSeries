@@ -21,7 +21,7 @@
  */
 
 class PerformanceMetrics {
-private:
+  private:
     // Loop timing statistics
     uint32_t loopTimeMin = 0xFFFFFFFF;
     uint32_t loopTimeMax = 0;
@@ -81,7 +81,7 @@ private:
 #endif
     }
 
-public:
+  public:
     PerformanceMetrics() {
         lastResetTime = millis();
     }
@@ -93,8 +93,10 @@ public:
 
     void EndLoopMeasurement() {
         uint32_t duration = micros() - loopStartTime;
-        if (duration < loopTimeMin) loopTimeMin = duration;
-        if (duration > loopTimeMax) loopTimeMax = duration;
+        if (duration < loopTimeMin)
+            loopTimeMin = duration;
+        if (duration > loopTimeMax)
+            loopTimeMax = duration;
         loopTimeSum += duration;
         loopTimeCount++;
     }
@@ -106,8 +108,10 @@ public:
 
     void EndISRMeasurement() {
         uint32_t duration = micros() - isrStartTime;
-        if (duration < isrTimeMin) isrTimeMin = duration;
-        if (duration > isrTimeMax) isrTimeMax = duration;
+        if (duration < isrTimeMin)
+            isrTimeMin = duration;
+        if (duration > isrTimeMax)
+            isrTimeMax = duration;
         isrTimeSum += duration;
         isrTimeCount++;
     }
@@ -119,8 +123,10 @@ public:
 
     void EndDACMeasurement() {
         uint32_t duration = micros() - dacStartTime;
-        if (duration < dacTimeMin) dacTimeMin = duration;
-        if (duration > dacTimeMax) dacTimeMax = duration;
+        if (duration < dacTimeMin)
+            dacTimeMin = duration;
+        if (duration > dacTimeMax)
+            dacTimeMax = duration;
         dacTimeSum += duration;
         dacTimeCount++;
     }
@@ -132,8 +138,10 @@ public:
 
     void EndCore1FlushMeasurement() {
         uint32_t duration = micros() - core1FlushStart;
-        if (duration < core1FlushMin) core1FlushMin = duration;
-        if (duration > core1FlushMax) core1FlushMax = duration;
+        if (duration < core1FlushMin)
+            core1FlushMin = duration;
+        if (duration > core1FlushMax)
+            core1FlushMax = duration;
         core1FlushSum += duration;
         core1FlushCount++;
     }
@@ -145,8 +153,10 @@ public:
 
     void EndDisplayMeasurement() {
         uint32_t duration = micros() - displayStartTime;
-        if (duration < displayTimeMin) displayTimeMin = duration;
-        if (duration > displayTimeMax) displayTimeMax = duration;
+        if (duration < displayTimeMin)
+            displayTimeMin = duration;
+        if (duration > displayTimeMax)
+            displayTimeMax = duration;
         displayTimeSum += duration;
         displayTimeCount++;
     }
@@ -158,8 +168,10 @@ public:
 
     void EndEncoderMeasurement() {
         uint32_t duration = micros() - encoderStartTime;
-        if (duration < encoderTimeMin) encoderTimeMin = duration;
-        if (duration > encoderTimeMax) encoderTimeMax = duration;
+        if (duration < encoderTimeMin)
+            encoderTimeMin = duration;
+        if (duration > encoderTimeMax)
+            encoderTimeMax = duration;
         encoderTimeSum += duration;
         encoderTimeCount++;
     }
@@ -217,14 +229,15 @@ public:
     // Print comprehensive stats to Serial
     void PrintStats() {
         uint32_t elapsed_ms = millis() - lastResetTime;
-        if (elapsed_ms == 0) elapsed_ms = 1;
+        if (elapsed_ms == 0)
+            elapsed_ms = 1;
 
         Stats loop = GetLoopStats();
-        Stats isr  = GetISRStats();
+        Stats isr = GetISRStats();
 
         // Compute actual rates from sample count over elapsed window
         float loopHz = loop.count * 1000.0f / elapsed_ms;
-        float isrHz  = isr.count  * 1000.0f / elapsed_ms;
+        float isrHz = isr.count * 1000.0f / elapsed_ms;
 
         Serial.print(F("\n=== Performance Metrics ["));
         Serial.print(elapsed_ms);
@@ -377,18 +390,18 @@ public:
 
     // Get warning flags
     struct HealthStatus {
-        bool loopSlow;      // Loop time excessive
-        bool isrSlow;       // ISR taking too long
-        bool displaySlow;   // Display updates slow
-        bool lowMemory;     // RAM critically low
+        bool loopSlow;    // Loop time excessive
+        bool isrSlow;     // ISR taking too long
+        bool displaySlow; // Display updates slow
+        bool lowMemory;   // RAM critically low
     };
 
     HealthStatus GetHealth() {
         return {
-            loopTimeMax > 10000,        // Loop > 10ms is problematic
-            isrTimeMax > 500,           // ISR > 500us could affect timing
-            displayTimeMax > 50000,     // Display > 50ms is very slow
-            GetFreeRAM() < 1024         // Less than 1KB free is concerning
+            loopTimeMax > 10000,    // Loop > 10ms is problematic
+            isrTimeMax > 500,       // ISR > 500us could affect timing
+            displayTimeMax > 50000, // Display > 50ms is very slow
+            GetFreeRAM() < 1024     // Less than 1KB free is concerning
         };
     }
 };

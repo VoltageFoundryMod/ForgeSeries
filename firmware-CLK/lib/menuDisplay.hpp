@@ -12,18 +12,19 @@
 // The actual definitions are in main.cpp (included before this file).
 extern Adafruit_SSD1306 display;
 extern void RedrawDisplay();
-extern void MenuHeader(const char* header);
+extern void MenuHeader(const char *header);
 
 // ── Layout constants ─────────────────────────────────────────
-static const int MD_ROW_H   = 9;    // pixels per row
-static const int MD_START_Y = 20;   // first row Y (below header)
-static const int MD_LABEL_X = 10;   // left edge for row labels
-static const int MD_VALUE_X = 70;   // default single-column value X
-static const int MD_CURSOR_X = 1;   // cursor triangle left edge
+static const int MD_ROW_H = 9;    // pixels per row
+static const int MD_START_Y = 20; // first row Y (below header)
+static const int MD_LABEL_X = 10; // left edge for row labels
+static const int MD_VALUE_X = 70; // default single-column value X
+static const int MD_CURSOR_X = 1; // cursor triangle left edge
 
 // Cursor triangle: hollow = selected, filled = editing
 static inline void _MD_Cursor(int y, bool sel, bool editing) {
-    if (!sel) return;
+    if (!sel)
+        return;
     if (editing)
         display.fillTriangle(MD_CURSOR_X, y - 1, MD_CURSOR_X, y + 7, MD_CURSOR_X + 4, y + 3, 1);
     else
@@ -32,15 +33,15 @@ static inline void _MD_Cursor(int y, bool sel, bool editing) {
 
 // Draw header + reset internal row counter.  Returns starting Y.
 static int _md_rowY;
-static inline void MD_PageBegin(const char* title, int startY = MD_START_Y) {
+static inline void MD_PageBegin(const char *title, int startY = MD_START_Y) {
     display.setTextSize(1);
     MenuHeader(title);
     _md_rowY = startY;
 }
 
 // Single-column row: label at MD_LABEL_X, value at MD_VALUE_X.
-static inline void MD_Row(const char* lbl, String val, bool hasVal,
-                           bool sel, bool editing) {
+static inline void MD_Row(const char *lbl, String val, bool hasVal,
+                          bool sel, bool editing) {
     display.setCursor(MD_LABEL_X, _md_rowY);
     display.print(lbl);
     if (hasVal) {
@@ -52,8 +53,8 @@ static inline void MD_Row(const char* lbl, String val, bool hasVal,
 }
 
 // Single-column row with a custom value X.
-static inline void MD_RowAtX(const char* lbl, String val, bool hasVal, int valX,
-                              bool sel, bool editing) {
+static inline void MD_RowAtX(const char *lbl, String val, bool hasVal, int valX,
+                             bool sel, bool editing) {
     display.setCursor(MD_LABEL_X, _md_rowY);
     display.print(lbl);
     if (hasVal) {
@@ -65,7 +66,7 @@ static inline void MD_RowAtX(const char* lbl, String val, bool hasVal, int valX,
 }
 
 // Action row: label only, no value.
-static inline void MD_ActionRow(const char* lbl, bool sel) {
+static inline void MD_ActionRow(const char *lbl, bool sel) {
     display.setCursor(MD_LABEL_X, _md_rowY);
     display.print(lbl);
     if (sel)
@@ -74,7 +75,7 @@ static inline void MD_ActionRow(const char* lbl, bool sel) {
 }
 
 // Two-column header line (drawn at _md_rowY, does NOT advance _md_rowY).
-static inline void MD_TwoColHeader(const char* c1, const char* c2, int x1, int x2) {
+static inline void MD_TwoColHeader(const char *c1, const char *c2, int x1, int x2) {
     display.setCursor(x1, _md_rowY);
     display.print(c1);
     display.setCursor(x2, _md_rowY);
@@ -82,13 +83,19 @@ static inline void MD_TwoColHeader(const char* c1, const char* c2, int x1, int x
 }
 
 // Two-column row: label, val1 at x1, val2 at x2.
-static inline void MD_TwoColRow(const char* lbl, String v1, bool hasV1,
-                                 String v2, bool hasV2,
-                                 int x1, int x2, bool sel, bool editing) {
+static inline void MD_TwoColRow(const char *lbl, String v1, bool hasV1,
+                                String v2, bool hasV2,
+                                int x1, int x2, bool sel, bool editing) {
     display.setCursor(MD_LABEL_X, _md_rowY);
     display.print(lbl);
-    if (hasV1) { display.setCursor(x1, _md_rowY); display.print(v1); }
-    if (hasV2) { display.setCursor(x2, _md_rowY); display.print(v2); }
+    if (hasV1) {
+        display.setCursor(x1, _md_rowY);
+        display.print(v1);
+    }
+    if (hasV2) {
+        display.setCursor(x2, _md_rowY);
+        display.print(v2);
+    }
     _MD_Cursor(_md_rowY, sel, editing);
     _md_rowY += MD_ROW_H;
 }
@@ -112,37 +119,38 @@ static inline void MD_PageEnd() {
 // Returns true if the page was rendered generically; false if
 // it was skipped (the item belongs to the special groups 0 or 5
 // where a fully custom renderer takes over).
-static bool MD_RenderGroup(const char* title,
-                            int curItem,   // 1-based menuItem
-                            int curMode,   // menuMode
-                            int groupId,
-                            int startY = MD_START_Y) {
+static bool MD_RenderGroup(const char *title,
+                           int curItem, // 1-based menuItem
+                           int curMode, // menuMode
+                           int groupId,
+                           int startY = MD_START_Y) {
     MD_PageBegin(title, startY);
     for (int i = 0; i < MENU_ITEM_COUNT; i++) {
-        const MenuItem& mi = MENU_ITEMS[i];
-        if (mi.group != groupId) continue;
+        const MenuItem &mi = MENU_ITEMS[i];
+        if (mi.group != groupId)
+            continue;
         int idx = i + 1; // 1-based item number
-        bool sel  = (idx == curItem);
+        bool sel = (idx == curItem);
         bool edit = sel && (curMode == idx);
 
         switch (mi.rowStyle) {
-            case ROW_ACTION:
-                MD_ActionRow(mi.label, sel);
-                break;
-            case ROW_TWOCOL:
-                MD_TwoColRow(mi.label,
-                             mi.valueFn  ? mi.valueFn()  : String(""), mi.valueFn  != nullptr,
-                             mi.valueFn2 ? mi.valueFn2() : String(""), mi.valueFn2 != nullptr,
-                             mi.col1x, mi.col2x, sel, edit);
-                break;
-            case ROW_HIDDEN:
-                break;
-            case ROW_SINGLE:
-            default:
-                MD_RowAtX(mi.label,
-                          mi.valueFn ? mi.valueFn() : String(""), mi.valueFn != nullptr,
-                          mi.col1x, sel, edit);
-                break;
+        case ROW_ACTION:
+            MD_ActionRow(mi.label, sel);
+            break;
+        case ROW_TWOCOL:
+            MD_TwoColRow(mi.label,
+                         mi.valueFn ? mi.valueFn() : String(""), mi.valueFn != nullptr,
+                         mi.valueFn2 ? mi.valueFn2() : String(""), mi.valueFn2 != nullptr,
+                         mi.col1x, mi.col2x, sel, edit);
+            break;
+        case ROW_HIDDEN:
+            break;
+        case ROW_SINGLE:
+        default:
+            MD_RowAtX(mi.label,
+                      mi.valueFn ? mi.valueFn() : String(""), mi.valueFn != nullptr,
+                      mi.col1x, sel, edit);
+            break;
         }
     }
     return true;

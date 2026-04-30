@@ -24,8 +24,8 @@ enum WaveformType {
     LogEnvelope,
     InvExpEnvelope,
     InvLogEnvelope,
-    Hatchet2,       // 2 square sub-pulses per clock cycle
-    Hatchet4,       // 4 square sub-pulses per clock cycle
+    Hatchet2, // 2 square sub-pulses per clock cycle
+    Hatchet4, // 4 square sub-pulses per clock cycle
     Noise,
     SmoothNoise,
     SampleHold,
@@ -352,7 +352,7 @@ class Output {
     bool _externaltrigger = false;
     unsigned long _envStartTime = 0;
     unsigned long _lastTriggerTime = 0; // Debounce: time of last HandleTrigger() fire
-    float _lastEnvValue = 0.0f; // Stores last envelope value for retriggering
+    float _lastEnvValue = 0.0f;         // Stores last envelope value for retriggering
 
     // ADSR envelope parameters
     EnvelopeParams _envParams = {
@@ -757,13 +757,15 @@ class Output {
 
     // ----------- Envelope Generation Functions -----------
     void HandleTrigger() {
-        if (!_state) return; // Output disabled — ignore triggers
-        if (random(100) >= _pulseProbability) return; // Probability gate
+        if (!_state)
+            return; // Output disabled — ignore triggers
+        if (random(100) >= _pulseProbability)
+            return; // Probability gate
         if (_triggerMode && (_waveformType == WaveformType::ADEnvelope || _waveformType == WaveformType::AREnvelope || _waveformType == WaveformType::ADSREnvelope)) {
             if (!_waveActive || _envParams.retrigger) {
 #ifdef ENVELOPE_DEBUG
                 Serial.printf("[TRIG ch%d] wActive=%d state=%d wv=%.2f t=%lums\n",
-                    _ID, (int)_waveActive, (int)_envState, _waveValue, millis());
+                              _ID, (int)_waveActive, (int)_envState, _waveValue, millis());
 #endif
                 _lastEnvValue = _envParams.retrigger ? _waveValue : 0.0f;
                 _envState = EnvelopeState::Attack;
@@ -785,14 +787,14 @@ class Output {
                 if (millis() - _lastTriggerTime < 50) {
 #ifdef ENVELOPE_DEBUG
                     Serial.printf("[REL_DEBOUNCE ch%d] age=%lums state=%d wv=%.2f\n",
-                        _ID, millis() - _lastTriggerTime, (int)_envState, _waveValue);
+                                  _ID, millis() - _lastTriggerTime, (int)_envState, _waveValue);
 #endif
                     return;
                 }
                 if (_waveActive && _envState != EnvelopeState::Release) {
 #ifdef ENVELOPE_DEBUG
                     Serial.printf("[RELEASE ch%d] state=%d wv=%.2f lev=%.2f t=%lums\n",
-                        _ID, (int)_envState, _waveValue, _lastEnvValue, millis());
+                                  _ID, (int)_envState, _waveValue, _lastEnvValue, millis());
 #endif
                     _lastEnvValue = _waveValue;
                     _envState = EnvelopeState::Release;
@@ -901,7 +903,7 @@ class Output {
                 if (_nowHoldMs - _lastHoldGenMs >= 20) {
                     _lastHoldGenMs = _nowHoldMs;
                     Serial.printf("[GEN_HOLD ch%d] wv=%.2f iPO=%d wAct=%d t=%lums\n",
-                        _ID, _waveValue, (int)_isPulseOn, (int)_waveActive, _nowHoldMs);
+                                  _ID, _waveValue, (int)_isPulseOn, (int)_waveActive, _nowHoldMs);
                 }
             }
 #endif
@@ -1016,8 +1018,8 @@ void Output::GenEnvelope() {
             if (_nowMs - _lastDbgMs >= 10) {
                 _lastDbgMs = _nowMs;
                 Serial.printf("[ENV_DROP ch%d] state=%d wv=%.2f lEv=%.2f iPO=%d t=%lums\n",
-                    _ID, (int)_envState, _waveValue, _lastEnvValue,
-                    (int)_isPulseOn, _nowMs);
+                              _ID, (int)_envState, _waveValue, _lastEnvValue,
+                              (int)_isPulseOn, _nowMs);
             }
         }
 #endif
@@ -1031,8 +1033,8 @@ void Output::GenEnvelope() {
 #ifdef ENVELOPE_DEBUG
             if (_envState != _prevState)
                 Serial.printf("[TRANS ch%d] %d->%d wv=%.2f lEv=%.2f iPO=%d t=%lums\n",
-                    _ID, (int)_prevState, (int)_envState, _waveValue, _lastEnvValue,
-                    (int)_isPulseOn, millis());
+                              _ID, (int)_prevState, (int)_envState, _waveValue, _lastEnvValue,
+                              (int)_isPulseOn, millis());
 #endif
             break;
         }
@@ -1044,8 +1046,8 @@ void Output::GenEnvelope() {
 #ifdef ENVELOPE_DEBUG
             if (_envState != _prevState)
                 Serial.printf("[TRANS ch%d] %d->%d wv=%.2f lEv=%.2f iPO=%d t=%lums\n",
-                    _ID, (int)_prevState, (int)_envState, _waveValue, _lastEnvValue,
-                    (int)_isPulseOn, millis());
+                              _ID, (int)_prevState, (int)_envState, _waveValue, _lastEnvValue,
+                              (int)_isPulseOn, millis());
 #endif
             break;
         }
@@ -1057,8 +1059,8 @@ void Output::GenEnvelope() {
 #ifdef ENVELOPE_DEBUG
             if (_envState != _prevState)
                 Serial.printf("[TRANS ch%d] %d->%d wv=%.2f lEv=%.2f iPO=%d t=%lums\n",
-                    _ID, (int)_prevState, (int)_envState, _waveValue, _lastEnvValue,
-                    (int)_isPulseOn, millis());
+                              _ID, (int)_prevState, (int)_envState, _waveValue, _lastEnvValue,
+                              (int)_isPulseOn, millis());
 #endif
             break;
         }
@@ -1148,7 +1150,7 @@ void Output::Pulse(int PPQN, unsigned long globalTick) {
     if (_triggerMode) {
         _blinkState = _waveActive;
     } else {
-        const float blinkMinPeriod = PPQN / 8.0f;  // x8 is the fastest visible blink rate
+        const float blinkMinPeriod = PPQN / 8.0f; // x8 is the fastest visible blink rate
         if (_externalClock && _clockDividers[_dividerIndex] < 1) {
             unsigned long blinkDivider = max((unsigned long)clockDividerExternal, (unsigned long)8);
             _blinkState = ((_internalPulseCounter / blinkDivider) % 2 == 0);
@@ -1232,11 +1234,12 @@ void Output::Pulse(int PPQN, unsigned long globalTick) {
             int N = (_waveformType == WaveformType::Hatchet2) ? 2 : 4;
             int iPeriod = max(1, int(periodTicks));
             unsigned long adjustedTick = (tickCounterSwing >= phaseOffsetTicks)
-                                             ? (tickCounterSwing - phaseOffsetTicks) : 0;
+                                             ? (tickCounterSwing - phaseOffsetTicks)
+                                             : 0;
             int tickInPeriod = (int)(adjustedTick % (unsigned long)iPeriod);
             if (tickInPeriod < (int)_pulseDuration) {
                 // Inside the "up" window: evenly divide into N square sub-pulses at 50% duty each
-                int subPeriod   = max(1, (int)_pulseDuration / N);
+                int subPeriod = max(1, (int)_pulseDuration / N);
                 int subDuration = max(1, subPeriod / 2);
                 _isPulseOn = (tickInPeriod % subPeriod) < subDuration;
             } else {
@@ -1290,7 +1293,7 @@ void Output::SetWaveformType(WaveformType type) {
         _lastEnvValue = 0.0f;
         _envStartTime = 0;
         _triggerMode = true;
-        SetDividerInternal(_dividerAmount - 1);  // Env slot (always the last entry)
+        SetDividerInternal(_dividerAmount - 1); // Env slot (always the last entry)
     } else if (_waveformType == WaveformType::QuantizeInput) {
         _waveActive = true;
         _triggerMode = false;
@@ -1367,7 +1370,7 @@ uint32_t Output::GetOutputLevel() {
         // was added on top of the full-amplitude signal and then constrained,
         // creating a flat top on the waveform).
         float floorVal = (_offset / 100.0f) * MaxWaveValue;
-        float ceilVal  = min(MaxWaveValue, floorVal + (_level / 100.0f) * MaxWaveValue);
+        float ceilVal = min(MaxWaveValue, floorVal + (_level / 100.0f) * MaxWaveValue);
 
         if (_waveformType == WaveformType::Square ||
             _waveformType == WaveformType::Hatchet2 ||
@@ -1390,8 +1393,8 @@ uint32_t Output::GetOutputLevel() {
             if (_nowMs - _lastHoldDbgMs >= 20) {
                 _lastHoldDbgMs = _nowMs;
                 Serial.printf("[HOLD_OUT ch%d] state=%d wAct=%d wv=%.2f adj=%.2f out=%.0f iPO=%d lv=%d t=%lums\n",
-                    _ID, (int)_envState, (int)_waveActive, _waveValue, adjustedLevel, outputLevel,
-                    (int)_isPulseOn, _level, _nowMs);
+                              _ID, (int)_envState, (int)_waveActive, _waveValue, adjustedLevel, outputLevel,
+                              (int)_isPulseOn, _level, _nowMs);
             }
         }
         // Also catch unexpected low output during Attack (but only at > halfway through attack,
@@ -1399,7 +1402,7 @@ uint32_t Output::GetOutputLevel() {
         if (_triggerMode && _waveActive && outputLevel < MaxDACValue * 0.5f &&
             _envState == EnvelopeState::Attack && _waveValue > MaxWaveValue * 0.5f) {
             Serial.printf("[ATTACK_DROP ch%d] wv=%.2f out=%.0f t=%lums\n",
-                _ID, _waveValue, outputLevel, millis());
+                          _ID, _waveValue, outputLevel, millis());
         }
 #endif
 

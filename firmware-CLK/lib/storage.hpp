@@ -17,16 +17,17 @@
 // EEPROM layout:
 //   [0 .. NUM_SLOTS×sizeof(LoadSaveParams))  — preset slots
 //   [EEPROM_CAL_BASE ..)                     — CalibrationData (never moved by slot ops)
-#define EEPROM_PRESET_BASE  0
-#define EEPROM_CAL_BASE     (NUM_SLOTS * (int)sizeof(LoadSaveParams))
-#define EEPROM_TOTAL_SIZE   (EEPROM_CAL_BASE + (int)sizeof(CalibrationData))
+#define EEPROM_PRESET_BASE 0
+#define EEPROM_CAL_BASE (NUM_SLOTS * (int)sizeof(LoadSaveParams))
+#define EEPROM_TOTAL_SIZE (EEPROM_CAL_BASE + (int)sizeof(CalibrationData))
 
 void EEPROMInit() {
     EEPROM.begin(EEPROM_TOTAL_SIZE);
 }
 
 void Save(const LoadSaveParams &p, int slot) {
-    if (slot < 0 || slot >= NUM_SLOTS) return;
+    if (slot < 0 || slot >= NUM_SLOTS)
+        return;
     LoadSaveParams ps = p;
     ps.valid = VALID_MAGIC;
     EEPROM.put(EEPROM_PRESET_BASE + slot * sizeof(LoadSaveParams), ps);
@@ -34,7 +35,8 @@ void Save(const LoadSaveParams &p, int slot) {
 }
 
 LoadSaveParams Load(int slot) {
-    if (slot < 0 || slot >= NUM_SLOTS) return LoadDefaultParams();
+    if (slot < 0 || slot >= NUM_SLOTS)
+        return LoadDefaultParams();
     LoadSaveParams p;
     EEPROM.get(EEPROM_PRESET_BASE + slot * sizeof(LoadSaveParams), p);
     return (p.valid == VALID_MAGIC) ? p : LoadDefaultParams();
@@ -75,30 +77,50 @@ void EEPROMInit() {
 }
 
 void Save(const LoadSaveParams &p, int slot) {
-    if (slot < 0 || slot >= NUM_SLOTS) return;
+    if (slot < 0 || slot >= NUM_SLOTS)
+        return;
     LoadSaveParams ps = p;
     ps.valid = VALID_MAGIC;
     delay(100);
     noInterrupts();
     switch (slot) {
-    case 0: slot0.write(ps); break;
-    case 1: slot1.write(ps); break;
-    case 2: slot2.write(ps); break;
-    case 3: slot3.write(ps); break;
+    case 0:
+        slot0.write(ps);
+        break;
+    case 1:
+        slot1.write(ps);
+        break;
+    case 2:
+        slot2.write(ps);
+        break;
+    case 3:
+        slot3.write(ps);
+        break;
     }
     interrupts();
 }
 
 LoadSaveParams Load(int slot) {
-    if (slot < 0 || slot >= NUM_SLOTS) return LoadDefaultParams();
+    if (slot < 0 || slot >= NUM_SLOTS)
+        return LoadDefaultParams();
     LoadSaveParams p;
     noInterrupts();
     switch (slot) {
-    case 0: p = slot0.read(); break;
-    case 1: p = slot1.read(); break;
-    case 2: p = slot2.read(); break;
-    case 3: p = slot3.read(); break;
-    default: p = LoadDefaultParams(); break;
+    case 0:
+        p = slot0.read();
+        break;
+    case 1:
+        p = slot1.read();
+        break;
+    case 2:
+        p = slot2.read();
+        break;
+    case 3:
+        p = slot3.read();
+        break;
+    default:
+        p = LoadDefaultParams();
+        break;
     }
     interrupts();
     return (p.valid == VALID_MAGIC) ? p : LoadDefaultParams();
@@ -118,4 +140,4 @@ CalibrationData LoadCalibration() {
     return cal;
 }
 
-#endif  // ARDUINO_ARCH_RP2040
+#endif // ARDUINO_ARCH_RP2040

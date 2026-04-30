@@ -2,7 +2,8 @@
 
 // cvInputs.hpp — CV input processing, CVTarget enum, attenuation, calibration
 //
-// Owns: CVTarget enum, CVTargetDescription[], CVInputTarget/Attenuation/Offset[],
+// Owns: CVTarget enum, CVTargetDescription[],
+// CVInputTarget/Attenuation/Offset[],
 //       channelADC[], pendingCVInputTarget[],
 //       AdjustADCReadings(), HandleCVInputs(), HandleCVTarget().
 // Depends on: outputs[], BPM/tickCounter/externalTickCounter (clockEngine.hpp),
@@ -10,14 +11,15 @@
 
 #include <Arduino.h>
 
-#include "calibrationData.hpp"  // CalibrationData + CAL_LUT_*
 #include "boardIO.hpp"
+#include "calibrationData.hpp" // CalibrationData + CAL_LUT_*
 #include "clockEngine.hpp"
 #include "outputs.hpp"
 #include "pinouts.hpp"
 #include "utils.hpp"
 
-// ── CV modulation target enum ─────────────────────────────────────────────────
+// ── CV modulation target enum
+// ─────────────────────────────────────────────────
 enum CVTarget {
     None = 0,
     StartStop,
@@ -99,33 +101,36 @@ String CVTargetDescription[] = {
     "Output 3",
     "Output 4",
 };
-int CVTargetLength = sizeof(CVTargetDescription) / sizeof(CVTargetDescription[0]);
+int CVTargetLength =
+    sizeof(CVTargetDescription) / sizeof(CVTargetDescription[0]);
 
-// ── CV oversample count ───────────────────────────────────────────────────────
-// RP2040 ADC is noisier than SAMD21 (no hardware averaging).
-// 8x software oversampling halves the noise floor (~1.4 effective bits gained).
-// SAMD21 uses 128x hardware averaging in InitIO(), so 1 read is sufficient.
+// ── CV oversample count
+// ─────────────────────────────────────────────────────── RP2040 ADC is noisier
+// than SAMD21 (no hardware averaging). 8x software oversampling halves the
+// noise floor (~1.4 effective bits gained). SAMD21 uses 128x hardware averaging
+// in InitIO(), so 1 read is sufficient.
 #if defined(ARDUINO_ARCH_RP2040)
 static constexpr int CV_OVERSAMPLE_SAMPLES = 8;
 #else
 static constexpr int CV_OVERSAMPLE_SAMPLES = 1;
 #endif
 
-// ── CV input state globals ────────────────────────────────────────────────────
+// ── CV input state globals
+// ────────────────────────────────────────────────────
 CVTarget pendingCVInputTarget[NUM_CV_INS] = {CVTarget::None, CVTarget::None};
 
 // Active CV target assignments
-CVTarget CVInputTarget[NUM_CV_INS]  = {CVTarget::None, CVTarget::None};
-int      CVInputAttenuation[NUM_CV_INS] = {0, 0};
-int      CVInputOffset[NUM_CV_INS]      = {0, 0};
+CVTarget CVInputTarget[NUM_CV_INS] = {CVTarget::None, CVTarget::None};
+int CVInputAttenuation[NUM_CV_INS] = {0, 0};
+int CVInputOffset[NUM_CV_INS] = {0, 0};
 
 // ADC readings (calibrated, filtered)
 float channelADC[NUM_CV_INS], oldChannelADC[NUM_CV_INS];
 
 // ── extern refs defined in main.cpp / clockEngine.hpp ────────────────────────
 extern CalibrationData cal;
-extern bool     masterState;
-extern void     SetMasterState(bool state);
+extern bool masterState;
+extern void SetMasterState(bool state);
 
 // Forward declaration
 void HandleCVTarget(int ch, float CVValue, CVTarget cvTarget);
@@ -145,8 +150,9 @@ void AdjustADCReadings(int CV_IN_PIN, int ch) {
     int raw = (int)(sum / CV_OVERSAMPLE_SAMPLES);
 
     // Piecewise-linear interpolation through the calibration LUT.
-    // LUT maps known voltages → expected raw ADC values captured during calibration.
-    // We invert: raw ADC → millivolts, then millivolts → 0-4095 (0-5V scale).
+    // LUT maps known voltages → expected raw ADC values captured during
+    // calibration. We invert: raw ADC → millivolts, then millivolts → 0-4095
+    // (0-5V scale).
     float mv = 0.0f;
     if (raw <= (int)cal.cvLUT[ch][0]) {
         mv = CAL_LUT_MV[0];
@@ -210,7 +216,7 @@ volatile bool lastResetState = false;
 void HandleCVTarget(int ch, float CVValue, CVTarget cvTarget) {
     // Attenuate and offset the CVValue
     float attenuatedValue = CVValue * ((100 - CVInputAttenuation[ch]) / 100.0f);
-    float offsetValue     = attenuatedValue + (CVInputOffset[ch] / 100.0f * MAXDAC);
+    float offsetValue = attenuatedValue + (CVInputOffset[ch] / 100.0f * MAXDAC);
     CVValue = constrain(offsetValue, 0, MAXDAC);
 
     // CRITICAL SECTION: protect parameter updates that affect timing
@@ -228,9 +234,9 @@ void HandleCVTarget(int ch, float CVValue, CVTarget cvTarget) {
         break;
     case CVTarget::Reset:
         if (CVValue > MAXDAC / 2 && !lastResetState) {
-            tickCounter        = 0;
+            tickCounter = 0;
             externalTickCounter = 0;
-            lastResetState     = true;
+            lastResetState = true;
         } else if (CVValue < MAXDAC / 2) {
             lastResetState = false;
         }
@@ -239,16 +245,20 @@ void HandleCVTarget(int ch, float CVValue, CVTarget cvTarget) {
         UpdateBPM(map(CVValue, 0, MAXDAC, minBPM, maxBPM));
         break;
     case CVTarget::Div1:
-        outputs[0].SetDivider(map(CVValue, 0, MAXDAC, 0, outputs[0].GetDividerAmounts()));
+        outputs[0].SetDivider(
+            map(CVValue, 0, MAXDAC, 0, outputs[0].GetDividerAmounts()));
         break;
     case CVTarget::Div2:
-        outputs[1].SetDivider(map(CVValue, 0, MAXDAC, 0, outputs[1].GetDividerAmounts()));
+        outputs[1].SetDivider(
+            map(CVValue, 0, MAXDAC, 0, outputs[1].GetDividerAmounts()));
         break;
     case CVTarget::Div3:
-        outputs[2].SetDivider(map(CVValue, 0, MAXDAC, 0, outputs[2].GetDividerAmounts()));
+        outputs[2].SetDivider(
+            map(CVValue, 0, MAXDAC, 0, outputs[2].GetDividerAmounts()));
         break;
     case CVTarget::Div4:
-        outputs[3].SetDivider(map(CVValue, 0, MAXDAC, 0, outputs[3].GetDividerAmounts()));
+        outputs[3].SetDivider(
+            map(CVValue, 0, MAXDAC, 0, outputs[3].GetDividerAmounts()));
         break;
     case CVTarget::Output1Prob:
         outputs[0].SetPulseProbability(map(CVValue, 0, MAXDAC, 1, 100));
@@ -263,28 +273,36 @@ void HandleCVTarget(int ch, float CVValue, CVTarget cvTarget) {
         outputs[3].SetPulseProbability(map(CVValue, 0, MAXDAC, 1, 100));
         break;
     case CVTarget::Swing1Amount:
-        outputs[0].SetSwingAmount(map(CVValue, 0, MAXDAC, 0, outputs[0].GetSwingAmounts()));
+        outputs[0].SetSwingAmount(
+            map(CVValue, 0, MAXDAC, 0, outputs[0].GetSwingAmounts()));
         break;
     case CVTarget::Swing1Every:
-        outputs[0].SetSwingEvery(map(CVValue, 0, MAXDAC, 1, outputs[0].GetSwingEveryAmounts()));
+        outputs[0].SetSwingEvery(
+            map(CVValue, 0, MAXDAC, 1, outputs[0].GetSwingEveryAmounts()));
         break;
     case CVTarget::Swing2Amount:
-        outputs[1].SetSwingAmount(map(CVValue, 0, MAXDAC, 0, outputs[1].GetSwingAmounts()));
+        outputs[1].SetSwingAmount(
+            map(CVValue, 0, MAXDAC, 0, outputs[1].GetSwingAmounts()));
         break;
     case CVTarget::Swing2Every:
-        outputs[1].SetSwingEvery(map(CVValue, 0, MAXDAC, 1, outputs[1].GetSwingEveryAmounts()));
+        outputs[1].SetSwingEvery(
+            map(CVValue, 0, MAXDAC, 1, outputs[1].GetSwingEveryAmounts()));
         break;
     case CVTarget::Swing3Amount:
-        outputs[2].SetSwingAmount(map(CVValue, 0, MAXDAC, 0, outputs[2].GetSwingAmounts()));
+        outputs[2].SetSwingAmount(
+            map(CVValue, 0, MAXDAC, 0, outputs[2].GetSwingAmounts()));
         break;
     case CVTarget::Swing3Every:
-        outputs[2].SetSwingEvery(map(CVValue, 0, MAXDAC, 1, outputs[2].GetSwingEveryAmounts()));
+        outputs[2].SetSwingEvery(
+            map(CVValue, 0, MAXDAC, 1, outputs[2].GetSwingEveryAmounts()));
         break;
     case CVTarget::Swing4Amount:
-        outputs[3].SetSwingAmount(map(CVValue, 0, MAXDAC, 0, outputs[3].GetSwingAmounts()));
+        outputs[3].SetSwingAmount(
+            map(CVValue, 0, MAXDAC, 0, outputs[3].GetSwingAmounts()));
         break;
     case CVTarget::Swing4Every:
-        outputs[3].SetSwingEvery(map(CVValue, 0, MAXDAC, 1, outputs[3].GetSwingEveryAmounts()));
+        outputs[3].SetSwingEvery(
+            map(CVValue, 0, MAXDAC, 1, outputs[3].GetSwingEveryAmounts()));
         break;
     case CVTarget::Output3Offset:
         outputs[2].SetOffset(map(CVValue, 0, MAXDAC, 0, 100));
@@ -299,10 +317,12 @@ void HandleCVTarget(int ch, float CVValue, CVTarget cvTarget) {
         outputs[3].SetLevel(map(CVValue, 0, MAXDAC, 0, 100));
         break;
     case CVTarget::Output3Waveform:
-        outputs[2].SetWaveformType(static_cast<WaveformType>(map(CVValue, 0, MAXDAC, 0, WaveformTypeLength)));
+        outputs[2].SetWaveformType(static_cast<WaveformType>(
+            map(CVValue, 0, MAXDAC, 0, WaveformTypeLength)));
         break;
     case CVTarget::Output4Waveform:
-        outputs[3].SetWaveformType(static_cast<WaveformType>(map(CVValue, 0, MAXDAC, 0, WaveformTypeLength)));
+        outputs[3].SetWaveformType(static_cast<WaveformType>(
+            map(CVValue, 0, MAXDAC, 0, WaveformTypeLength)));
         break;
     case CVTarget::Output1Duty:
         outputs[0].SetDutyCycle(map(CVValue, 0, MAXDAC, 0, 100));
@@ -319,22 +339,26 @@ void HandleCVTarget(int ch, float CVValue, CVTarget cvTarget) {
     case CVTarget::Envelope1: {
         // Schmitt-trigger hysteresis: higher threshold to arm, lower to release.
         bool wasTriggered = outputs[0].GetExternalTrigger();
-        outputs[0].SetExternalTrigger(CVValue > (wasTriggered ? (MAXDAC * 0.40f) : (MAXDAC * 0.60f)));
+        outputs[0].SetExternalTrigger(
+            CVValue > (wasTriggered ? (MAXDAC * 0.40f) : (MAXDAC * 0.60f)));
         break;
     }
     case CVTarget::Envelope2: {
         bool wasTriggered = outputs[1].GetExternalTrigger();
-        outputs[1].SetExternalTrigger(CVValue > (wasTriggered ? (MAXDAC * 0.40f) : (MAXDAC * 0.60f)));
+        outputs[1].SetExternalTrigger(
+            CVValue > (wasTriggered ? (MAXDAC * 0.40f) : (MAXDAC * 0.60f)));
         break;
     }
     case CVTarget::Envelope3: {
         bool wasTriggered = outputs[2].GetExternalTrigger();
-        outputs[2].SetExternalTrigger(CVValue > (wasTriggered ? (MAXDAC * 0.40f) : (MAXDAC * 0.60f)));
+        outputs[2].SetExternalTrigger(
+            CVValue > (wasTriggered ? (MAXDAC * 0.40f) : (MAXDAC * 0.60f)));
         break;
     }
     case CVTarget::Envelope4: {
         bool wasTriggered = outputs[3].GetExternalTrigger();
-        outputs[3].SetExternalTrigger(CVValue > (wasTriggered ? (MAXDAC * 0.40f) : (MAXDAC * 0.60f)));
+        outputs[3].SetExternalTrigger(
+            CVValue > (wasTriggered ? (MAXDAC * 0.40f) : (MAXDAC * 0.60f)));
         break;
     }
     case CVTarget::Output1:

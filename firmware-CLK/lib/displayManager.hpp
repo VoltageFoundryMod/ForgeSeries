@@ -20,21 +20,21 @@
  */
 
 class DisplayManager {
-private:
-    Adafruit_SSD1306& display;
+  private:
+    Adafruit_SSD1306 &display;
 
     // Timing control
     unsigned long lastUpdateTime = 0;
     unsigned long lastInteractionTime = 0;
-    static const unsigned long UPDATE_INTERVAL_MS = 50;  // 20Hz max refresh
-    unsigned long timeoutMs = 5000;  // Return to main screen (0 = disabled)
+    static const unsigned long UPDATE_INTERVAL_MS = 50; // 20Hz max refresh
+    unsigned long timeoutMs = 5000;                     // Return to main screen (0 = disabled)
 
     // State tracking
     bool isDirty = false;
     bool unsavedChanges = false;
 
-public:
-    DisplayManager(Adafruit_SSD1306& disp) : display(disp) {}
+  public:
+    DisplayManager(Adafruit_SSD1306 &disp) : display(disp) {}
 
     // Mark display as needing update (cheap call) — does NOT reset the interaction
     // timer, so the screen-timeout clock keeps ticking. Use for clock/ISR-driven updates.
@@ -53,7 +53,7 @@ public:
     void SetUnsavedChanges(bool hasChanges) {
         if (unsavedChanges != hasChanges) {
             unsavedChanges = hasChanges;
-            MarkDirty();  // state change only — do not reset interaction timer
+            MarkDirty(); // state change only — do not reset interaction timer
         }
     }
 
@@ -68,7 +68,8 @@ public:
 
     // Check if should timeout to main screen
     bool ShouldTimeout(int menuItem, int menuMode) {
-        if (timeoutMs == 0) return false;
+        if (timeoutMs == 0)
+            return false;
         if (menuItem == 1 || menuItem == 2 || menuMode != 0) {
             return false;
         }
@@ -134,7 +135,7 @@ public:
     }
 
     // Helper: Draw centered header
-    void DrawMenuHeader(const char* header) {
+    void DrawMenuHeader(const char *header) {
         display.setTextSize(1);
         int headerLength = (strlen(header) * 6) + 24;
         display.setCursor((128 - headerLength) / 2, 1);
@@ -151,7 +152,7 @@ public:
     }
 
     // Direct access to display for complex drawing
-    Adafruit_SSD1306& GetDisplay() {
+    Adafruit_SSD1306 &GetDisplay() {
         return display;
     }
 };
