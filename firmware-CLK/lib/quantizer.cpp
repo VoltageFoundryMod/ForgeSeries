@@ -4,6 +4,8 @@
 #include "Arduino.h"
 #endif
 
+#include "boardIO.hpp"
+
 // Build the quantizer buffer
 // Inputs:
 //   note: array of 12 booleans, one for each note in an octave
@@ -31,8 +33,8 @@ void QuantizeCV(float AD_CH, float AD_CH_old, int cv_qnt_thr_buf[], int sensitiv
     int cmp1 = 0, cmp2 = 0; // Detect closest note
     byte search_qnt = 0;
     AD_CH = AD_CH * (16 + sensitivity_ch) / 20; // sens setting
-    if (AD_CH > 4095) {
-        AD_CH = 4095;
+    if (AD_CH > MAXADC) {
+        AD_CH = MAXADC;
     }
     if (abs(AD_CH_old - AD_CH) > 10) // counter measure for AD error , ignore small changes
     {
@@ -45,10 +47,10 @@ void QuantizeCV(float AD_CH, float AD_CH_old, int cv_qnt_thr_buf[], int sensitiv
         }
         if (cmp1 >= cmp2) { // Detect closest note
             *CV_out = (cv_qnt_thr_buf[search_qnt + 1] + 8) / 17 * 68.25 + (oct - 3) * 12 * 68.25;
-            *CV_out = constrain(*CV_out, 0, 4095);
+            *CV_out = constrain(*CV_out, 0, MAXDAC);
         } else if (cmp2 > cmp1) { // Detect closest note
             *CV_out = (cv_qnt_thr_buf[search_qnt] + 8) / 17 * 68.25 + (oct - 3) * 12 * 68.25;
-            *CV_out = constrain(*CV_out, 0, 4095);
+            *CV_out = constrain(*CV_out, 0, MAXDAC);
         }
     }
 }

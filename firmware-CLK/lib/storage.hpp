@@ -8,6 +8,7 @@
 // Swap this file for a new platform (e.g. std::fstream for VCVRack) without
 // touching any other module.
 
+#include "boardIO.hpp"
 #include "presetManager.hpp"
 #include <EEPROM.h>
 
@@ -52,7 +53,7 @@ CalibrationData LoadCalibration() {
         for (int i = 0; i < NUM_CV_INS; i++) {
             for (int p = 0; p < CAL_LUT_POINTS; p++) {
                 uint32_t mv = CAL_LUT_MV[p];
-                cal.cvLUT[i][p] = (uint16_t)((uint32_t)mv * 33 * 4095 / (51 * 3300));
+                cal.cvLUT[i][p] = (uint16_t)((uint32_t)mv * 33 * MAXDAC / (51 * 3300));
             }
         }
         cal.valid = false;

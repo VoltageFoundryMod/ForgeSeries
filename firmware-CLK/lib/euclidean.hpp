@@ -1,6 +1,9 @@
 #pragma once
 #include <Arduino.h>
 
+// Maximum number of steps in the Euclidean pattern. This can be adjusted based on memory constraints and desired pattern complexity.
+#define MAX_STEPS 64
+
 typedef struct {
     bool enabled;
     int steps;    // Number of steps in the pattern
@@ -27,10 +30,10 @@ void distributePattern(int level, int counts[], int remainders[], int pattern[],
 
 // Euclidean pattern generation based on Bjorklund's algorithm
 void GeneratePattern(EuclideanParams &params, int *rhythm) {
-    // Temporary arrays for computation, we have 128 steps but currently limited to 64
-    int counts[128] = {0};
-    int remainders[128] = {0};
-    int pattern[128] = {0}; // Temporary pattern storage
+    // Temporary arrays for computation
+    int counts[MAX_STEPS] = {0};
+    int remainders[MAX_STEPS] = {0};
+    int pattern[MAX_STEPS] = {0}; // Temporary pattern storage
     int divisor = params.steps - params.triggers;
     int level = 0;
 
