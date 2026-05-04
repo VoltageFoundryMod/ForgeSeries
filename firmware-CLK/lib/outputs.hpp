@@ -282,20 +282,22 @@ class Output {
 
     // Variables
     int _ID;
-    bool _externalClock = false;  // External clock state
-    OutputType _outputType;       // 0 = Digital, 1 = DAC
-    int _dividerIndex = 9;        // Default to 1
-    int _dutyCycle = 50;          // Default to 50%
-    int _phase = 0;               // Phase offset, default to 0% (in phase with master)
-    int _level = 100;             // Output voltage level for DAC outs (Default to 100%)
-    int _offset = 0;              // Output voltage offset for DAC outs (default to 0%)
-    bool _isPulseOn = false;      // Pulse state
-    bool _lastPulseState = false; // Last pulse state
-    bool _blinkState = false;     // Display blink indicator (toggled once per output period)
-    bool _state = true;           // Output state
-    bool _oldState = true;        // Previous output state (for master stop)
-    bool _masterState = true;     // Master output state
-    int _pulseProbability = 100;  // % chance of pulse
+    bool _externalClock = false;         // External clock state
+    OutputType _outputType;              // 0 = Digital, 1 = DAC
+    int _dividerIndex = 9;               // Default to 1
+    int _dutyCycle = 50;                 // Default to 50%
+    int _phase = 0;                      // Phase offset, default to 0% (in phase with master)
+    int _level = 100;                    // Output voltage level for DAC outs (Default to 100%)
+    int _offset = 0;                     // Output voltage offset for DAC outs (default to 0%)
+    bool _isPulseOn = false;             // Pulse state
+    bool _lastPulseState = false;        // Last pulse state
+    bool _blinkState = false;            // Display blink indicator (toggled once per output period)
+    bool _pulseFired = true;             // True when the current period's pulse actually fired (false = skipped by probability or Euclidean)
+    unsigned long _blinkOnStartTick = 0; // globalTick when the most recent fired pulse was triggered
+    bool _state = true;                  // Output state
+    bool _oldState = true;               // Previous output state (for master stop)
+    bool _masterState = true;            // Master output state
+    int _pulseProbability = 100;         // % chance of pulse
 
     QuantizerParams _quantizerParams = {
         .enable = false,
@@ -1068,9 +1070,12 @@ void Output::GeneratePulse(int PPQN, unsigned long globalTick) {
     if (!_euclideanParams.enabled) {
         // If not using Euclidean rhythm, generate waveform based on the pulse probability
         if (shouldTrigger) {
+            _pulseFired = true;
+            _blinkOnStartTick = globalTick;
             StartWaveform();
         } else {
             // We stop the waveform directly if the pulse probability is not met since StopWaveform() is used for the square wave
+            _pulseFired = false;
             ResetWaveform();
         }
     } else {
@@ -1078,12 +1083,16 @@ void Output::GeneratePulse(int PPQN, unsigned long globalTick) {
         if (_euclideanRhythm[_euclideanStepIndex] == 1) {
             // Active step in the pattern
             if (shouldTrigger) {
+                _pulseFired = true;
+                _blinkOnStartTick = globalTick;
                 StartWaveform();
             } else {
+                _pulseFired = false;
                 ResetWaveform();
             }
         } else {
             // Inactive step in the pattern
+            _pulseFired = false;
             ResetWaveform();
         }
 
@@ -1142,17 +1151,14 @@ void Output::Pulse(int PPQN, unsigned long globalTick) {
     if (_triggerMode) {
         _blinkState = _waveActive;
     } else {
+        // Blink HIGH for the first half of the period (minimum blinkMinPeriod ticks) after
+        // each fired pulse, then LOW until the next fire.  Using elapsed ticks since the
+        // last GeneratePulse() fire rather than a period-parity formula ensures every
+        // fired pulse is visible regardless of which period number it falls on.  Skipped
+        // pulses (probability miss / Euclidean inactive step) keep the indicator outline.
         const float blinkMinPeriod = PPQN / 8.0f; // x8 is the fastest visible blink rate
-        if (_externalClock && _clockDividers[_dividerIndex] < 1) {
-            unsigned long blinkDivider = max((unsigned long)clockDividerExternal, (unsigned long)8);
-            _blinkState = ((_internalPulseCounter / blinkDivider) % 2 == 0);
-        } else {
-            float blinkPeriod = max(periodTicks, blinkMinPeriod);
-            unsigned long adjustedTick = (tickCounterSwing >= phaseOffsetTicks)
-                                             ? (tickCounterSwing - phaseOffsetTicks)
-                                             : 0;
-            _blinkState = ((adjustedTick / (unsigned long)blinkPeriod) % 2 == 0);
-        }
+        float blinkHoldTicks = max(periodTicks / 2.0f, blinkMinPeriod);
+        _blinkState = _pulseFired && ((globalTick - _blinkOnStartTick) < (unsigned long)blinkHoldTicks);
     }
 
     // Calculate the pulse duration (in ticks) based on the duty cycle
@@ -1341,6 +1347,29 @@ void Output::ToggleMasterState() {
 uint32_t Output::GetOutputLevel() {
     float adjustedLevel;
     float outputLevel;
+
+    // ── QuantizeInput: CV passthrough with quantisation ──────────────────────
+    // _inputCV lives in 0..MAXADC (4095) — identical to the note grid used by
+    // BuildQuantBuffer / QuantizeCV (68.25 counts/semitone × 60 = 4095).
+    // Pass it directly so the quantiser sees the correct pitch distances and
+    // snaps to the right note (e.g. 2V = 1638 counts → C2).
+    // Compressing through MaxDACValue first (×3830/4095 = 93.5%) shifts every
+    // note downward by ~0.6 semitone and causes 1-semitone errors at octave
+    // boundaries.  The hardware ceiling is enforced by the final clamp below.
+    if (_waveformType == WaveformType::QuantizeInput) {
+        float out = _inputCV; // 0..4095 calibrated ADC (0..5V after LUT)
+        if (_quantizerParams.enable) {
+            QuantizeCV(out, (float)_oldOutputLevel,
+                       _quantizerThresholdBuff,
+                       _quantizerParams.channelSensitivity,
+                       _quantizerParams.octaveShift, &out);
+        }
+        // Clamp to MaxDACValue: notes above ~G#4 (3830 counts, ≈4.68V) are
+        // unreachable due to op-amp saturation — snap them to the ceiling.
+        out = constrain(out, 0.0f, (float)MaxDACValue);
+        _oldOutputLevel = (uint32_t)out;
+        return _oldOutputLevel;
+    }
 
     {
         // floorVal: the DC floor (0V when offset=0%).
