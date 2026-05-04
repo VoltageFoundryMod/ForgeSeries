@@ -42,6 +42,13 @@ volatile bool usingExternalClock = false;
 volatile unsigned long externalTickCounter = 0;
 bool extClockBlinkState = false; // toggled each QN for the blink indicator
 
+// Minimum consecutive valid QN pulses before entering external-clock mode.
+// Prevents cable-plug transients or nearby interference from briefly activating
+// external sync. 3 QN pulses = ~1.5 s at 120 BPM — imperceptible for a user
+// deliberately patching a clock in, but long enough to reject single glitches.
+static const int MIN_EXT_CLOCK_PULSES = 3;
+static int pendingExtClockPulses = 0; // consecutive valid QN pulses seen so far
+
 static int const dividerAmount = 7;
 int externalClockDividers[dividerAmount] = {1, 2, 4, 8, 16, 24, 48};
 // Labels reflect the number of pulses-per-quarter-note the attached clock
@@ -94,6 +101,7 @@ void ClockReceived() {
     const unsigned long maxValidInterval =
         60000000UL / minBPM; // µs, conservatively for 1PPQN
     if (interval < 2000UL || interval > maxValidInterval) {
+        pendingExtClockPulses = 0; // out-of-range pulse resets confirmation
         return;
     }
 
@@ -115,49 +123,59 @@ void ClockReceived() {
             validIntervals++;
         }
     }
-    if (validIntervals == 0)
+    if (validIntervals == 0) {
+        pendingExtClockPulses = 0; // inconsistent ring buffer resets confirmation
         return;
+    }
     averageInterval /= validIntervals;
 
     // Only act on every N-th pulse where N = divider (= pulses per quarter note)
     if (externalTickCounter % externalClockDividers[externalDividerIndex] == 0) {
+        pendingExtClockPulses++;
+        // Require MIN_EXT_CLOCK_PULSES consecutive valid QN pulses before entering
+        // external-clock mode.  This rejects brief noise bursts (touching a cable,
+        // nearby EMI) that occasionally produce one or two valid-looking intervals.
+        bool confirmed = (pendingExtClockPulses >= MIN_EXT_CLOCK_PULSES);
+
         // QN period in µs = inter-pulse interval × pulses-per-QN
         unsigned long qnPeriodUs =
             averageInterval *
             (unsigned long)externalClockDividers[externalDividerIndex];
-        clockInterval = qnPeriodUs;
-
         unsigned int newBPM = (unsigned int)roundf(60000000.0f / (float)qnPeriodUs);
 
-        noInterrupts();
-        bool wasExternal = usingExternalClock;
-        // Capture the current internal BPM before it is replaced, so we can
-        // restore it when the external clock disconnects. Do this once, on the
-        // first pulse of each new sync session (mode transition).
-        if (!wasExternal)
-            lastInternalBPM = BPM;
-        for (int i = 0; i < NUM_OUTPUTS; i++) {
-            outputs[i].SetExternalClock(true);
-            outputs[i].IncrementInternalCounter();
-        }
-        usingExternalClock = true;
-        // Reset the internal tick counter only on the FIRST sync (mode transition).
-        // Resetting it every QN causes waveform phase glitches for dividers slower
-        // than x1, where the output period spans multiple QNs.
-        if (!wasExternal)
-            tickCounter = 0;
-        interrupts();
+        if (confirmed) {
+            clockInterval = qnPeriodUs;
 
-        // Toggle the blink indicator on every QN pulse (drives the E blink on main
-        // screen).
-        extClockBlinkState = !extClockBlinkState;
-        displayRefresh = 1;
+            noInterrupts();
+            bool wasExternal = usingExternalClock;
+            // Capture the current internal BPM before it is replaced, so we can
+            // restore it when the external clock disconnects. Do this once, on the
+            // first pulse of each new sync session (mode transition).
+            if (!wasExternal)
+                lastInternalBPM = BPM;
+            for (int i = 0; i < NUM_OUTPUTS; i++) {
+                outputs[i].SetExternalClock(true);
+                outputs[i].IncrementInternalCounter();
+            }
+            usingExternalClock = true;
+            // Reset the internal tick counter only on the FIRST sync (mode transition).
+            // Resetting it every QN causes waveform phase glitches for dividers slower
+            // than x1, where the output period spans multiple QNs.
+            if (!wasExternal)
+                tickCounter = 0;
+            interrupts();
 
-        // Hysteresis: only restart the hardware timer if BPM changed meaningfully.
-        // Avoids jitter-driven timer restarts every QN for a stable clock source.
-        if (abs((int)newBPM - (int)BPM) > 2) {
-            UpdateBPM(newBPM);
-            DEBUG_PRINT("External clock connected");
+            // Toggle the blink indicator on every QN pulse (drives the E blink on main
+            // screen). Only after confirmation to avoid the brief "E" flicker on noise.
+            extClockBlinkState = !extClockBlinkState;
+            displayRefresh = 1;
+
+            // Hysteresis: only restart the hardware timer if BPM changed meaningfully.
+            // Avoids jitter-driven timer restarts every QN for a stable clock source.
+            if (abs((int)newBPM - (int)BPM) > 2) {
+                UpdateBPM(newBPM);
+                DEBUG_PRINT("External clock connected");
+            }
         }
     }
     externalTickCounter++;
@@ -185,6 +203,7 @@ void HandleExternalClock() {
         // Reset the ring buffer so stale intervals don't affect the next sync
         externalTickCounter = 0;
         extClockBlinkState = false; // reset so next sync starts at a known state
+        pendingExtClockPulses = 0;  // require re-confirmation on next patch-in
         displayRefresh = 1;
         DEBUG_PRINT("External clock disconnected");
     }
