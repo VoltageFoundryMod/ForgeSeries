@@ -31,8 +31,8 @@ extern int menuScreenTimeout;     // defined in src/main.cpp
 #define NUM_SLOTS 10
 // Bump this whenever the LoadSaveParams layout changes so older (incompatible)
 // presets are treated as invalid and fall back to defaults instead of loading
-// garbage into the new fields.  0xA6: added cross-op fields.
-#define VALID_MAGIC 0xA6 // Written to `valid` on save; 0xFF = erased flash, 0x00 = zeroed RAM
+// garbage into the new fields.  0xA6: cross-op fields.  0xA7: loop + invert fields.
+#define VALID_MAGIC 0xA7 // Written to `valid` on save; 0xFF = erased flash, 0x00 = zeroed RAM
 
 struct LoadSaveParams {
     uint8_t valid; // VALID_MAGIC = valid data; any other = use defaults
@@ -41,6 +41,7 @@ struct LoadSaveParams {
     int divIdx[NUM_OUTPUTS];
     int dutyCycle[NUM_OUTPUTS];
     bool outputState[NUM_OUTPUTS];
+    bool outputInvert[NUM_OUTPUTS];
     uint32_t outputLevel[NUM_OUTPUTS];
     int outputOffset[NUM_OUTPUTS];
     int swingIdx[NUM_OUTPUTS];
@@ -56,6 +57,10 @@ struct LoadSaveParams {
     QuantizerParams quantizerParams[NUM_OUTPUTS];
     int crossOp[NUM_OUTPUTS];  // CrossOp index per output
     int crossSrc[NUM_OUTPUTS]; // CrossSource index per output
+    int loopBeats[NUM_OUTPUTS]; // Loop length in beats (0 = off)
+    int loopWake[NUM_OUTPUTS];  // Loops to run before napping
+    int loopNap[NUM_OUTPUTS];   // Loops to mute (0 = never nap)
+    int loopShift[NUM_OUTPUTS]; // Nap/wake cycle offset in whole loops
     int menuScreenTimeout;     // index into screenTimeoutOptions[]
 };
 
@@ -71,6 +76,7 @@ LoadSaveParams LoadDefaultParams() {
         p.divIdx[i] = 9;
         p.dutyCycle[i] = 50;
         p.outputState[i] = true;
+        p.outputInvert[i] = false;
         p.outputLevel[i] = 100;
         p.outputOffset[i] = 0;
         p.swingIdx[i] = 0;
@@ -83,6 +89,10 @@ LoadSaveParams LoadDefaultParams() {
         p.quantizerParams[i] = {false, 3, 4, 1, 0};
         p.crossOp[i] = 0;  // CrossNone
         p.crossSrc[i] = 0; // Out 1
+        p.loopBeats[i] = 0; // off
+        p.loopWake[i] = 1;
+        p.loopNap[i] = 0;   // never nap
+        p.loopShift[i] = 0;
     }
     for (int i = 0; i < NUM_CV_INS; i++) {
         p.CVInputTarget[i] = 0;
@@ -108,6 +118,7 @@ LoadSaveParams CollectParams() {
         p.divIdx[i] = outputs[i].GetDividerIndex();
         p.dutyCycle[i] = outputs[i].GetDutyCycle();
         p.outputState[i] = outputs[i].GetOutputState();
+        p.outputInvert[i] = outputs[i].GetInvert();
         p.outputLevel[i] = outputs[i].GetLevel();
         p.outputOffset[i] = outputs[i].GetOffset();
         p.swingIdx[i] = outputs[i].GetSwingAmountIndex();
@@ -120,6 +131,10 @@ LoadSaveParams CollectParams() {
         p.quantizerParams[i] = outputs[i].GetQuantizerParams();
         p.crossOp[i] = outputs[i].GetCrossOpIndex();
         p.crossSrc[i] = outputs[i].GetCrossSourceIndex();
+        p.loopBeats[i] = outputs[i].GetLoopBeats();
+        p.loopWake[i] = outputs[i].GetLoopWake();
+        p.loopNap[i] = outputs[i].GetLoopNap();
+        p.loopShift[i] = outputs[i].GetLoopShift();
     }
     for (int i = 0; i < NUM_CV_INS; i++) {
         p.CVInputTarget[i] = CVInputTarget[i];
@@ -140,6 +155,7 @@ void UpdateParameters(LoadSaveParams p) {
         outputs[i].SetDivider(p.divIdx[i]);
         outputs[i].SetDutyCycle(p.dutyCycle[i]);
         outputs[i].SetOutputState(p.outputState[i]);
+        outputs[i].SetInvert(p.outputInvert[i]);
         outputs[i].SetLevel(p.outputLevel[i]);
         outputs[i].SetOffset(p.outputOffset[i]);
         outputs[i].SetSwingAmount(p.swingIdx[i]);
@@ -152,6 +168,10 @@ void UpdateParameters(LoadSaveParams p) {
         outputs[i].SetQuantizerParams(p.quantizerParams[i]);
         outputs[i].SetCrossOp(p.crossOp[i]);
         outputs[i].SetCrossSource(p.crossSrc[i]);
+        outputs[i].SetLoopBeats(p.loopBeats[i]);
+        outputs[i].SetLoopWake(p.loopWake[i]);
+        outputs[i].SetLoopNap(p.loopNap[i]);
+        outputs[i].SetLoopShift(p.loopShift[i]);
     }
     for (int i = 0; i < NUM_CV_INS; i++) {
         CVInputTarget[i] = static_cast<CVTarget>(p.CVInputTarget[i]);

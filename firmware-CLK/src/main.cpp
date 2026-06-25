@@ -82,6 +82,7 @@ bool unsavedChanges = false;         // Unsaved changes flag
 int euclideanOutputSelect = 0;       // Euclidean rhythm output index
 int quantizerOutputSelect = 0;       // Quantizer output index
 int envelopeOutputSelect = 0;        // Envelope output index
+int loopOutputSelect = 0;            // Loops output index
 int menuScreenTimeout = 2;           // Index into screenTimeoutOptions[]: 0=Off,1=2s,2=5s,3=10s,4=20s
 unsigned long lastEncoderUpdate = 0; // Last encoder update time
 
@@ -117,9 +118,9 @@ void HandleEncoderClick() {
                     menuMode = menuItem;
                     // Fix: initialize pending state for CV target editing
                     // (original code had this as dead code inside menuMode==0 branch).
-                    if (menuItem == 57) {
+                    if (menuItem == 61) {
                         pendingCVInputTarget[0] = CVInputTarget[0];
-                    } else if (menuItem == 58) {
+                    } else if (menuItem == 62) {
                         pendingCVInputTarget[1] = CVInputTarget[1];
                     }
                 }
@@ -127,9 +128,9 @@ void HandleEncoderClick() {
         } else {
             // Commit changes and exit edit mode.
             // CV target items copy the pending selection back to the live value.
-            if (menuMode == 57) {
+            if (menuMode == 61) {
                 CVInputTarget[0] = pendingCVInputTarget[0];
-            } else if (menuMode == 58) {
+            } else if (menuMode == 62) {
                 CVInputTarget[1] = pendingCVInputTarget[1];
             }
             menuMode = 0;

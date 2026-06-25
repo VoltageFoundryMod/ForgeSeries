@@ -136,6 +136,7 @@ void HandleDisplay() {
             "",                  // 12 (settings — rendered below)
             "OUTPUT SETTINGS",   // 13 (level/offset - all 4)
             "CROSS OPS",         // 14 (cross operations - all 4)
+            "LOOPS",             // 15 (loop reset + nap/wake, per-output)
         };
 
         // ── Group 4: Euclidean — custom overlay (pattern grid) ─────────────
@@ -149,7 +150,7 @@ void HandleDisplay() {
                 bool sel = (idx == menuItem);
                 bool edit = sel && (menuMode == idx);
                 // Items 20 (ROT) and 21 (PAD) share a row; draw ROT on left, PAD at x=64
-                if (idx == 32) { // ROT — left half
+                if (idx == 36) { // ROT — left half
                     display.setCursor(MD_LABEL_X, _md_rowY);
                     display.print(mi.label);
                     if (mi.valueFn) {
@@ -158,7 +159,7 @@ void HandleDisplay() {
                     }
                     _MD_Cursor(_md_rowY, sel, edit);
                     // Don't advance — PAD shares this row
-                } else if (idx == 33) { // PAD — right half
+                } else if (idx == 37) { // PAD — right half
                     display.setCursor(50, _md_rowY);
                     display.print(mi.label);
                     if (mi.valueFn) {
@@ -231,6 +232,38 @@ void HandleDisplay() {
                              mi.valueFn ? mi.valueFn() : String(""), mi.valueFn != nullptr,
                              mi.valueFn2 ? mi.valueFn2() : String(""), mi.valueFn2 != nullptr,
                              mi.col1x, mi.col2x, sel, edit);
+            }
+            RedrawDisplay();
+            return;
+        }
+
+        // ── Group 2: Output state — STATE/INV for all 4 outputs ────────────
+        if (grp == 2) {
+            MD_PageBegin("OUTPUT STATE", 12);
+            // Column headers
+            display.setCursor(58, _md_rowY);
+            display.println("STATE");
+            display.setCursor(100, _md_rowY);
+            display.println("INV");
+            // Column indicator arrow (even item → STATE column, odd → INV column)
+            if (menuItem % 2 == 0) {
+                display.fillTriangle(52, _md_rowY, 52, _md_rowY + 6, 55, _md_rowY + 3, 1);
+            } else {
+                display.fillTriangle(94, _md_rowY, 94, _md_rowY + 6, 97, _md_rowY + 3, 1);
+            }
+            _md_rowY += MD_ROW_H;
+            for (int i = 0; i < MENU_ITEM_COUNT; i++) {
+                const MenuItem &mi = MENU_ITEMS[i];
+                if (mi.group != 2 || mi.rowStyle == ROW_HIDDEN)
+                    continue;
+                int idx = i + 1;
+                int idxInv = idx + 1;
+                bool sel = (idx == menuItem || idxInv == menuItem);
+                // Toggles never enter edit mode, so the cursor is always hollow.
+                MD_TwoColRow(mi.label,
+                             mi.valueFn ? mi.valueFn() : String(""), mi.valueFn != nullptr,
+                             mi.valueFn2 ? mi.valueFn2() : String(""), mi.valueFn2 != nullptr,
+                             mi.col1x, mi.col2x, sel, false);
             }
             RedrawDisplay();
             return;
@@ -310,14 +343,14 @@ void HandleDisplay() {
                 int idx = i + 1;
                 bool sel = (idx == menuItem);
                 bool edit = sel && (menuMode == idx);
-                if (idx == 55) { // Curv — left half of last row
+                if (idx == 59) { // Curv — left half of last row
                     display.setCursor(MD_LABEL_X, _md_rowY);
                     display.print(mi.label);
                     if (mi.valueFn)
                         display.print(mi.valueFn());
                     _MD_Cursor(_md_rowY, sel, edit);
                     // Don't advance; Retr shares this row
-                } else if (idx == 56) { // Retr — right half
+                } else if (idx == 60) { // Retr — right half
                     bool sel2 = (idx == menuItem);
                     bool edit2 = sel2 && (menuMode == idx);
                     display.setCursor(70, _md_rowY);
@@ -352,7 +385,7 @@ void HandleDisplay() {
                     continue; // skip paired offset items
                 bool sel = (idx == menuItem);
                 bool edit = sel && (menuMode == idx);
-                if (mi.rowStyle == ROW_SINGLE && idx <= 58) {
+                if (mi.rowStyle == ROW_SINGLE && idx <= 62) {
                     // Full-width target rows (CV 1:/CV 2: target)
                     display.setCursor(MD_LABEL_X, _md_rowY);
                     display.print(mi.label);
@@ -362,16 +395,16 @@ void HandleDisplay() {
                     _md_rowY += MD_ROW_H;
                 } else if (mi.rowStyle == ROW_TWOCOL) {
                     // First time through: draw column headers
-                    if (idx == 59) {
+                    if (idx == 63) {
                         display.setCursor(60, _md_rowY);
                         display.println("ATTN");
                         display.setCursor(100, _md_rowY);
                         display.println("OFF");
                         // Column indicator
-                        int colItem = menuItem; // 59,60 or 61,62
-                        if (colItem == 59 || colItem == 61) {
+                        int colItem = menuItem; // 63,64 or 65,66
+                        if (colItem == 63 || colItem == 65) {
                             display.fillTriangle(55, _md_rowY, 55, _md_rowY + 6, 58, _md_rowY + 3, 1);
-                        } else if (colItem == 60 || colItem == 62) {
+                        } else if (colItem == 64 || colItem == 66) {
                             display.fillTriangle(95, _md_rowY, 95, _md_rowY + 6, 98, _md_rowY + 3, 1);
                         }
                         _md_rowY += MD_ROW_H;
@@ -398,7 +431,7 @@ void HandleDisplay() {
             display.setCursor(MD_LABEL_X, yPosition);
             display.print("TAP TEMPO");
             display.print(" (" + String(BPM) + " BPM)");
-            if (menuItem == 68) {
+            if (menuItem == 72) {
                 display.drawTriangle(MD_CURSOR_X, yPosition - 1, MD_CURSOR_X, yPosition + 7, MD_CURSOR_X + 4, yPosition + 3, 1);
             }
             yPosition += MD_ROW_H; // gap
@@ -406,9 +439,9 @@ void HandleDisplay() {
             display.setCursor(MD_LABEL_X, yPosition);
             display.print("SCR TIMEOUT: ");
             display.print(getTimeout());
-            if (menuItem == 69 && menuMode == 0) {
+            if (menuItem == 73 && menuMode == 0) {
                 display.drawTriangle(MD_CURSOR_X, yPosition - 1, MD_CURSOR_X, yPosition + 7, MD_CURSOR_X + 4, yPosition + 3, 1);
-            } else if (menuMode == 69) {
+            } else if (menuMode == 73) {
                 display.fillTriangle(MD_CURSOR_X, yPosition - 1, MD_CURSOR_X, yPosition + 7, MD_CURSOR_X + 4, yPosition + 3, 1);
             }
             yPosition += MD_ROW_H;
@@ -416,28 +449,28 @@ void HandleDisplay() {
             display.setCursor(MD_LABEL_X, yPosition);
             display.print("PRESET SLOT: ");
             display.print(saveSlot);
-            if (menuItem == 70 && menuMode == 0) {
+            if (menuItem == 74 && menuMode == 0) {
                 display.drawTriangle(MD_CURSOR_X, yPosition - 1, MD_CURSOR_X, yPosition + 7, MD_CURSOR_X + 4, yPosition + 3, 1);
-            } else if (menuMode == 70) {
+            } else if (menuMode == 74) {
                 display.fillTriangle(MD_CURSOR_X, yPosition - 1, MD_CURSOR_X, yPosition + 7, MD_CURSOR_X + 4, yPosition + 3, 1);
             }
             yPosition += MD_ROW_H;
             // Save
             display.setCursor(MD_LABEL_X, yPosition);
             display.print("SAVE");
-            if (menuItem == 71)
+            if (menuItem == 75)
                 display.drawTriangle(MD_CURSOR_X, yPosition - 1, MD_CURSOR_X, yPosition + 7, MD_CURSOR_X + 4, yPosition + 3, 1);
             yPosition += MD_ROW_H;
             // Load
             display.setCursor(MD_LABEL_X, yPosition);
             display.print("LOAD");
-            if (menuItem == 72)
+            if (menuItem == 76)
                 display.drawTriangle(MD_CURSOR_X, yPosition - 1, MD_CURSOR_X, yPosition + 7, MD_CURSOR_X + 4, yPosition + 3, 1);
             yPosition += MD_ROW_H;
             // Load defaults
             display.setCursor(MD_LABEL_X, yPosition);
             display.print("LOAD DEFAULTS");
-            if (menuItem == 73)
+            if (menuItem == 77)
                 display.drawTriangle(MD_CURSOR_X, yPosition - 1, MD_CURSOR_X, yPosition + 7, MD_CURSOR_X + 4, yPosition + 3, 1);
             RedrawDisplay();
             return;

@@ -35,7 +35,8 @@ enum WaveformType {
     ADEnvelope,
     AREnvelope,
     ADSREnvelope,
-    QuantizeInput,
+    CVInput1, // mirror CV input 1 to this output (quantise via the Quantize toggle)
+    CVInput2, // mirror CV input 2 to this output
 };
 
 String WaveformTypeDescriptions[] = {
@@ -58,14 +59,14 @@ String WaveformTypeDescriptions[] = {
     "AD Env",
     "AR Env",
     "ADSR Env",
-    "Quantize",
+    "CV 1",
+    "CV 2",
 };
 int WaveformTypeLength = sizeof(WaveformTypeDescriptions) / sizeof(WaveformTypeDescriptions[0]);
 
 // ── Cross operations (ALM Pamela-style) ──────────────────────────────────────
 // Combine this output's value with a source signal (another output or a CV
-// input) before quantisation.  SEED is deferred to a later stage (it needs a
-// per-output RNG before it can reset randomness), so it is not listed here.
+// input) before quantisation.
 enum CrossOp {
     CrossNone = 0,
     CrossMix,    // (a + b) / 2
@@ -84,12 +85,13 @@ enum CrossOp {
     CrossBitOr,  // bitwise OR
     CrossBitXor, // bitwise XOR
     CrossBitAnd, // bitwise AND
+    CrossSeed,   // rising source edge re-seeds (rewinds) this output's RNG
 };
 
 String CrossOpDescriptions[] = {
     "None", "MIX", "MULT", "ADD", "SUB", "MIN", "MAX",
     "HOLD", "S&H", "MASK", "NOT", "OR", "XOR", "AND",
-    "BitOR", "BitXOR", "BitAND"};
+    "BitOR", "BitXOR", "BitAND", "SEED"};
 int CrossOpLength = sizeof(CrossOpDescriptions) / sizeof(CrossOpDescriptions[0]);
 
 // Cross source: which signal modulates this output.  Out1-4 use the other
@@ -182,6 +184,22 @@ class Output {
     int GetCrossSourceIndex() { return _crossSource; }
     void SetCrossSource(int index) { _crossSource = constrain(index, 0, CrossSourceLength - 1); }
     String GetCrossSourceDescription() { return CrossSourceDescriptions[_crossSource]; }
+
+    // Loops — periodic rewind of pattern generators + nap/wake gating.
+    // Loop length is in beats (quarter notes); nap/wake/shift count whole loops.
+    int GetLoopBeats() { return _loopBeats; }
+    void SetLoopBeats(int beats) { _loopBeats = constrain(beats, 0, 64); } // 0 = off
+    String GetLoopBeatsDescription() { return _loopBeats == 0 ? String("Off") : String(_loopBeats); }
+    int GetLoopWake() { return _loopWake; }
+    void SetLoopWake(int n) { _loopWake = constrain(n, 1, 16); }
+    String GetLoopWakeDescription() { return String(_loopWake); }
+    int GetLoopNap() { return _loopNap; }
+    void SetLoopNap(int n) { _loopNap = constrain(n, 0, 16); } // 0 = never nap
+    String GetLoopNapDescription() { return _loopNap == 0 ? String("Off") : String(_loopNap); }
+    int GetLoopShift() { return _loopShift; }
+    void SetLoopShift(int n) { _loopShift = constrain(n, 0, 16); }
+    String GetLoopShiftDescription() { return String(_loopShift); }
+
     void QuantizerCVValue(float CVValue);
     String GetLevelDescription() { return String(_level) + "%"; }
     void SetLevel(int level) { _level = constrain(level, 0, 100); }
@@ -190,6 +208,13 @@ class Output {
     int GetOffset() { return _offset; }
     void SetOffset(int offset) { _offset = constrain(offset, 0, 100); }
     String GetOffsetDescription() { return String(_offset) + "%"; }
+
+    // Output Invert — polarity flip (out = MAXDAC - out) applied at the final
+    // output stage (after cross-ops and quantisation).
+    bool GetInvert() { return _invert; }
+    void SetInvert(bool state) { _invert = state; }
+    void ToggleInvert() { _invert = !_invert; }
+    String GetInvertDescription() { return _invert ? "Inv" : "-"; }
 
     // Swing
     void SetSwingAmount(int swingAmount) { _swingAmountIndex = constrain(swingAmount, 0, 6); }
@@ -347,6 +372,7 @@ class Output {
     int _phase = 0;                      // Phase offset, default to 0% (in phase with master)
     int _level = 100;                    // Output voltage level for DAC outs (Default to 100%)
     int _offset = 0;                     // Output voltage offset for DAC outs (default to 0%)
+    bool _invert = false;                // Polarity flip applied at the final output stage
     bool _isPulseOn = false;             // Pulse state
     bool _lastPulseState = false;        // Last pulse state
     bool _blinkState = false;            // Display blink indicator (toggled once per output period)
@@ -376,7 +402,23 @@ class Output {
     CrossOp _crossOp = CrossNone;  // Selected cross operation (default: off)
     int _crossSource = 0;          // CrossSource index (Out1-4 / IN1-2)
     float _crossHeldValue = 0.0f;  // Last held value for HOLD / S&H (normalised 0..1)
-    bool _crossSrcWasHigh = false; // Source-above-threshold state, for S&H edge detect
+    bool _crossSrcWasHigh = false; // Source-above-threshold state, for S&H / SEED edge detect
+
+    // Per-output PRNG (xorshift32).  All randomness draws from this so it can be
+    // rewound to _rngSeed to replay an identical sequence — used by Loops (every
+    // loop boundary) and the SEED cross-op.  Seeded deterministically from _ID.
+    uint32_t _rngSeed = 1;
+    uint32_t _rngState = 1;
+    // SmoothNoise evolving state (per-output; was function-static = shared bug).
+    float _smoothLastValue = 127.5f;
+    float _smoothValue = 50.0f;
+
+    // Loops
+    int _loopBeats = 0;         // 0 = off; >0 = loop length in beats (quarter notes)
+    int _loopWake = 1;          // loops to run (output active) before napping
+    int _loopNap = 0;           // loops to mute the output (0 = never nap)
+    int _loopShift = 0;         // offset (in whole loops) of the nap/wake cycle
+    bool _loopNapMuted = false; // computed each tick: true while napping
 
     // Waveform generation variables
     WaveformType _waveformType = WaveformType::Square; // Default to square wave
@@ -436,6 +478,27 @@ class Output {
     } _envState = Idle;
 
     // -------------- Private Functions --------------
+
+    // Per-output PRNG (xorshift32).  Never returns 0-state.  Draw all randomness
+    // from here so Loops / SEED can rewind it to replay the same sequence.
+    uint32_t _NextRandom() {
+        uint32_t x = _rngState;
+        x ^= x << 13;
+        x ^= x >> 17;
+        x ^= x << 5;
+        _rngState = x ? x : 1u;
+        return _rngState;
+    }
+    // Uniform random integer in [0, n).  Returns 0 for n == 0.
+    uint32_t _RandomBelow(uint32_t n) { return n ? (_NextRandom() % n) : 0u; }
+
+    // Rewind the RNG (and smooth-noise state) so the random sequence replays
+    // identically.  Called at loop boundaries and by the SEED cross-op.
+    void ResetRandom() {
+        _rngState = _rngSeed;
+        _smoothLastValue = 127.5f;
+        _smoothValue = 50.0f;
+    }
 
     // Bypass the user-selectable cap to allow setting the Env slot (index _dividerAmount-1).
     // Only called by SetWaveformType when an envelope waveform is selected.
@@ -671,37 +734,30 @@ class Output {
     // Generate random values
     void GenerateNoiseWave(int PPQN) {
         if (_waveActive) {
-            // Generate white noise waveform
-            _waveValue = random(MaxWaveValue + 1); // Random value
+            // Generate white noise waveform (per-output RNG so Loops can replay it)
+            _waveValue = _RandomBelow((uint32_t)MaxWaveValue + 1);
             _isPulseOn = true;
             _randomTickCounter++;
         }
     }
 
-    // Generate smooth random waveform
+    // Generate smooth random waveform.  State (_smoothLastValue / _smoothValue)
+    // is per-output and drawn from the per-output RNG so Loops can replay it.
     void GenerateSmoothNoiseWave(int PPQN) {
         if (_waveActive) {
-            // Generate smooth random waveform with smooth peaks and valleys
-            static float phase = 0.0f;
-            static float frequency = 0.3f;             // Adjust frequency for smoothness
-            static float amplitude = MaxWaveValue / 2; // Amplitude for wave value range
-            static float lastValue = MaxWaveValue / 2; // Last generated value
-            static float smoothValue = 50.0f;          // Smoothed value
+            const float frequency = 0.3f;             // random-walk rate
+            const float amplitude = MaxWaveValue / 2; // wave value range
 
-            // Increment phase
-            phase += frequency;
+            // Random walk: step in [-1, 1) from the per-output RNG.
+            float randomStep = ((float)_NextRandom() / 4294967295.0f - 0.5f) * 2.0f;
+            _smoothLastValue += randomStep * amplitude * frequency;
+            _smoothLastValue = fmin(fmax(_smoothLastValue, 0.0f), MaxWaveValue);
 
-            // Generate smooth random value using a random walk
-            float randomStep = (static_cast<float>(rand()) / RAND_MAX - 0.5f) * 2.0f; // Random step between -1 and 1
-            lastValue += randomStep * amplitude * frequency;                          // Adjust step size by amplitude and frequency
-            lastValue = fmin(fmax(lastValue, 0.0f), MaxWaveValue);                    // Clamp value
+            // Low-pass filter to smooth out the waveform.
+            const float alpha = 0.01f;
+            _smoothValue = alpha * _smoothLastValue + (1.0f - alpha) * _smoothValue;
 
-            // Apply a low-pass filter to smooth out the waveform
-            float alpha = 0.01f; // Smoothing factor (0 < alpha < 1)
-            smoothValue = alpha * lastValue + (1.0f - alpha) * smoothValue;
-
-            _waveValue = smoothValue;
-
+            _waveValue = _smoothValue;
             _isPulseOn = true;
         }
     }
@@ -807,7 +863,7 @@ class Output {
         if (_waveActive) {
             // Generate a random value at the start of each pulse
             if (_randomTickCounter == 0) {
-                _waveValue = random(MaxWaveValue + 1);
+                _waveValue = _RandomBelow((uint32_t)MaxWaveValue + 1);
             }
             _isPulseOn = true;
             _randomTickCounter++;
@@ -818,7 +874,7 @@ class Output {
     void HandleTrigger() {
         if (!_state)
             return; // Output disabled — ignore triggers
-        if (random(100) >= _pulseProbability)
+        if ((int)_RandomBelow(100) >= _pulseProbability)
             return; // Probability gate
         if (_triggerMode && (_waveformType == WaveformType::ADEnvelope || _waveformType == WaveformType::AREnvelope || _waveformType == WaveformType::ADSREnvelope)) {
             if (!_waveActive || _envParams.retrigger) {
@@ -1052,6 +1108,11 @@ class Output {
 Output::Output(int ID, OutputType type) {
     _ID = ID;
     _outputType = type;
+    // Deterministic per-output RNG seed (distinct per output, never 0).
+    _rngSeed = 0x9E3779B9u ^ ((uint32_t)ID * 2654435761u);
+    if (_rngSeed == 0)
+        _rngSeed = 1u;
+    _rngState = _rngSeed;
     GeneratePattern(_euclideanParams, _euclideanRhythm);
     SetupQuantizer();
 }
@@ -1131,7 +1192,7 @@ void Output::GenEnvelope() {
 }
 
 void Output::GeneratePulse(int PPQN, unsigned long globalTick) {
-    bool shouldTrigger = (random(100) < _pulseProbability);
+    bool shouldTrigger = ((int)_RandomBelow(100) < _pulseProbability);
     if (!_euclideanParams.enabled) {
         // If not using Euclidean rhythm, generate waveform based on the pulse probability
         if (shouldTrigger) {
@@ -1186,6 +1247,39 @@ void Output::Pulse(int PPQN, unsigned long globalTick) {
             _waveActive = false;
         }
         return;
+    }
+
+    // ── Loops: periodic rewind + nap/wake gating ──────────────────────────────
+    // A loop is _loopBeats quarter notes (= _loopBeats * PPQN ticks).  At each
+    // loop boundary the pattern generators are rewound so random / Euclidean /
+    // flex patterns repeat identically.  Nap/Wake then mutes whole loops.
+    if (_loopBeats > 0) {
+        unsigned long loopPeriod = (unsigned long)_loopBeats * (unsigned long)PPQN;
+        unsigned long loopNum = globalTick / loopPeriod;
+        if (globalTick % loopPeriod == 0) {
+            _euclideanStepIndex = 0;
+            _envTickCounter = 0;
+            _randomTickCounter = 0;
+            ResetRandom();
+        }
+        if (_loopNap > 0) {
+            int cycleLen = _loopWake + _loopNap;
+            int cyclePos = (int)((loopNum + (unsigned long)_loopShift) % (unsigned long)cycleLen);
+            _loopNapMuted = (cyclePos >= _loopWake);
+        } else {
+            _loopNapMuted = false;
+        }
+        if (_loopNapMuted) {
+            // Output is asleep: silence it but keep tick-based timing running so
+            // it resumes in phase.  ComputeRawOutput() also forces 0V while muted.
+            StopWaveform();
+            _isPulseOn = false;
+            _waveActive = false;
+            _blinkState = false;
+            return;
+        }
+    } else {
+        _loopNapMuted = false;
     }
 
     // Calculate the period duration in ticks
@@ -1323,9 +1417,11 @@ void Output::Pulse(int PPQN, unsigned long globalTick) {
             _isPulseOn = false;
         }
         break;
-    case WaveformType::QuantizeInput:
-        // Divide by 4095.0f (ADC full-scale, MAXADC) — _inputCV is an ADC-domain
-        // value, so normalise by the ADC range, not the DAC range.
+    case WaveformType::CVInput1:
+    case WaveformType::CVInput2:
+        // Output mirrors a CV input.  Keep _waveValue in sync for the blink
+        // indicator; ComputeRawOutput() emits the raw _inputCV (ADC domain) so
+        // the quantiser, when enabled, sees the correct note grid.
         _waveValue = (_inputCV / 4095.0f) * MaxWaveValue;
         _isPulseOn = true;
         break;
@@ -1356,14 +1452,12 @@ void Output::SetWaveformType(WaveformType type) {
         _envStartTime = 0;
         _triggerMode = true;
         SetDividerInternal(_dividerAmount - 1); // Env slot (always the last entry)
-    } else if (_waveformType == WaveformType::QuantizeInput) {
+    } else if (_waveformType == WaveformType::CVInput1 || _waveformType == WaveformType::CVInput2) {
+        // CV passthrough: behaves like a value waveform.  Leave the quantiser
+        // state untouched so it is an independent toggle — pick "CV 1/2", then
+        // enable Quantize in the Quantize menu (the two-step flow).
         _waveActive = true;
         _triggerMode = false;
-        if (!_quantizerParams.enable) {
-            // Enable quantizer if it's not already enabled
-            _quantizerParams.enable = true;
-            SetupQuantizer();
-        }
     } else {
         // For other waveforms, disable quantizer
         _quantizerParams.enable = false;
@@ -1380,6 +1474,8 @@ void Output::SetMasterState(bool state) {
         _envTickCounter = 0;
         _randomTickCounter = 0;
         _euclideanStepIndex = 0;
+        // Rewind randomness so patterns restart deterministically on transport.
+        ResetRandom();
 
         if (!_masterState) {
             _oldState = _state;
@@ -1411,13 +1507,17 @@ void Output::ToggleMasterState() {
 // output type and pulse state.  Cross operations are applied to this value, and
 // FinalizeOutput() then quantises and clamps it.  GetOutputLevel() chains both.
 float Output::ComputeRawOutput() {
-    // ── QuantizeInput: CV passthrough ────────────────────────────────────────
+    // Loop nap: output is asleep → force 0V regardless of waveform type.
+    if (_loopNapMuted)
+        return 0.0f;
+
+    // ── CV passthrough (CV 1 / CV 2) ─────────────────────────────────────────
     // _inputCV lives in 0..MAXADC (4095) — identical to the note grid used by
     // BuildQuantBuffer / QuantizeCV (68.25 counts/semitone × 60 = 4095).
-    // Pass it directly so the quantiser sees the correct pitch distances and
-    // snaps to the right note (e.g. 2V = 1638 counts → C2).  The hardware
-    // ceiling is enforced by FinalizeOutput()'s clamp.
-    if (_waveformType == WaveformType::QuantizeInput) {
+    // Pass it directly so the quantiser (if enabled) sees the correct pitch
+    // distances and snaps to the right note (e.g. 2V = 1638 counts → C2).
+    // The hardware ceiling is enforced by FinalizeOutput()'s clamp.
+    if (_waveformType == WaveformType::CVInput1 || _waveformType == WaveformType::CVInput2) {
         return _inputCV; // 0..4095 calibrated ADC (0..5V after LUT)
     }
 
@@ -1477,8 +1577,13 @@ uint32_t Output::FinalizeOutput(float raw) {
     }
     // Final clamp to the physical DAC range [0, MAXDAC].
     raw = constrain(raw, 0.0f, (float)MAXDAC);
+    // Store the pre-invert value so the quantizer's hysteresis (which compares
+    // against the previous output) stays in the un-inverted domain.
     _oldOutputLevel = (uint32_t)raw;
-    return (uint32_t)raw;
+    uint32_t out = (uint32_t)raw;
+    if (_invert)
+        out = (uint32_t)MAXDAC - out; // polarity flip at the final stage
+    return out;
 }
 
 // Output Level based on the output type and pulse state (no cross-op applied).
@@ -1559,6 +1664,16 @@ float Output::ApplyCrossOp(float ownRaw, float srcNorm) {
                  : (_crossOp == CrossBitXor) ? (ia ^ ib)
                                              : (ia & ib);
         r = ir / 4095.0f;
+        break;
+    }
+    case CrossSeed: {
+        // Rising source edge rewinds this output's RNG (Krell-style reseed).
+        // The value passes through unchanged.
+        bool high = (b > kGate);
+        if (high && !_crossSrcWasHigh)
+            ResetRandom();
+        _crossSrcWasHigh = high;
+        r = a;
         break;
     }
     default:

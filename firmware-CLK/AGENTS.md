@@ -56,7 +56,7 @@ ClockForge is a **Eurorack modular synthesizer clock/CV module** firmware for th
 **Output System** — all 4 outputs via MCP4728 quad 12-bit I2C DAC:
 - **No inverted gate logic** (old SAMD21 behavior is gone)
 - Physical channel swap in hardware: DACB/DACC are swapped — see `_chanMap[]` in [lib/boardIO.hpp](lib/boardIO.hpp)
-- 20 waveform types: `Square`, `Triangle`, `Sine`, `Parabolic`, `Sawtooth`, `ExpEnvelope`, `LogEnvelope`, `InvExpEnvelope`, `InvLogEnvelope`, `Hatchet2`, `Hatchet4`, `Noise`, `SmoothNoise`, `SampleHold`, `ResetTrig`, `Play`, `ADEnvelope`, `AREnvelope`, `ADSREnvelope`, `QuantizeInput`
+- 21 waveform types: `Square`, `Triangle`, `Sine`, `Parabolic`, `Sawtooth`, `ExpEnvelope`, `LogEnvelope`, `InvExpEnvelope`, `InvLogEnvelope`, `Hatchet2`, `Hatchet4`, `Noise`, `SmoothNoise`, `SampleHold`, `ResetTrig`, `Play`, `ADEnvelope`, `AREnvelope`, `ADSREnvelope`, `CVInput1`, `CVInput2` (mirror CV in 1/2 to the output; quantise via the Quantize toggle)
 
 **CV Input Modulation**:
 - 2 CV inputs (0–5V) mapped to `CVTarget` targets via `HandleCVTarget()` in [lib/cvInputs.hpp](lib/cvInputs.hpp)

@@ -28,7 +28,9 @@ Part of the **Forge** series of modules which share a single hardware platform. 
 - **Tap Tempo Functionality**: Manually set the BPM by tapping a button.
 - **Quantization**: Quantize the output wave or CV input to some scale and root note.
 - **Envelopes**: Outputs can generate different types of envelopes (AD, AR, ADSR) triggered by CV inputs.
-- **Save/Load Configuration**: Save and load up to 5 configurations.
+- **Cross Operations**: Modulate an output with another output or CV input using arithmetic, logic and sample/hold operations.
+- **Loops**: Rewind an output's pattern every few beats to build repeating, structured random/Euclidean phrases, with nap/wake muting.
+- **Save/Load Configuration**: Save and load up to 10 configurations.
 
 The module has a user-friendly interface with an encoder for navigation and parameter adjustment, and a clear display showing the current settings and status of each output. The main screen shows the BPM and the status of each output, while navigating into each output's settings allows for detailed configuration of that specific output. There are no submenus as all parameters are accessible by scrolling horizontally on the same menu screen.
 
@@ -36,7 +38,7 @@ The right side of the screen shows a navigation line to indicate the current pos
 
 Whenever a parameter is changed, a small circle will be shown in the top-left corner of the screen. This indicates that the current settings were modified and not saved. The module always loads the preset saved in slot 0 on boot.
 
-----------------------------------------------------------------------------
+---
 
 ## User Manual
 
@@ -51,7 +53,7 @@ Whenever a parameter is changed, a small circle will be shown in the top-left co
     - [Setting the BPM](#setting-the-bpm)
     - [Global Play/Stop](#global-playstop)
     - [Output clock division/multiplication](#output-clock-divisionmultiplication)
-    - [Output Enable/Disable](#output-enabledisable)
+    - [Output Enable/Disable and Invert](#output-enabledisable-and-invert)
     - [Pulse Probability](#pulse-probability)
     - [Euclidean Rhythm Configuration](#euclidean-rhythm-configuration)
     - [Swing Configuration](#swing-configuration)
@@ -63,7 +65,10 @@ Whenever a parameter is changed, a small circle will be shown in the top-left co
     - [Tap Tempo](#tap-tempo)
     - [CV Input Modulation](#cv-input-modulation)
     - [Quantization](#quantization)
+    - [Cross Operations](#cross-operations)
+    - [Loops](#loops)
     - [Misc Settings](#misc-settings)
+      - [Main screen timeout](#main-screen-timeout)
     - [Save/Load Configuration](#saveload-configuration)
     - [External Clock Sync](#external-clock-sync)
   - [Hardware Calibration](#hardware-calibration)
@@ -78,7 +83,6 @@ Whenever a parameter is changed, a small circle will be shown in the top-left co
   - [Acknowledgements](#acknowledgements)
   - [License](#license)
 
-
 ### Global Parameters
 
 - **BPM**: Beats per minute, adjustable from 10 to 300.
@@ -92,6 +96,7 @@ Each of the four outputs can be individually configured with the following param
 
 - **Divider/Multiplier**: Set the clock multiplication or division ratio.
 - **Output State**: Enable or disable the specific output.
+- **Invert**: Invert the output polarity (5V - value).
 - **Pulse Probability**: Probability of a pulse occurring.
 - **Euclidean Enabled**: Enable or disable Euclidean rhythm generation.
 - **Euclidean Steps**: Number of steps in the Euclidean pattern.
@@ -106,6 +111,8 @@ Each of the four outputs can be individually configured with the following param
 - **Offset**: Set the output voltage offset.
 - **Waveform**: Select the waveform for outputs.
 - **Quantization**: Quantize the output to a specific scale and root note.
+- **Cross Operation**: Combine this output's value with another output or CV input using a selected operation.
+- **Loop**: Rewind this output's pattern every N beats, with optional nap/wake muting.
 
 ## Operation
 
@@ -135,12 +142,17 @@ Outputs can be configured to multiply or divide the master clock. The default va
 3. Use the encoder to select the desired divider value.
 4. Click the encoder to exit edit mode.
 
-### Output Enable/Disable
+### Output Enable/Disable and Invert
 
-Outputs can be stopped individually. When stopped, the output will not generate any pulses. When master stop is activated, all outputs will be stopped and when master play is resumed, any stopped output will be kept stopped.
+The Output State page has two columns per output: **STATE** and **INV**.
+
+Outputs can be stopped individually (STATE). When stopped, the output will not generate any pulses. When master stop is activated, all outputs will be stopped and when master play is resumed, any stopped output will be kept stopped.
+
+The **INV** column inverts the output polarity (the final voltage becomes 5V − value), so a rising ramp becomes falling, and a high gate becomes low. This is applied at the very last stage, after cross-operations and quantization. (Note: inverting a quantized pitch mirrors it around mid-scale rather than transposing it, so invert is mainly useful for gates, triggers and modulation shapes.)
 
 1. Navigate to the output state menu page.
-2. Click the encoder to set the output to ON or OFF
+2. Use the encoder to move between the STATE and INV columns for each output (the arrow indicates the active column).
+3. Click the encoder to toggle the selected output's state (ON/OFF) or invert (Inv/-).
 
 If the output wave type is set to "Play", the output will be true (high) when the master clock is running and false (low) when the master clock is stopped. This is useful for triggering other modules based on the master clock.
 
@@ -161,7 +173,7 @@ Euclidean rhythms are made from an algorithm which takes a numbers of steps, tri
 
 Additional empty steps can be added to the pattern using the pad(PD) parameter. This is useful for creating more complex rhythms.
 
-1. Navigate to the euclidean rhythm menu page. 
+1. Navigate to the euclidean rhythm menu page.
 2. Select the output item and click the encoder to select the output to be edited. Click the encoder again to exit the output selection.
 3. First setting enables or disables the Euclidean rhythm generation by clicking the encoder.
 4. Select the Steps, Triggers and Rotation parameters, click the encoder to edit the values.
@@ -193,7 +205,7 @@ Just be careful with phase wraps as shifting an output phase by more than 50% wi
 
 Duty cycle or width is the percentage of the pulse that remains high or low. The default value is 50% which means the pulse high cycle has the same lenght as the low cycle. The duty cycle can be set from 1 to 99% where 1% will generate a very short pulse and 99% a very long high pulse.
 
-The alternative waveforms generated by outputs 3 and 4 can also have their shape modified by the duty cycle parameter. For example, a 50% duty cycle (default) in the triangle wave output will generate a perfect triangle wave, setting the duty cycle to 1% will generate a sawtooth wave and setting it to 99% will generate an inverted sawtooth wave. The duty cycle also affects the envelopes by shortening or lengthening the decay time during the pulse.
+The non-square waveforms can also have their shape modified by the duty cycle parameter. For example, a 50% duty cycle (default) in the triangle wave output will generate a perfect triangle wave, setting the duty cycle to 1% will generate a sawtooth wave and setting it to 99% will generate an inverted sawtooth wave. The duty cycle also affects the envelopes by shortening or lengthening the decay time during the pulse.
 
 1. Select the duty cycle parameter for the desired output. Click the encoder to enter edit mode.
 2. Use the encoder to select the desired duty cycle value from 1 to 99%.
@@ -232,7 +244,7 @@ They support the following:
 - **ADSR** Envelope: An Attack-Decay-Sustain-Release envelope with adjustable level and offset. Triggered by a CV input.
 - **Play**: The output will be true (high) when the master clock is running and false (low) when the master clock is stopped. This is useful for triggering other modules based on the master clock.
 - **Reset**: The output will trigger (high) when the master clock starts running. This is useful for resetting other modules based on the master clock.
-- **Quantize**: The output will quantize according to the selected scale and root note the CV value that is routed to this input in the CV target configuration.
+- **CV 1** / **CV 2**: The output mirrors CV input 1 or 2 respectively (a buffered copy of the input voltage). Enable Quantize on the output to snap that CV to the selected scale and root note — handy for pitch-quantizing an external sequencer or random source. No CV target assignment is needed.
 
 1. Navigate to the selected output item. Click the encoder to enter edit mode.
 2. Use the encoder to select the desired waveform. The waveform will be updated in real-time.
@@ -262,6 +274,8 @@ In addition to setting the BPM manually, the module can be set to the desired BP
 
 Many parameters can be modulated by the CV inputs. The CV inputs are 0-5V and can be used on the modulation matrix to control the parameters below:
 
+- **Start/Stop**: Start or stop all outputs with a gate/CV signal (high = play, low = stop).
+- **Reset**: Reset the clock on a rising edge.
 - **BPM**: Modulate the global BPM with a CV signal.
 - **Output X Div**: Modulate the clock division/multiplication for output X.
 - **Output X Prob**: Modulate the probability of a pulse occurring on output X.
@@ -272,7 +286,8 @@ Many parameters can be modulated by the CV inputs. The CV inputs are 0-5V and ca
 - **Output X Waveform**: Select the waveform for output X based on the input CV Value.
 - **Output X Duty Cycle**: Modulate the duty cycle of the output X.
 - **Output X Envelope**: Trigger the envelope generation for the output X by sending a gate/trigger signal to the assigned CV input.
-- **Output X**: Send the input CV Value to the output X. This can be used for example to quantize an external CV and enabling the quantizer in the used output.
+
+> To route a CV input straight to an output (e.g. to quantize an external CV), no target assignment is needed — set that output's waveform to "CV 1" or "CV 2" instead (see [Quantization](#quantization)).
 
 Each input can be assigned to one of the parameters above. The CV input can be attenuated or offset by using configuration parameters.
 
@@ -292,19 +307,77 @@ The Quantize Settings menu allows you to enable/disable quantization for the sel
 
 To use quantization on the generated output, first select the output waveform type (sine, S&H, etc) and then enable the quantization on Quantize menu. Select the root note and scale to be used. The quantization will be applied to the output waveform.
 
-It's also possible to quantize an input CV signal to a specific scale and root note. This is useful for using CV values generated by external modules. To use quantization on the CV input, choose the "Quantize" waveform type. Then in the Quantize menu, select the root note and scale to be used. Lastly, in the CV Input Targets menu, assign the CV input to the output to be quantized.
+It's also possible to quantize an input CV signal to a specific scale and root note. This is useful for using CV values generated by external modules (e.g. a sequencer or random source) to drive pitch. To do this, select the **"CV 1"** or **"CV 2"** waveform type for the output — this mirrors the corresponding CV input jack to that output. Then enable quantization in the Quantize menu and pick the root note and scale.
 
-Eg. if you want to quantize the CV input 1 to the output 3, select the "Quantize" waveform type for output 3 and then in the CV Input Targets menu, assign CV input 1 to output 3. The quantization will be applied to the output waveform. Also select which scale and root note to be used in the Quantize menu.
+Eg. to quantize CV input 1 on output 3: set output 3's waveform to "CV 1", then enable Quantize on output 3 and choose the scale/root note. The CV input is copied to the output and snapped to the selected scale — no CV Input Target assignment is needed.
+
+With quantization disabled, the "CV 1"/"CV 2" waveform simply passes the CV input through to the output (a buffered copy), which can be used as a CV mult/buffer.
+
+### Cross Operations
+
+Cross operations allow the value of an output to be influenced by another signal (a _source_) through a selected operation. This can be as simple as mixing two outputs together, a logic gate, or something more involved like sample-and-hold or reseeding randomness. It greatly extends the basic logic operations found on similar modules.
+
+The **Cross Ops** menu page has one row per output with two columns:
+
+- **OP**: the operation to apply (set to anything other than "None" to activate).
+- **SRC**: the source signal — another output (`Out 1`–`Out 4`) or a CV input (`IN 1`, `IN 2`).
+
+When a source is another output, its value is taken **before** that output's own cross operation is applied, so two outputs can cross-modulate each other without feedback and the result is independent of output order. Cross operations are applied **before** quantization, so you can, for example, mix two pitches and then quantize the result.
+
+1. Navigate to the Cross Ops page and the desired output row.
+2. Click the encoder to edit the **OP** column and select an operation.
+3. Move to the **SRC** column, click to edit, and select the source output or CV input.
+4. Click the encoder to exit edit mode.
+
+The available operations are:
+
+- **None**: Cross operation disabled (output is unaffected).
+- **MIX**: Average of the output and source values.
+- **MULT**: Multiplies the two values (ring-mod style).
+- **ADD**: Adds the two values, clipping any overflow.
+- **SUB**: Subtracts the source from the output, clipping at zero.
+- **MIN**: The lower of the two values.
+- **MAX**: The higher of the two values.
+- **HOLD**: While the source is high, the output value is frozen at its last value.
+- **S&H**: A rising edge on the source samples the current output value and holds it until the next rising edge.
+- **MASK**: When the source is zero, the output is forced to zero; otherwise it passes through.
+- **NOT**: When the source is high, the output is forced to zero (inverse of MASK).
+- **OR** / **XOR** / **AND**: Boolean logic of the two values, outputting either zero or full scale (like CMOS logic gates).
+- **BitOR** / **BitXOR** / **BitAND**: Bitwise logic across all bits of the two values, for more complex stepped results.
+- **SEED**: A rising edge on the source rewinds this output's random generator, replaying the same random sequence from the start (useful for "Krell"-style patches). The value passes through unchanged.
+
+Logic operations treat a value above half scale as "high". The HOLD, MASK, NOT, S&H and SEED operations treat any value meaningfully above zero as "high/triggered".
+
+### Loops
+
+Loops turn free-running or random patterns into repeating, musically structured phrases by periodically rewinding an output. A loop length is specified in **beats** (quarter notes, not steps), and at each loop boundary the output's pattern generators — random values, probability decisions and the Euclidean step position — are rewound to their start, so the pattern repeats identically.
+
+This is especially useful for random waveforms (Noise, Smooth Noise, S&H) and probability or Euclidean patterns: with a loop set, an otherwise endless random sequence becomes a locked, repeating groove aligned to the bar.
+
+When a loop is active, the **Nap/Wake** parameters add a higher-level on/off arrangement counted in whole loops:
+
+- **Loop Beats**: Loop length in beats. `Off` disables loops; otherwise 1–64 beats.
+- **Wake**: Number of complete loops to play (output active) before napping.
+- **Nap**: Number of complete loops to mute the output. `Off` (0) means the output never naps and just repeats.
+- **Shift**: Offsets the start of the nap/wake cycle by a number of complete loops, so different outputs can stagger their drop-outs against each other.
+
+For example, with Loop Beats = 4, Wake = 2 and Nap = 1, the output plays the same 8-beat phrase (two 4-beat loops), then goes silent for 4 beats, then repeats. While napping the output is muted (0 V) but its timing keeps running, so it resumes in phase.
+
+1. Navigate to the **Loops** menu page.
+2. Select the **OUTPUT** item and click the encoder to choose the output to edit. Click again to exit the output selection.
+3. Set **LOOP BEATS** to the desired loop length (or `Off` to disable).
+4. Optionally set **WAKE**, **NAP** and **SHIFT** to build the mute pattern.
+5. Click the encoder to exit edit mode.
 
 ### Misc Settings
 
-**Main screen timeout**
+#### Main screen timeout
 
 The module can be set to return to the main screen (the one showing the BPM and the output boxes) after a certain amount of seconds of inactivity when not editing a parameter. When a parameter is being changed (selected), the timeout doesn't apply. This can be configured in the "Screen Timeout" menu where the options are Off, 2s, 5s, 10s and 20s.
 
 ### Save/Load Configuration
 
-The module has 5 memory slots to save and load configuration. The parameters saved into slot 0 is automatically loaded on boot.
+The module has 10 memory slots (0–9) to save and load configuration. The parameters saved into slot 0 are automatically loaded on boot.
 
 1. Navigate to the PRESET SLOT parameter.
 2. Click the encoder to enter the desired slot selection.
@@ -326,40 +399,40 @@ The module works with external clocks from 30 to 300 BPM. Due to timer resolutio
 
 ## Hardware Calibration
 
-The module ships with sensible default values, but for best CV precision — especially when using quantization or 1V/oct pitch CV — you should run the hardware calibration wizard once after building or assembling the module.
+The module ships with sensible default values, but for best precision — especially when using quantization or 1V/oct pitch CV — you should run the hardware calibration wizard once after building or assembling the module.
 
-Calibration is a two-phase process:
+Calibration covers two things:
 
-**Phase 1 — Output trim**: fine-tunes the output op-amp gain so every output jack delivers exactly 5.00 V at full scale.
-**Phase 2 — CV input LUT**: maps 7 known voltages from the (now calibrated) outputs back through the voltage-divider input circuit, building a per-channel piecewise-linear correction table that compensates for resistor tolerances and RP2040 ADC non-linearity.
+**Output trim**: the output op-amp gain is set with on-board trimmers so every output jack delivers exactly 5.00 V at full scale. This is purely a hardware adjustment — there is no software output scaling.
+**CV input calibration**: each CV input is measured at two known reference voltages (1 V and 3 V) to build a per-channel linear correction (`mv = scale × reading + offset`) that compensates for resistor tolerances and ADC offset. This is done with external references and is independent of the module's own outputs, so any output-trim error does not propagate into the input calibration.
 
 Calibration data is stored in a dedicated area of non-volatile memory **separate from presets**, so it survives firmware updates and preset load/save operations.
 
 ### What you need
 
-- A multimeter capable of measuring DC voltage to at least two decimal places
-- Two standard Eurorack patch cables
+- A multimeter capable of measuring DC voltage to at least two decimal places (for the output trim).
+- A stable, known **1 V** and **3 V** source for the CV inputs — for example a precision voltage reference, a bench power supply, or a calibrated sequencer/quantizer output — and a patch cable to connect it.
 
 ### Running calibration
 
-1. Power on the module while **holding the encoder button** pressed. The display will show the calibration wizard. Release the button when you see the welcome screen.
+The wizard has 5 steps: one output trim followed by four CV input captures (1 V and 3 V on each of the two inputs).
 
-2. **Step 1 — Output trim** (`1/3  OUTPUT TRIM`):
-   All four outputs are driven to full scale (5 V). Using a multimeter set to DC voltage, probe each output jack in turn and adjust its corresponding trimmer potentiometer on the PCB until the reading is exactly **5.00 V**. Repeat for all four outputs.
-   When all four outputs read 5.00 V, press the encoder to continue.
+1. Power on the module while **holding the encoder button** pressed. The display shows the calibration wizard. Release the button at the welcome screen and click the encoder to start. Do this while plugged into your Eurorack power supply. Using the USB port on the MCU would not be enough to power the module and the outputs would not reach full scale. **Never plug both at the same time, as this could damage the module**.
 
-3. **Step 2 — Patch cables** (`2/3  PATCH CABLES`):
-   Connect two patch cables as shown on the display:
-   - **OUT 1 → CV IN 1**
-   - **OUT 2 → CV IN 2**
+2. **Step 1 — Output trim** (`1/5  OUTPUT TRIM`):
+   All four outputs are driven to full scale. Using a multimeter set to DC voltage, probe each output jack in turn and adjust its corresponding trimmer potentiometer on the PCB until the reading is exactly **5.00 V**. When all four outputs read 5.00 V, press the encoder to continue.
 
-   Keep both cables connected for the next step, then press the encoder.
+3. **Steps 2–5 — CV input capture** (`2/5` … `5/5`):
+   The display asks for a specific reference voltage on a specific input, in turn:
+   - `2/5  CV1 INPUT 1V` — apply **1 V** to CV input 1
+   - `3/5  CV1 INPUT 3V` — apply **3 V** to CV input 1
+   - `4/5  CV2 INPUT 1V` — apply **1 V** to CV input 2
+   - `5/5  CV2 INPUT 3V` — apply **3 V** to CV input 2
 
-4. **Step 3 — CV input capture** (`3/3  CV INPUT CAL`):
-   The firmware automatically steps Out 1 and Out 2 through seven voltage levels (0 V, 0.5 V, 1 V, 2 V, 3 V, 4 V, 5 V). At each step it waits 200 ms for the voltage to settle, then averages 256 ADC samples per channel. A progress bar shows the current step. No interaction needed — just wait (~10 seconds total).
+   For each step, apply the requested voltage to the named input. The screen shows a live voltage reading so you can confirm the signal is stable; when it is steady, press the encoder to capture (256 ADC samples are averaged). Repeat for all four steps.
 
-5. **Review and save**:
-   The display shows the raw ADC readings at 0 V and 5 V for a quick sanity check. If the numbers look reasonable (0 V ≈ 0, 5 V ≈ 3300–4000 depending on your resistors), press the encoder to **save and reboot**. The module will restart with calibration applied.
+4. **Review and save**:
+   The display shows the derived per-channel scale and offset for a sanity check. Press the encoder to **save and reboot**. The module restarts with calibration applied.
 
 > **Tip:** Calibration only needs to be run once. Re-run it if you replace any resistors or trimmers on the board, or if CV tracking feels off after assembly.
 

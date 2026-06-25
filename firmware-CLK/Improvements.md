@@ -1,4 +1,9 @@
-Improvements:
+Features:
+
+- [ ] Implement internal modulators for parameters
+- [x] Add an operation to invert the output signal for each channel
+
+Project Improvements:
 
 - [x] Better resolution to generate cleaner waveforms
 - [x] Better detection of input clock with different PPQNs (dividers)
@@ -12,26 +17,23 @@ Improvements:
 - [ ] Improve user manual and documentation
 - [x] Check the slight clipping in the outputs... could be adjustment but also firmware calibration issue
 - [x] Add hatchet x2 and x4 to the output waveform where x2 generates 2 square pulses in one up clock cycle and x4 generates 4 square pulses in one up clock cycle, this will be useful for people who want to generate faster clock divisions without having to change the master clock BPM
-- [ ] Add automated tests for the firmware functions
 - [x] Review overlapping text in the menu items
 - [x] Error on envelope generation when outut is off, small pulse is generated.
 - [x] Check if there are general improvements to the clock generation and engine
 - [x] Cleanup SAMD21 code to avoid clutter
-- [ ] Maybe have it work with audio rate possibility in the outputs?
-- [ ] Review the calibration process since we capped the max output voltage to make sure in quantizer mode it still quantizes correctly to the notes and not to the voltage steps of the DAC
-- [ ] Implement internal modulators for parameters
+- [x] Review the calibration process since we capped the max output voltage to make sure in quantizer mode it still quantizes correctly to the notes and not to the voltage steps of the DAC
 - [x] Implement mixer functions for the outputs like sum, multiply, average
-- [ ] Add operation for Seed which is pending
-- [ ] Add an operation to invert the output signal for each channel
-- [ ] Add loop mode
-- [ ] Create a VCV Rack plugin for the module
+- [x] Add operation for Seed which is pending
+- [x] Add loop mode
+- [ ] Add automated tests for the firmware functions
+- [ ] Create expansion modules (auto-detect it?). Initially one with 4 outputs and 1 CV Input.
 
 Fixes to Board
 
 - [x] Change the pins from MCP main I2C to the new available pins 0 and 1.
 - [x] Fix the voltage output from the R2R OPAMP
 - [x] Channels 2 and 3 of the DAC are swapped
-- [ ] Push 6V into the output OpAmp so we can properly get the 0-5V range
+- [x] Push 6V into the output OpAmp so we can properly get the 0-5V range
 
 Test:
 
@@ -41,3 +43,7 @@ Test:
 - [ ] CV Inputs and routing
 - [ ] Waveforms and Envelopes
 - [ ] Test envelopes with external clock
+
+Misc:
+
+- [ ] Create a VCV Rack plugin for the module

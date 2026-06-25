@@ -41,10 +41,16 @@ enum CVTarget {
     Swing3Every,
     Swing4Amount,
     Swing4Every,
+    Output1Level,
+    Output2Level,
     Output3Level,
     Output4Level,
+    Output1Offset,
+    Output2Offset,
     Output3Offset,
     Output4Offset,
+    Output1Waveform,
+    Output2Waveform,
     Output3Waveform,
     Output4Waveform,
     Output1Duty,
@@ -55,10 +61,6 @@ enum CVTarget {
     Envelope2,
     Envelope3,
     Envelope4,
-    Output1,
-    Output2,
-    Output3,
-    Output4,
 };
 
 String CVTargetDescription[] = {
@@ -82,10 +84,16 @@ String CVTargetDescription[] = {
     "Swing 3 Every",
     "Swing 4 Amt",
     "Swing 4 Every",
+    "Output 1 Lvl",
+    "Output 2 Lvl",
     "Output 3 Lvl",
     "Output 4 Lvl",
+    "Output 1 Off",
+    "Output 2 Off",
     "Output 3 Off",
     "Output 4 Off",
+    "Output 1 Wav",
+    "Output 2 Wav",
     "Output 3 Wav",
     "Output 4 Wav",
     "Output 1 Duty",
@@ -96,10 +104,6 @@ String CVTargetDescription[] = {
     "Output 2 Env",
     "Output 3 Env",
     "Output 4 Env",
-    "Output 1",
-    "Output 2",
-    "Output 3",
-    "Output 4",
 };
 int CVTargetLength =
     sizeof(CVTargetDescription) / sizeof(CVTargetDescription[0]);
@@ -161,29 +165,42 @@ void HandleCVInputs() {
         oldChannelADC[i] = channelADC[i];
         AdjustADCReadings(CV_IN_PINS[i], i);
 
-        // Choose IIR filter aggressiveness based on target:
-        //   Direct CV passthrough (Output3/Output4) feeds the quantizer.
-        //   Use a light filter (α≈0.15 of old state) so pitch changes propagate
-        //   within 1–2 loop iterations.  The quantizer has its own ±10-count
-        //   hysteresis, so extra smoothing here only adds unwanted lag.
-        //   All other targets (BPM, dividers, …) tolerate and benefit from
-        //   heavier filtering (α=0.5) to suppress ADC noise on slow parameters.
-        //
-        //   ONE_POLE(out, in, coeff): out = (1-coeff)*out + coeff*in
-        //     here out=new_raw, in=old_filtered → result = (1-α)*new_raw + α*old
-        bool isDirectCV = (CVInputTarget[i] == CVTarget::Output1 ||
-                           CVInputTarget[i] == CVTarget::Output2 ||
-                           CVInputTarget[i] == CVTarget::Output3 ||
-                           CVInputTarget[i] == CVTarget::Output4);
-        if (isDirectCV) {
-            ONE_POLE(channelADC[i], oldChannelADC[i], 0.15f);
-            // Always propagate — let the quantizer's internal hysteresis decide
-            HandleCVTarget(i, channelADC[i], CVInputTarget[i]);
-        } else {
-            ONE_POLE(channelADC[i], oldChannelADC[i], 0.5f);
-            if (abs(channelADC[i] - oldChannelADC[i]) > 10) {
-                HandleCVTarget(i, channelADC[i], CVInputTarget[i]);
+        // Is this CV input mirrored to a output? (waveform "CV 1" reads CV in 1,
+        // "CV 2" reads CV in 2).  Such outputs feed the quantizer and want a
+        // light filter for responsive pitch tracking; everything else (BPM,
+        // dividers, …) benefits from heavier filtering to suppress ADC noise.
+        WaveformType passthroughWave = (i == 0) ? WaveformType::CVInput1 : WaveformType::CVInput2;
+        bool feedsOutput = false;
+        for (int o = 0; o < NUM_OUTPUTS; o++) {
+            if (outputs[o].GetWaveformType() == passthroughWave) {
+                feedsOutput = true;
+                break;
             }
+        }
+
+        // ONE_POLE(out, in, coeff): out = (1-coeff)*out + coeff*in
+        //   here out=new_raw, in=old_filtered → result = (1-α)*new_raw + α*old
+        if (feedsOutput) {
+            ONE_POLE(channelADC[i], oldChannelADC[i], 0.15f); // light: pitch tracking
+        } else {
+            ONE_POLE(channelADC[i], oldChannelADC[i], 0.5f); // heavy: noise rejection
+        }
+
+        // Push the filtered CV to every output mirroring this input.  The
+        // quantizer's own ±hysteresis decides note changes downstream.
+        if (feedsOutput) {
+            for (int o = 0; o < NUM_OUTPUTS; o++) {
+                if (outputs[o].GetWaveformType() == passthroughWave) {
+                    outputs[o].SetCVValue(channelADC[i]);
+                }
+            }
+        }
+
+        // Dispatch to the assigned modulation target (BPM, divider, prob, …),
+        // gated on a meaningful change to ignore ADC jitter.
+        if (CVInputTarget[i] != CVTarget::None &&
+            abs(channelADC[i] - oldChannelADC[i]) > 10) {
+            HandleCVTarget(i, channelADC[i], CVInputTarget[i]);
         }
     }
 }
@@ -284,11 +301,11 @@ void HandleCVTarget(int ch, float CVValue, CVTarget cvTarget) {
         outputs[3].SetSwingEvery(
             map(CVValue, 0, MAXDAC, 1, outputs[3].GetSwingEveryAmounts()));
         break;
-    case CVTarget::Output3Offset:
-        outputs[2].SetOffset(map(CVValue, 0, MAXDAC, 0, 100));
+    case CVTarget::Output1Level:
+        outputs[0].SetLevel(map(CVValue, 0, MAXDAC, 0, 100));
         break;
-    case CVTarget::Output4Offset:
-        outputs[3].SetOffset(map(CVValue, 0, MAXDAC, 0, 100));
+    case CVTarget::Output2Level:
+        outputs[1].SetLevel(map(CVValue, 0, MAXDAC, 0, 100));
         break;
     case CVTarget::Output3Level:
         outputs[2].SetLevel(map(CVValue, 0, MAXDAC, 0, 100));
@@ -296,13 +313,35 @@ void HandleCVTarget(int ch, float CVValue, CVTarget cvTarget) {
     case CVTarget::Output4Level:
         outputs[3].SetLevel(map(CVValue, 0, MAXDAC, 0, 100));
         break;
+    case CVTarget::Output1Offset:
+        outputs[0].SetOffset(map(CVValue, 0, MAXDAC, 0, 100));
+        break;
+    case CVTarget::Output2Offset:
+        outputs[1].SetOffset(map(CVValue, 0, MAXDAC, 0, 100));
+        break;
+    case CVTarget::Output3Offset:
+        outputs[2].SetOffset(map(CVValue, 0, MAXDAC, 0, 100));
+        break;
+    case CVTarget::Output4Offset:
+        outputs[3].SetOffset(map(CVValue, 0, MAXDAC, 0, 100));
+        break;
+    // map upper bound is WaveformTypeLength - 1 so a full-scale CV selects the
+    // last waveform (not an out-of-range index).
+    case CVTarget::Output1Waveform:
+        outputs[0].SetWaveformType(static_cast<WaveformType>(
+            map(CVValue, 0, MAXDAC, 0, WaveformTypeLength - 1)));
+        break;
+    case CVTarget::Output2Waveform:
+        outputs[1].SetWaveformType(static_cast<WaveformType>(
+            map(CVValue, 0, MAXDAC, 0, WaveformTypeLength - 1)));
+        break;
     case CVTarget::Output3Waveform:
         outputs[2].SetWaveformType(static_cast<WaveformType>(
-            map(CVValue, 0, MAXDAC, 0, WaveformTypeLength)));
+            map(CVValue, 0, MAXDAC, 0, WaveformTypeLength - 1)));
         break;
     case CVTarget::Output4Waveform:
         outputs[3].SetWaveformType(static_cast<WaveformType>(
-            map(CVValue, 0, MAXDAC, 0, WaveformTypeLength)));
+            map(CVValue, 0, MAXDAC, 0, WaveformTypeLength - 1)));
         break;
     case CVTarget::Output1Duty:
         outputs[0].SetDutyCycle(map(CVValue, 0, MAXDAC, 0, 100));
@@ -341,18 +380,6 @@ void HandleCVTarget(int ch, float CVValue, CVTarget cvTarget) {
             CVValue > (wasTriggered ? (MAXDAC * 0.40f) : (MAXDAC * 0.60f)));
         break;
     }
-    case CVTarget::Output1:
-        outputs[0].SetCVValue(CVValue);
-        break;
-    case CVTarget::Output2:
-        outputs[1].SetCVValue(CVValue);
-        break;
-    case CVTarget::Output3:
-        outputs[2].SetCVValue(CVValue);
-        break;
-    case CVTarget::Output4:
-        outputs[3].SetCVValue(CVValue);
-        break;
     }
 
     interrupts();
