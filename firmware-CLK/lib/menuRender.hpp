@@ -135,6 +135,7 @@ void HandleDisplay() {
             "QUANTIZE SETTINGS", // 11
             "",                  // 12 (settings — rendered below)
             "OUTPUT SETTINGS",   // 13 (level/offset - all 4)
+            "CROSS OPS",         // 14 (cross operations - all 4)
         };
 
         // ── Group 4: Euclidean — custom overlay (pattern grid) ─────────────
@@ -257,6 +258,38 @@ void HandleDisplay() {
                 int idx = i + 1;
                 int idxOff = idx + 1;
                 bool sel = (idx == menuItem || idxOff == menuItem);
+                bool edit = sel && (menuMode == menuItem);
+                MD_TwoColRow(mi.label,
+                             mi.valueFn ? mi.valueFn() : String(""), mi.valueFn != nullptr,
+                             mi.valueFn2 ? mi.valueFn2() : String(""), mi.valueFn2 != nullptr,
+                             mi.col1x, mi.col2x, sel, edit);
+            }
+            RedrawDisplay();
+            return;
+        }
+
+        // ── Group 14: Cross ops — OP/SRC for all 4 outputs ─────────────────
+        if (grp == 14) {
+            MD_PageBegin("CROSS OPS", 12);
+            // Column headers
+            display.setCursor(48, _md_rowY);
+            display.println("OP");
+            display.setCursor(92, _md_rowY);
+            display.println("SRC");
+            // Column indicator arrow (even item → OP column, odd → SRC column)
+            if (menuItem % 2 == 0) {
+                display.fillTriangle(42, _md_rowY, 42, _md_rowY + 6, 45, _md_rowY + 3, 1);
+            } else {
+                display.fillTriangle(86, _md_rowY, 86, _md_rowY + 6, 89, _md_rowY + 3, 1);
+            }
+            _md_rowY += MD_ROW_H;
+            for (int i = 0; i < MENU_ITEM_COUNT; i++) {
+                const MenuItem &mi = MENU_ITEMS[i];
+                if (mi.group != 14 || mi.rowStyle == ROW_HIDDEN)
+                    continue;
+                int idx = i + 1;
+                int idxSrc = idx + 1;
+                bool sel = (idx == menuItem || idxSrc == menuItem);
                 bool edit = sel && (menuMode == menuItem);
                 MD_TwoColRow(mi.label,
                              mi.valueFn ? mi.valueFn() : String(""), mi.valueFn != nullptr,

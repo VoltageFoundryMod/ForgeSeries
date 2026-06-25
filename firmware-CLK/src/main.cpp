@@ -256,12 +256,36 @@ void HandleOutputs() {
     // All 4 outputs are MCP4728 I2C DAC. DACWriteAll is called directly here.
     // display.display() is gated to encoder-idle periods in RedrawDisplay() so
     // it never overlaps with DACWriteAll (same I2C bus).
-    uint16_t v0 = (uint16_t)outputs[0].GetOutputLevel();
-    uint16_t v1 = (uint16_t)outputs[1].GetOutputLevel();
-    uint16_t v2 = (uint16_t)outputs[2].GetOutputLevel();
-    uint16_t v3 = (uint16_t)outputs[3].GetOutputLevel();
+    // Pass 1: compute each output's raw (pre-quantisation) value and a
+    // normalised snapshot.  Cross operations read from this frozen snapshot so
+    // results are order-independent (no feedback when two outputs cross-modulate
+    // each other).
+    float raw[NUM_OUTPUTS];
+    float norm[NUM_OUTPUTS];
+    for (int i = 0; i < NUM_OUTPUTS; i++) {
+        raw[i] = outputs[i].ComputeRawOutput();
+        norm[i] = raw[i] / (float)MAXDAC;
+    }
+
+    // Pass 2: apply cross operations against the snapshot, then quantise/clamp.
+    uint16_t v[NUM_OUTPUTS];
+    for (int i = 0; i < NUM_OUTPUTS; i++) {
+        float r = raw[i];
+        if (outputs[i].HasCrossOp()) {
+            int src = outputs[i].GetCrossSourceIndex();
+            float srcNorm;
+            if (src < NUM_OUTPUTS) {
+                srcNorm = norm[src]; // another output's pre-cross value
+            } else {
+                // IN1 / IN2 sampled CV (channelADC is 0..4095)
+                srcNorm = channelADC[src - NUM_OUTPUTS] / 4095.0f;
+            }
+            r = outputs[i].ApplyCrossOp(raw[i], srcNorm);
+        }
+        v[i] = (uint16_t)outputs[i].FinalizeOutput(r);
+    }
     metrics.BeginDACMeasurement();
-    DACWriteAll(v0, v1, v2, v3);
+    DACWriteAll(v[0], v[1], v[2], v[3]);
     metrics.EndDACMeasurement();
     for (int i = 0; i < NUM_OUTPUTS; i++) {
         outputs[i].GenEnvelope();
@@ -362,6 +386,8 @@ void setup() {
     } else {
         Serial.println("Calibration data loaded.");
     }
+    // Output full-scale is fixed at MAXDAC (= 5V via the hardware trimmer); no
+    // software output scaling is applied — only the CV inputs use calibration.
     // Load settings from flash memory (slot 0) or set defaults
     LoadSaveParams p = Load(0);
     UpdateParameters(p);

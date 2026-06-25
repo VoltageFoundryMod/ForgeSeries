@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 
+#include "boardIO.hpp" // MAXDAC / MAXADC
 #include "euclidean.hpp"
 #include "utils.hpp"
 
@@ -60,6 +61,49 @@ String WaveformTypeDescriptions[] = {
     "Quantize",
 };
 int WaveformTypeLength = sizeof(WaveformTypeDescriptions) / sizeof(WaveformTypeDescriptions[0]);
+
+// ── Cross operations (ALM Pamela-style) ──────────────────────────────────────
+// Combine this output's value with a source signal (another output or a CV
+// input) before quantisation.  SEED is deferred to a later stage (it needs a
+// per-output RNG before it can reset randomness), so it is not listed here.
+enum CrossOp {
+    CrossNone = 0,
+    CrossMix,    // (a + b) / 2
+    CrossMult,   // a * b   (ring mod)
+    CrossAdd,    // a + b,  clipped
+    CrossSub,    // a - b,  clipped
+    CrossMin,    // min(a, b)
+    CrossMax,    // max(a, b)
+    CrossHold,   // freeze active value while source > 0
+    CrossSH,     // sample & hold active value on rising source edge
+    CrossMask,   // active = 0 when source == 0
+    CrossNot,    // active = 0 when source > 0
+    CrossOr,     // boolean OR  (CMOS-style: 0 or full scale)
+    CrossXor,    // boolean XOR
+    CrossAnd,    // boolean AND
+    CrossBitOr,  // bitwise OR
+    CrossBitXor, // bitwise XOR
+    CrossBitAnd, // bitwise AND
+};
+
+String CrossOpDescriptions[] = {
+    "None", "MIX", "MULT", "ADD", "SUB", "MIN", "MAX",
+    "HOLD", "S&H", "MASK", "NOT", "OR", "XOR", "AND",
+    "BitOR", "BitXOR", "BitAND"};
+int CrossOpLength = sizeof(CrossOpDescriptions) / sizeof(CrossOpDescriptions[0]);
+
+// Cross source: which signal modulates this output.  Out1-4 use the other
+// outputs' pre-cross-op (snapshot) values; IN1/IN2 use the sampled CV inputs.
+enum CrossSource {
+    CrossSrcOut1 = 0,
+    CrossSrcOut2,
+    CrossSrcOut3,
+    CrossSrcOut4,
+    CrossSrcIn1,
+    CrossSrcIn2,
+};
+String CrossSourceDescriptions[] = {"Out 1", "Out 2", "Out 3", "Out 4", "IN 1", "IN 2"};
+int CrossSourceLength = sizeof(CrossSourceDescriptions) / sizeof(CrossSourceDescriptions[0]);
 
 // ADSR envelope parameters
 typedef struct {
@@ -122,6 +166,22 @@ class Output {
     // Output Level
     uint32_t GetLevel() { return _level; }
     uint32_t GetOutputLevel(); // Output Level based on the output type
+    // Split computation for cross-ops: cross operations are applied to the raw
+    // (pre-quantisation) value, then FinalizeOutput() quantises and clamps.
+    float ComputeRawOutput();           // pre-quantise value, in DAC counts
+    uint32_t FinalizeOutput(float raw); // quantise + clamp + store, returns counts
+    // Combine this output's raw value with a normalised (0..1) source value
+    // according to the configured cross operation.  Returns DAC counts.
+    float ApplyCrossOp(float ownRaw, float srcNorm);
+
+    // Cross operation config
+    int GetCrossOpIndex() { return (int)_crossOp; }
+    void SetCrossOp(int index) { _crossOp = (CrossOp)constrain(index, 0, CrossOpLength - 1); }
+    String GetCrossOpDescription() { return CrossOpDescriptions[_crossOp]; }
+    bool HasCrossOp() { return _crossOp != CrossNone; }
+    int GetCrossSourceIndex() { return _crossSource; }
+    void SetCrossSource(int index) { _crossSource = constrain(index, 0, CrossSourceLength - 1); }
+    String GetCrossSourceDescription() { return CrossSourceDescriptions[_crossSource]; }
     void QuantizerCVValue(float CVValue);
     String GetLevelDescription() { return String(_level) + "%"; }
     void SetLevel(int level) { _level = constrain(level, 0, 100); }
@@ -262,12 +322,10 @@ class Output {
 
   private:
     // Constants
-    const int MaxDACValue = 3830; // Effective full-scale DAC count (~4.68V).
-                                  // 4095 drives the output op-amp into its near-rail
-                                  // saturation region, causing a visible flat top on
-                                  // continuous waveforms.  3830 stays in the linear
-                                  // output range while still covering nearly the full
-                                  // 0–5V span.
+    // Output full scale is MAXDAC (= 5.00V at the jack after the output trimmer
+    // is calibrated on the 6V opamp rail).  The entire 0..MAXDAC range is linear,
+    // so "100% level" maps directly to MAXDAC with no software cap.  (The old
+    // design capped output at ~4V because a 5V-rail MCP6004 saturated near 5V.)
     const float MaxWaveValue = 255.0;
     static int const _dividerAmount = 21;
     float _clockDividers[_dividerAmount] = {0.0078125, 0.015625, 0.03125, 0.0625, 0.125, 0.25, 0.3333333333, 0.5, 0.6666666667, 1.0, 1.5, 2.0, 3.0, 4.0, 8.0, 16.0, 24.0, 32.0, 48.0, 64.0, 10000};
@@ -306,12 +364,19 @@ class Output {
         .scaleIndex = 1,
         .noteIndex = 0,
     };
-    int _quantizerThresholdBuff[62]; // input quantize
+    int _quantizerNoteBuff[62];      // active note voltages (counts), ascending
+    int _quantizerNoteCount = 0;     // number of valid entries in _quantizerNoteBuff
     bool _activeNotes[12] = {false}; // 1=note valid,0=note invalid
     float _inputCV = 0.0f;           // Input CV value for quantizer (set by HandleCVTarget)
 
     unsigned long _internalPulseCounter = 0; // Pulse counter (used for external clock division)
     unsigned long _resetPulseStart = 0;      // Reset pulse start time
+
+    // Cross-op state
+    CrossOp _crossOp = CrossNone;  // Selected cross operation (default: off)
+    int _crossSource = 0;          // CrossSource index (Out1-4 / IN1-2)
+    float _crossHeldValue = 0.0f;  // Last held value for HOLD / S&H (normalised 0..1)
+    bool _crossSrcWasHigh = false; // Source-above-threshold state, for S&H edge detect
 
     // Waveform generation variables
     WaveformType _waveformType = WaveformType::Square; // Default to square wave
@@ -994,7 +1059,7 @@ Output::Output(int ID, OutputType type) {
 // Setup quantizer scale and buffer
 void Output::SetupQuantizer() {
     BuildScale(_quantizerParams.scaleIndex, _quantizerParams.noteIndex, _activeNotes);
-    BuildQuantBuffer(_activeNotes, _quantizerThresholdBuff);
+    _quantizerNoteCount = BuildQuantBuffer(_activeNotes, _quantizerNoteBuff);
 }
 
 // Generate envelope based on trigger state
@@ -1259,9 +1324,8 @@ void Output::Pulse(int PPQN, unsigned long globalTick) {
         }
         break;
     case WaveformType::QuantizeInput:
-        // Divide by 4095.0f (ADC full-scale), not MaxDACValue (output ceiling).
-        // These are independent — ADC range is always 0-4095 regardless of
-        // where we cap the DAC output.
+        // Divide by 4095.0f (ADC full-scale, MAXADC) — _inputCV is an ADC-domain
+        // value, so normalise by the ADC range, not the DAC range.
         _waveValue = (_inputCV / 4095.0f) * MaxWaveValue;
         _isPulseOn = true;
         break;
@@ -1343,90 +1407,167 @@ void Output::ToggleMasterState() {
     SetMasterState(!_masterState);
 }
 
-// Output Level based on the output type and pulse state
-uint32_t Output::GetOutputLevel() {
-    float adjustedLevel;
-    float outputLevel;
-
-    // ── QuantizeInput: CV passthrough with quantisation ──────────────────────
+// Compute the raw (pre-quantisation) output value in DAC counts based on the
+// output type and pulse state.  Cross operations are applied to this value, and
+// FinalizeOutput() then quantises and clamps it.  GetOutputLevel() chains both.
+float Output::ComputeRawOutput() {
+    // ── QuantizeInput: CV passthrough ────────────────────────────────────────
     // _inputCV lives in 0..MAXADC (4095) — identical to the note grid used by
     // BuildQuantBuffer / QuantizeCV (68.25 counts/semitone × 60 = 4095).
     // Pass it directly so the quantiser sees the correct pitch distances and
-    // snaps to the right note (e.g. 2V = 1638 counts → C2).
-    // Compressing through MaxDACValue first (×3830/4095 = 93.5%) shifts every
-    // note downward by ~0.6 semitone and causes 1-semitone errors at octave
-    // boundaries.  The hardware ceiling is enforced by the final clamp below.
+    // snaps to the right note (e.g. 2V = 1638 counts → C2).  The hardware
+    // ceiling is enforced by FinalizeOutput()'s clamp.
     if (_waveformType == WaveformType::QuantizeInput) {
-        float out = _inputCV; // 0..4095 calibrated ADC (0..5V after LUT)
-        if (_quantizerParams.enable) {
-            QuantizeCV(out, (float)_oldOutputLevel,
-                       _quantizerThresholdBuff,
-                       _quantizerParams.channelSensitivity,
-                       _quantizerParams.octaveShift, &out);
-        }
-        // Clamp to MaxDACValue: notes above ~G#4 (3830 counts, ≈4.68V) are
-        // unreachable due to op-amp saturation — snap them to the ceiling.
-        out = constrain(out, 0.0f, (float)MaxDACValue);
-        _oldOutputLevel = (uint32_t)out;
-        return _oldOutputLevel;
+        return _inputCV; // 0..4095 calibrated ADC (0..5V after LUT)
     }
 
-    {
-        // floorVal: the DC floor (0V when offset=0%).
-        // ceilVal:  floor + amplitude headroom — capped at MaxWaveValue so the
-        //           combined signal never exceeds full scale regardless of offset.
-        // This prevents digital clipping when offset > 0 (previously the offset
-        // was added on top of the full-amplitude signal and then constrained,
-        // creating a flat top on the waveform).
-        float floorVal = (_offset / 100.0f) * MaxWaveValue;
-        float ceilVal = min(MaxWaveValue, floorVal + (_level / 100.0f) * MaxWaveValue);
+    // floorVal: the DC floor (0V when offset=0%).
+    // ceilVal:  floor + amplitude headroom — capped at MaxWaveValue so the
+    //           combined signal never exceeds full scale regardless of offset.
+    // This prevents digital clipping when offset > 0 (previously the offset
+    // was added on top of the full-amplitude signal and then constrained,
+    // creating a flat top on the waveform).
+    float floorVal = (_offset / 100.0f) * MaxWaveValue;
+    float ceilVal = min(MaxWaveValue, floorVal + (_level / 100.0f) * MaxWaveValue);
 
-        if (_waveformType == WaveformType::Square ||
-            _waveformType == WaveformType::Hatchet2 ||
-            _waveformType == WaveformType::Hatchet4) {
-            adjustedLevel = _isPulseOn ? ceilVal : floorVal;
-        } else {
-            // Scale waveValue [0..MaxWaveValue] into [floorVal..ceilVal]
-            adjustedLevel = floorVal + _waveValue * (ceilVal - floorVal) / MaxWaveValue;
-            adjustedLevel = _isPulseOn ? adjustedLevel : floorVal;
-        }
+    float adjustedLevel;
+    if (_waveformType == WaveformType::Square ||
+        _waveformType == WaveformType::Hatchet2 ||
+        _waveformType == WaveformType::Hatchet4) {
+        adjustedLevel = _isPulseOn ? ceilVal : floorVal;
+    } else {
+        // Scale waveValue [0..MaxWaveValue] into [floorVal..ceilVal]
+        adjustedLevel = floorVal + _waveValue * (ceilVal - floorVal) / MaxWaveValue;
+        adjustedLevel = _isPulseOn ? adjustedLevel : floorVal;
+    }
 
-        outputLevel = adjustedLevel * MaxDACValue / MaxWaveValue;
+    float outputLevel = adjustedLevel * MAXDAC / MaxWaveValue;
 
 #ifdef ENVELOPE_DEBUG
-        // Probe: log ALL GetOutputLevel calls during AttackHold — regardless of
-        // _waveActive — to catch if the hold phase ever outputs unexpectedly low.
-        if (_triggerMode && (_envState == EnvelopeState::AttackHold || _envState == EnvelopeState::Sustain)) {
-            static unsigned long _lastHoldDbgMs = 0;
-            unsigned long _nowMs = millis();
-            if (_nowMs - _lastHoldDbgMs >= 20) {
-                _lastHoldDbgMs = _nowMs;
-                Serial.printf("[HOLD_OUT ch%d] state=%d wAct=%d wv=%.2f adj=%.2f out=%.0f iPO=%d lv=%d t=%lums\n",
-                              _ID, (int)_envState, (int)_waveActive, _waveValue, adjustedLevel, outputLevel,
-                              (int)_isPulseOn, _level, _nowMs);
-            }
+    // Probe: log all calls during AttackHold — regardless of _waveActive — to
+    // catch if the hold phase ever outputs unexpectedly low.
+    if (_triggerMode && (_envState == EnvelopeState::AttackHold || _envState == EnvelopeState::Sustain)) {
+        static unsigned long _lastHoldDbgMs = 0;
+        unsigned long _nowMs = millis();
+        if (_nowMs - _lastHoldDbgMs >= 20) {
+            _lastHoldDbgMs = _nowMs;
+            Serial.printf("[HOLD_OUT ch%d] state=%d wAct=%d wv=%.2f adj=%.2f out=%.0f iPO=%d lv=%d t=%lums\n",
+                          _ID, (int)_envState, (int)_waveActive, _waveValue, adjustedLevel, outputLevel,
+                          (int)_isPulseOn, _level, _nowMs);
         }
-        // Also catch unexpected low output during Attack (but only at > halfway through attack,
-        // i.e. wv should be above 50% by now if it's a late-attack drop).
-        if (_triggerMode && _waveActive && outputLevel < MaxDACValue * 0.5f &&
-            _envState == EnvelopeState::Attack && _waveValue > MaxWaveValue * 0.5f) {
-            Serial.printf("[ATTACK_DROP ch%d] wv=%.2f out=%.0f t=%lums\n",
-                          _ID, _waveValue, outputLevel, millis());
-        }
+    }
+    // Also catch unexpected low output during Attack (but only at > halfway through attack,
+    // i.e. wv should be above 50% by now if it's a late-attack drop).
+    if (_triggerMode && _waveActive && outputLevel < MAXDAC * 0.5f &&
+        _envState == EnvelopeState::Attack && _waveValue > MaxWaveValue * 0.5f) {
+        Serial.printf("[ATTACK_DROP ch%d] wv=%.2f out=%.0f t=%lums\n",
+                      _ID, _waveValue, outputLevel, millis());
+    }
 #endif
 
-        if (_quantizerParams.enable) {
-            // Apply quantization
-            QuantizeCV(outputLevel, _oldOutputLevel, _quantizerThresholdBuff, _quantizerParams.channelSensitivity, _quantizerParams.octaveShift, &outputLevel);
-        }
+    return outputLevel;
+}
 
-        // Final clamp: QuantizeCV hardcodes constrain(0,4095) internally, so
-        // its output can exceed MaxDACValue.  Cap here to stay in linear range.
-        outputLevel = constrain(outputLevel, 0.0f, (float)MaxDACValue);
-
-        _oldOutputLevel = outputLevel;
-        return uint32_t(outputLevel);
+// Quantise (if enabled) and clamp a raw value, updating the stored last value.
+uint32_t Output::FinalizeOutput(float raw) {
+    if (_quantizerParams.enable) {
+        QuantizeCV(raw, (float)_oldOutputLevel, _quantizerNoteBuff,
+                   _quantizerNoteCount, _quantizerParams.channelSensitivity,
+                   _quantizerParams.octaveShift, &raw);
     }
+    // Final clamp to the physical DAC range [0, MAXDAC].
+    raw = constrain(raw, 0.0f, (float)MAXDAC);
+    _oldOutputLevel = (uint32_t)raw;
+    return (uint32_t)raw;
+}
+
+// Output Level based on the output type and pulse state (no cross-op applied).
+uint32_t Output::GetOutputLevel() {
+    return FinalizeOutput(ComputeRawOutput());
+}
+
+// Combine this output's raw value (DAC counts) with a normalised (0..1) source
+// value per the configured cross operation.  Both operands are normalised to
+// 0..1 internally; the result is scaled back to DAC counts.  Returns ownRaw
+// unchanged when no operation is selected.
+float Output::ApplyCrossOp(float ownRaw, float srcNorm) {
+    if (_crossOp == CrossNone)
+        return ownRaw;
+
+    float a = constrain(ownRaw / (float)MAXDAC, 0.0f, 1.0f);
+    float b = constrain(srcNorm, 0.0f, 1.0f);
+    const float kGate = 0.05f;  // "greater than zero" threshold (noise floor)
+    const float kLogic = 0.5f;  // CMOS logic-high threshold
+    float r = a;
+
+    switch (_crossOp) {
+    case CrossMix:
+        r = (a + b) * 0.5f;
+        break;
+    case CrossMult:
+        r = a * b;
+        break;
+    case CrossAdd:
+        r = a + b;
+        break;
+    case CrossSub:
+        r = a - b;
+        break;
+    case CrossMin:
+        r = min(a, b);
+        break;
+    case CrossMax:
+        r = max(a, b);
+        break;
+    case CrossHold:
+        if (b > kGate) {
+            r = _crossHeldValue; // source high → freeze
+        } else {
+            r = a;
+            _crossHeldValue = a; // track most recent value while unfrozen
+        }
+        break;
+    case CrossSH: {
+        bool high = (b > kGate);
+        if (high && !_crossSrcWasHigh)
+            _crossHeldValue = a; // rising edge → sample
+        _crossSrcWasHigh = high;
+        r = _crossHeldValue;
+        break;
+    }
+    case CrossMask:
+        r = (b > kGate) ? a : 0.0f;
+        break;
+    case CrossNot:
+        r = (b > kGate) ? 0.0f : a;
+        break;
+    case CrossOr:
+        r = ((a > kLogic) || (b > kLogic)) ? 1.0f : 0.0f;
+        break;
+    case CrossXor:
+        r = ((a > kLogic) != (b > kLogic)) ? 1.0f : 0.0f;
+        break;
+    case CrossAnd:
+        r = ((a > kLogic) && (b > kLogic)) ? 1.0f : 0.0f;
+        break;
+    case CrossBitOr:
+    case CrossBitXor:
+    case CrossBitAnd: {
+        int ia = (int)(a * 4095.0f);
+        int ib = (int)(b * 4095.0f);
+        int ir = (_crossOp == CrossBitOr) ? (ia | ib)
+                 : (_crossOp == CrossBitXor) ? (ia ^ ib)
+                                             : (ia & ib);
+        r = ir / 4095.0f;
+        break;
+    }
+    default:
+        r = a;
+        break;
+    }
+
+    r = constrain(r, 0.0f, 1.0f);
+    return r * (float)MAXDAC;
 }
 
 // Euclidean Rhythm Functions

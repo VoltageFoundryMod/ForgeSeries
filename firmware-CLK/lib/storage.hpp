@@ -50,11 +50,13 @@ CalibrationData LoadCalibration() {
     CalibrationData cal;
     EEPROM.get(EEPROM_CAL_BASE, cal);
     if (!cal.valid) {
+        // No calibration stored yet — populate nominal linear coefficients
+        // (5000 mV full scale over 4095 counts, zero offset).
+        // AdjustADCReadings() also falls back to nominal when !cal.valid,
+        // so these values are a consistent starting point that avoids NaN.
         for (int i = 0; i < NUM_CV_INS; i++) {
-            for (int p = 0; p < CAL_LUT_POINTS; p++) {
-                uint32_t mv = CAL_LUT_MV[p];
-                cal.cvLUT[i][p] = (uint16_t)((uint32_t)mv * 33 * MAXDAC / (51 * 3300));
-            }
+            cal.cvScale[i] = 5000.0f / 4095.0f;
+            cal.cvOffset[i] = 0.0f;
         }
         cal.valid = false;
     }

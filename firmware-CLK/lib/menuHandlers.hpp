@@ -531,6 +531,52 @@ static void actionLoadDefaults() {
 }
 
 // ================================================================
+// Group 14 — Cross operations  (items 74–81)
+// ================================================================
+
+// Op/source scroll: direction only, wraps within the respective list.
+static void setCrossOp0(int d) {
+    int dir = (d > 0) ? 1 : -1;
+    outputs[0].SetCrossOp((outputs[0].GetCrossOpIndex() + CrossOpLength + dir) % CrossOpLength);
+    unsavedChanges = true;
+}
+static void setCrossOp1(int d) {
+    int dir = (d > 0) ? 1 : -1;
+    outputs[1].SetCrossOp((outputs[1].GetCrossOpIndex() + CrossOpLength + dir) % CrossOpLength);
+    unsavedChanges = true;
+}
+static void setCrossOp2(int d) {
+    int dir = (d > 0) ? 1 : -1;
+    outputs[2].SetCrossOp((outputs[2].GetCrossOpIndex() + CrossOpLength + dir) % CrossOpLength);
+    unsavedChanges = true;
+}
+static void setCrossOp3(int d) {
+    int dir = (d > 0) ? 1 : -1;
+    outputs[3].SetCrossOp((outputs[3].GetCrossOpIndex() + CrossOpLength + dir) % CrossOpLength);
+    unsavedChanges = true;
+}
+static void setCrossSrc0(int d) {
+    int dir = (d > 0) ? 1 : -1;
+    outputs[0].SetCrossSource((outputs[0].GetCrossSourceIndex() + CrossSourceLength + dir) % CrossSourceLength);
+    unsavedChanges = true;
+}
+static void setCrossSrc1(int d) {
+    int dir = (d > 0) ? 1 : -1;
+    outputs[1].SetCrossSource((outputs[1].GetCrossSourceIndex() + CrossSourceLength + dir) % CrossSourceLength);
+    unsavedChanges = true;
+}
+static void setCrossSrc2(int d) {
+    int dir = (d > 0) ? 1 : -1;
+    outputs[2].SetCrossSource((outputs[2].GetCrossSourceIndex() + CrossSourceLength + dir) % CrossSourceLength);
+    unsavedChanges = true;
+}
+static void setCrossSrc3(int d) {
+    int dir = (d > 0) ? 1 : -1;
+    outputs[3].SetCrossSource((outputs[3].GetCrossSourceIndex() + CrossSourceLength + dir) % CrossSourceLength);
+    unsavedChanges = true;
+}
+
+// ================================================================
 // Value getter functions — return const char* for display.
 // Each uses a static char buffer (safe: only one is live at a time
 // since they are called sequentially during display rendering).
@@ -691,6 +737,16 @@ static String getSaveSlot() {
     return _slotBuf;
 }
 
+// ── Group 14: Cross operations ───────────────────────────────
+static String getCrossOp0() { return outputs[0].GetCrossOpDescription(); }
+static String getCrossOp1() { return outputs[1].GetCrossOpDescription(); }
+static String getCrossOp2() { return outputs[2].GetCrossOpDescription(); }
+static String getCrossOp3() { return outputs[3].GetCrossOpDescription(); }
+static String getCrossSrc0() { return outputs[0].GetCrossSourceDescription(); }
+static String getCrossSrc1() { return outputs[1].GetCrossSourceDescription(); }
+static String getCrossSrc2() { return outputs[2].GetCrossSourceDescription(); }
+static String getCrossSrc3() { return outputs[3].GetCrossSourceDescription(); }
+
 static constexpr unsigned long TIMEOUT_OPTIONS[] = {0, 2000, 5000, 10000, 20000};
 static constexpr const char *TIMEOUT_LABELS[] = {"Off", "2s", "5s", "10s", "20s"};
 static constexpr int TIMEOUT_COUNT = 5;
@@ -812,6 +868,17 @@ const MenuItem MENU_ITEMS[] = {
     {"SAVE", nullptr, nullptr, 0, 0, 12, ROW_ACTION, MENU_ACTION, nullptr, actionSave},                  // 71
     {"LOAD", nullptr, nullptr, 0, 0, 12, ROW_ACTION, MENU_ACTION, nullptr, actionLoad},                  // 72
     {"LOAD DEFAULTS", nullptr, nullptr, 0, 0, 12, ROW_ACTION, MENU_ACTION, nullptr, actionLoadDefaults}, // 73
+
+    // ── Group 14: Cross operations (all 4 outputs) ──────────── items 74–81
+    // col1x=48 (OP), col2x=92 (SRC); even items = TWOCOL, odd = HIDDEN
+    {"OUT 1:", getCrossOp0, getCrossSrc0, 48, 92, 14, ROW_TWOCOL, MENU_EDIT, setCrossOp0, nullptr},  // 74
+    {"OUT 1:", getCrossOp0, getCrossSrc0, 48, 92, 14, ROW_HIDDEN, MENU_EDIT, setCrossSrc0, nullptr}, // 75
+    {"OUT 2:", getCrossOp1, getCrossSrc1, 48, 92, 14, ROW_TWOCOL, MENU_EDIT, setCrossOp1, nullptr},  // 76
+    {"OUT 2:", getCrossOp1, getCrossSrc1, 48, 92, 14, ROW_HIDDEN, MENU_EDIT, setCrossSrc1, nullptr}, // 77
+    {"OUT 3:", getCrossOp2, getCrossSrc2, 48, 92, 14, ROW_TWOCOL, MENU_EDIT, setCrossOp2, nullptr},  // 78
+    {"OUT 3:", getCrossOp2, getCrossSrc2, 48, 92, 14, ROW_HIDDEN, MENU_EDIT, setCrossSrc2, nullptr}, // 79
+    {"OUT 4:", getCrossOp3, getCrossSrc3, 48, 92, 14, ROW_TWOCOL, MENU_EDIT, setCrossOp3, nullptr},  // 80
+    {"OUT 4:", getCrossOp3, getCrossSrc3, 48, 92, 14, ROW_HIDDEN, MENU_EDIT, setCrossSrc3, nullptr}, // 81
 };
 
 const int MENU_ITEM_COUNT = (int)(sizeof(MENU_ITEMS) / sizeof(MENU_ITEMS[0]));

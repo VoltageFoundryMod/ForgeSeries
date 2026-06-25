@@ -3,6 +3,7 @@
 // Use a minimal polling-based shim with the same read() API.
 // IMPORTANT: constructor must NOT call pinMode/digitalRead — pins are not ready
 // at global-object-construction time. Call begin() from setupZ() before first read().
+#pragma once
 class Encoder {
     int _pin1, _pin2;
     long _pos = 0;

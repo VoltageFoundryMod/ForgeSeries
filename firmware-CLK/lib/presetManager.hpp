@@ -29,7 +29,10 @@ extern int menuScreenTimeout;     // defined in src/main.cpp
 // Slot 0 = auto-load/save on boot; slots 1–(NUM_SLOTS-1) = user presets.
 // Increasing this shifts EEPROM_CAL_BASE — re-run CV calibration after changing.
 #define NUM_SLOTS 10
-#define VALID_MAGIC 0xA5 // Written to `valid` on save; 0xFF = erased flash, 0x00 = zeroed RAM
+// Bump this whenever the LoadSaveParams layout changes so older (incompatible)
+// presets are treated as invalid and fall back to defaults instead of loading
+// garbage into the new fields.  0xA6: added cross-op fields.
+#define VALID_MAGIC 0xA6 // Written to `valid` on save; 0xFF = erased flash, 0x00 = zeroed RAM
 
 struct LoadSaveParams {
     uint8_t valid; // VALID_MAGIC = valid data; any other = use defaults
@@ -51,7 +54,9 @@ struct LoadSaveParams {
     int CVInputOffset[NUM_CV_INS];
     EnvelopeParams envParams[NUM_OUTPUTS];
     QuantizerParams quantizerParams[NUM_OUTPUTS];
-    int menuScreenTimeout; // index into screenTimeoutOptions[]
+    int crossOp[NUM_OUTPUTS];  // CrossOp index per output
+    int crossSrc[NUM_OUTPUTS]; // CrossSource index per output
+    int menuScreenTimeout;     // index into screenTimeoutOptions[]
 };
 
 // CV calibration — see calibrationData.hpp for the struct definition.
@@ -76,6 +81,8 @@ LoadSaveParams LoadDefaultParams() {
         p.waveformType[i] = 0;
         p.envParams[i] = {200.0f, 200.0f, 70.0f, 250.0f, 0.5f, 0.5f, 0.5f, false};
         p.quantizerParams[i] = {false, 3, 4, 1, 0};
+        p.crossOp[i] = 0;  // CrossNone
+        p.crossSrc[i] = 0; // Out 1
     }
     for (int i = 0; i < NUM_CV_INS; i++) {
         p.CVInputTarget[i] = 0;
@@ -111,6 +118,8 @@ LoadSaveParams CollectParams() {
         p.waveformType[i] = int(outputs[i].GetWaveformType());
         p.envParams[i] = outputs[i].GetEnvelopeParams();
         p.quantizerParams[i] = outputs[i].GetQuantizerParams();
+        p.crossOp[i] = outputs[i].GetCrossOpIndex();
+        p.crossSrc[i] = outputs[i].GetCrossSourceIndex();
     }
     for (int i = 0; i < NUM_CV_INS; i++) {
         p.CVInputTarget[i] = CVInputTarget[i];
@@ -141,6 +150,8 @@ void UpdateParameters(LoadSaveParams p) {
         outputs[i].SetWaveformType(static_cast<WaveformType>(p.waveformType[i]));
         outputs[i].SetEnvelopeParams(p.envParams[i]);
         outputs[i].SetQuantizerParams(p.quantizerParams[i]);
+        outputs[i].SetCrossOp(p.crossOp[i]);
+        outputs[i].SetCrossSource(p.crossSrc[i]);
     }
     for (int i = 0; i < NUM_CV_INS; i++) {
         CVInputTarget[i] = static_cast<CVTarget>(p.CVInputTarget[i]);
