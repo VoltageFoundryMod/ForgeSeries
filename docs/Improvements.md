@@ -16,7 +16,7 @@ Project Improvements:
 - [x] Probability doesn't affect outputs with envelopes
 - [x] CV 1/CV 2 passthrough: Probability and Euclidean are inert (value always passes through and the blink indicator follows the flowing CV instead of blinking "off")
 - [x] Guard so the CV "Output X Div" target (and divider menu) can't move an envelope output off the "Env" divider slot
-- [ ] Improve user manual and documentation
+- [x] Improve user manual and documentation
 - [x] Check the slight clipping in the outputs... could be adjustment but also firmware calibration issue
 - [x] Add hatchet x2 and x4 to the output waveform where x2 generates 2 square pulses in one up clock cycle and x4 generates 4 square pulses in one up clock cycle, this will be useful for people who want to generate faster clock divisions without having to change the master clock BPM
 - [x] Review overlapping text in the menu items
@@ -39,13 +39,13 @@ Fixes to Board
 
 Test:
 
-- [ ] All 4 outputs
-- [ ] CV input calibration
-- [ ] Quantizer
-- [ ] CV Inputs and routing
-- [ ] Waveforms and Envelopes
-- [ ] Test envelopes with external clock
+- [x] All 4 outputs
+- [x] CV input calibration
+- [x] Quantizer
+- [x] CV Inputs and routing
+- [x] Waveforms and Envelopes
+- [x] Test envelopes with external clock
 
 Misc:
 
-- [ ] Create a VCV Rack plugin for the module
+- [x] Create a VCV Rack plugin for the module

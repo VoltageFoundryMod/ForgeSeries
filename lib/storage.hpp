@@ -49,9 +49,20 @@ void SaveCalibration(const CalibrationData &cal) {
 CalibrationData LoadCalibration() {
     CalibrationData cal;
     EEPROM.get(EEPROM_CAL_BASE, cal);
-    if (!cal.valid) {
-        // No calibration stored yet — populate nominal linear coefficients
-        // (5000 mV full scale over 4095 counts, zero offset).
+    // Erased flash / freshly-initialised EEPROM reads as 0xFF bytes: that decodes
+    // to a non-zero `valid` flag AND NaN coefficients, which would otherwise slip
+    // past a bare `if (!cal.valid)` check and make AdjustADCReadings() compute NaN
+    // CV readings (CV inputs appear completely dead). Reject non-finite
+    // coefficients too (NaN compares unequal to itself) so an uncalibrated module
+    // always falls back to the nominal linear mapping.
+    bool finite = true;
+    for (int i = 0; i < NUM_CV_INS; i++) {
+        if (cal.cvScale[i] != cal.cvScale[i] || cal.cvOffset[i] != cal.cvOffset[i])
+            finite = false;
+    }
+    if (!cal.valid || !finite) {
+        // No (or invalid) calibration stored yet — populate nominal linear
+        // coefficients (5000 mV full scale over 4095 counts, zero offset).
         // AdjustADCReadings() also falls back to nominal when !cal.valid,
         // so these values are a consistent starting point that avoids NaN.
         for (int i = 0; i < NUM_CV_INS; i++) {

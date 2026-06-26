@@ -123,6 +123,15 @@ int CVInputOffset[NUM_CV_INS] = {0, 0};
 // ADC readings (calibrated, filtered)
 float channelADC[NUM_CV_INS], oldChannelADC[NUM_CV_INS];
 
+// Last CV value actually dispatched to a modulation target, per channel. The
+// dispatch gate compares against this (cumulative change) rather than the
+// previous sample, so slow-moving CV still re-dispatches once it has drifted
+// past the threshold. Comparing only adjacent samples breaks down when
+// HandleCVInputs() is polled fast (e.g. the VCV engine at several kHz): each
+// step's delta stays below the threshold and the target would never update.
+// Sentinel forces a dispatch on the first reading after a target is assigned.
+float lastDispatchedADC[NUM_CV_INS] = {-1.0e9f, -1.0e9f};
+
 // ── extern refs defined in main.cpp / clockEngine.hpp ────────────────────────
 extern CalibrationData cal;
 extern bool masterState;
@@ -197,10 +206,12 @@ void HandleCVInputs() {
         }
 
         // Dispatch to the assigned modulation target (BPM, divider, prob, …),
-        // gated on a meaningful change to ignore ADC jitter.
+        // gated on a meaningful change since the last dispatch to ignore ADC
+        // jitter while still tracking slow CV sweeps.
         if (CVInputTarget[i] != CVTarget::None &&
-            abs(channelADC[i] - oldChannelADC[i]) > 10) {
+            abs(channelADC[i] - lastDispatchedADC[i]) > 10) {
             HandleCVTarget(i, channelADC[i], CVInputTarget[i]);
+            lastDispatchedADC[i] = channelADC[i];
         }
     }
 }

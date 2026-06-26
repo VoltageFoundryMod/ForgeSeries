@@ -1,0 +1,28 @@
+{
+  "slug": "ClockForge",
+  "name": "ClockForge",
+  "version": "2.0.0",
+  "license": "VCV Rack EULA",
+  "brand": "Voltage Foundry Modular",
+  "author": "Carlos Eduardo de Paula",
+  "authorEmail": "me@carlosedp.com",
+  "authorUrl": "",
+  "pluginUrl": "",
+  "manualUrl": "",
+  "sourceUrl": "",
+  "donateUrl": "",
+  "changelogUrl": "",
+  "modules": [
+    {
+      "slug": "ClockForge",
+      "name": "Clock Forge",
+      "description": "Advanced Clock Generator and Modulator",
+      "tags": [
+        "Clock modulator",
+        "Clock generator",
+        "Digital",
+        "Hardware clone"
+      ]
+    }
+  ]
+}

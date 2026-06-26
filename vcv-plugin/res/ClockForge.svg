@@ -5,7 +5,7 @@
    height="128.5mm"
    viewBox="0 0 30.48 128.5"
    id="svg834"
-   sodipodi:docname="CLK-NF-Panel-Edge_Cuts.svg"
+   sodipodi:docname="ClockForge.svg"
    inkscape:version="1.4.2 (f4327f4, 2025-05-13)"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
@@ -33,14 +33,14 @@
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="mm"
      inkscape:zoom="2.8284271"
-     inkscape:cx="52.149125"
-     inkscape:cy="244.83572"
-     inkscape:window-width="1500"
+     inkscape:cx="15.379573"
+     inkscape:cy="213.36947"
+     inkscape:window-width="1925"
      inkscape:window-height="1825"
-     inkscape:window-x="2031"
+     inkscape:window-x="1580"
      inkscape:window-y="50"
      inkscape:window-maximized="0"
-     inkscape:current-layer="svg834" />
+     inkscape:current-layer="layer2" />
   <title
      id="title1">SVG Image created as CLK-NF-Panel-Edge_Cuts.svg date 2026-06-25T18:22:16 </title>
   <desc
@@ -1463,6 +1463,14 @@
        cy="66.794594"
        rx="3.0193317"
        ry="3.0700057"
+       inkscape:label="clkin" />
+    <ellipse
+       style="display:inline;fill:#ffff00;fill-opacity:1;stroke-width:6.31256"
+       id="path862-94"
+       cx="14.923599"
+       cy="50.9184"
+       rx="3.6458998"
+       ry="3.6460009"
        inkscape:label="encoder" />
     <ellipse
        style="fill:#00ff00;fill-opacity:1;stroke-width:5.27133"
@@ -1512,10 +1520,13 @@
        rx="3.0193317"
        ry="3.0700057"
        inkscape:label="out4" />
-    <path
-       style="baseline-shift:baseline;display:inline;overflow:visible;vector-effect:none;fill:#ffff00;stroke-linecap:round;stroke-linejoin:round;enable-background:accumulate;stop-color:#000000;stop-opacity:1"
-       d="m 3.065446,19.77502 c -0.5403767,-0.01866 -0.9195763,0.53471 -0.8195616,1.042627 0.00832,4.423575 -0.016578,8.848894 0.012336,13.271388 0.060858,0.521228 0.6364403,0.76441 1.1070185,0.679666 7.8284091,-0.004 15.6576181,0.0079 23.4855251,-0.0059 0.520122,-0.01367 0.836217,-0.557044 0.754869,-1.036507 -0.0041,-4.404044 0.0082,-8.808939 -0.006,-13.212459 -0.02626,-0.544219 -0.621296,-0.834115 -1.112979,-0.738052 -7.806978,-4.82e-4 -15.614581,9.64e-4 -23.4211675,-7.23e-4 z"
-       id="path936"
+    <rect
+       style="fill:#ffff00;stroke-width:4.99963"
+       id="rect1"
+       width="25.361897"
+       height="14.993519"
+       x="2.2444708"
+       y="19.775869"
        inkscape:label="display" />
   </g>
 </svg>
