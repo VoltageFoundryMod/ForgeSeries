@@ -1,0 +1,38 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build and Install VCV Plugin",
+      "type": "shell",
+      "command": "make",
+      "args": ["RACK_DIR=/c/users/carlosedp/Rack-SDK", "install"],
+      "options": {
+        "cwd": "${workspaceFolder}/vcv-plugin",
+        "env": {
+          "PATH": "/c/msys64/usr/bin:/c/msys64/mingw64/bin:${env:PATH}",
+          "MSYSTEM": "MINGW64"
+        }
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Clean VCV Plugin",
+      "type": "shell",
+      "command": "make",
+      "args": ["RACK_DIR=/c/users/carlosedp/Rack-SDK", "clean"],
+      "options": {
+        "cwd": "${workspaceFolder}/vcv-plugin",
+        "env": {
+          "PATH": "/c/msys64/usr/bin:/c/msys64/mingw64/bin:${env:PATH}",
+          "MSYSTEM": "MINGW64"
+        }
+      },
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}

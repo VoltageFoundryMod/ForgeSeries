@@ -12,7 +12,7 @@ firmware expects. The OLED is emulated as a framebuffer, so the on-screen UI is
 pixel-identical to the hardware and the entire menu/DSP system comes across for
 free. Future firmware changes to `lib/` re-port with little or no effort.
 
-```
+```txt
 VCV Rack  ──►  ClockForge.cpp (Module + widgets)
                      │  clean POD API (cfengine)
                      ▼
@@ -24,28 +24,28 @@ VCV Rack  ──►  ClockForge.cpp (Module + widgets)
 
 ## Repository layout (`vcv-plugin/`)
 
-| Path | Purpose |
-|------|---------|
-| `src/plugin.cpp` / `plugin.hpp` | Plugin entry point; registers `modelClockForge`. |
-| `src/ClockForge.cpp` | The Rack `Module` + widgets (display, encoder, ports). Includes **only** `fw_engine.hpp` — never the shim or firmware headers. |
-| `src/engine/fw_engine.hpp` | Clean opaque/POD API (`namespace cfengine`). The only bridge header; exposes no Arduino/firmware types so it coexists with `rack.hpp`. |
-| `src/engine/fw_engine.cpp` | VCV-adapted port of the firmware's `main.cpp`: defines the firmware globals, non-blocking versions of the integration functions, and the `cfengine` entry points. Includes the shim + `../lib/`. |
-| `src/shim/` | The Arduino/RP2040 compatibility layer (see below). |
-| `../lib/` | The hardware firmware — **reused unchanged** via the `-I../lib` include path on the engine translation unit only. |
+| Path                            | Purpose                                                                                                                                                                                          |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/plugin.cpp` / `plugin.hpp` | Plugin entry point; registers `modelClockForge`.                                                                                                                                                 |
+| `src/ClockForge.cpp`            | The Rack `Module` + widgets (display, encoder, ports). Includes **only** `fw_engine.hpp` — never the shim or firmware headers.                                                                   |
+| `src/engine/fw_engine.hpp`      | Clean opaque/POD API (`namespace cfengine`). The only bridge header; exposes no Arduino/firmware types so it coexists with `rack.hpp`.                                                           |
+| `src/engine/fw_engine.cpp`      | VCV-adapted port of the firmware's `main.cpp`: defines the firmware globals, non-blocking versions of the integration functions, and the `cfengine` entry points. Includes the shim + `../lib/`. |
+| `src/shim/`                     | The Arduino/RP2040 compatibility layer (see below).                                                                                                                                              |
+| `../lib/`                       | The hardware firmware — **reused unchanged** via the `-I../lib` include path on the engine translation unit only.                                                                                |
 
 ### The shim layer (`src/shim/`)
 
-| File | Emulates |
-|------|----------|
-| `Arduino.h` | Core Arduino API (millis/micros, digital/analog IO, math, random, Serial→no-op) + the `HostBridge` that connects firmware IO to the host module. |
-| `WString.h` | Arduino `String` over `std::string`. |
-| `Wire.h` | I2C. Parses the MCP4728 multi-write frames from `DACWriteAll()` back into per-output values. |
-| `Adafruit_GFX.h` | Self-contained GFX with Adafruit's exact primitive algorithms + the real 5×7 `glcdfont.h` → pixel-identical text. |
-| `Adafruit_SSD1306.h` | `Adafruit_GFX` subclass whose `drawPixel` targets a buffer; `display()` packs it into the host framebuffer (1bpp, row-major, MSB-first). |
-| `Adafruit_MCP4728.h` | DAC `setChannelValue` path (the `InitDAC`/`DACWrite` route). |
-| `EEPROM.h` | EEPROM emulation over a byte buffer (persisted via patch save/load). |
-| `hardware/timer.h` | RP2040 repeating timer → inert stubs (the module drives the clock instead). |
-| `glcdfont.h` | The genuine Adafruit 5×7 font (copied verbatim). |
+| File                 | Emulates                                                                                                                                         |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Arduino.h`          | Core Arduino API (millis/micros, digital/analog IO, math, random, Serial→no-op) + the `HostBridge` that connects firmware IO to the host module. |
+| `WString.h`          | Arduino `String` over `std::string`.                                                                                                             |
+| `Wire.h`             | I2C. Parses the MCP4728 multi-write frames from `DACWriteAll()` back into per-output values.                                                     |
+| `Adafruit_GFX.h`     | Self-contained GFX with Adafruit's exact primitive algorithms + the real 5×7 `glcdfont.h` → pixel-identical text.                                |
+| `Adafruit_SSD1306.h` | `Adafruit_GFX` subclass whose `drawPixel` targets a buffer; `display()` packs it into the host framebuffer (1bpp, row-major, MSB-first).         |
+| `Adafruit_MCP4728.h` | DAC `setChannelValue` path (the `InitDAC`/`DACWrite` route).                                                                                     |
+| `EEPROM.h`           | EEPROM emulation over a byte buffer (persisted via patch save/load).                                                                             |
+| `hardware/timer.h`   | RP2040 repeating timer → inert stubs (the module drives the clock instead).                                                                      |
+| `glcdfont.h`         | The genuine Adafruit 5×7 font (copied verbatim).                                                                                                 |
 
 `HostBridge` is the per-instance IO struct: ADC inputs and GPIO in, DAC values
 and the 1024-byte framebuffer out. The active bridge is `g_host`.
@@ -106,6 +106,7 @@ make RACK_DIR="<path-to>/Rack-SDK" \
 ```
 
 Notes:
+
 - The firmware/shim require **C++17** (Rack defaults to C++11). The Makefile adds
   `EXTRA_CXXFLAGS += -std=c++17`, which lands after Rack's `-std` and wins.
 - The shim include paths are scoped to **only** the engine TU
