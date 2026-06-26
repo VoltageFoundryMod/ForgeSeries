@@ -8,6 +8,8 @@ NoteForge is a versatile tool designed to quantize analog control voltages (CV) 
 
 Part of the **Forge** series of modules which share a single hardware platform.
 
+The hardware schematics and design files are completely open-source and available in the [GitHub repository](https://github.com/VoltageFoundryMod/ForgeSeries-Hardware).
+
 ## Features
 
 - Two independent quantizers
