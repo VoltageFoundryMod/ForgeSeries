@@ -2,10 +2,10 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Build and Install VCV Plugin",
+      "label": "VCV Plugin: Build and Install",
       "type": "shell",
       "command": "make",
-      "args": ["RACK_DIR=/c/users/carlosedp/Rack-SDK", "install"],
+      "args": ["install"],
       "options": {
         "cwd": "${workspaceFolder}/vcv-plugin",
         "env": {
@@ -20,10 +20,10 @@
       "problemMatcher": ["$gcc"]
     },
     {
-      "label": "Clean VCV Plugin",
+      "label": "VCV Plugin: Clean",
       "type": "shell",
       "command": "make",
-      "args": ["RACK_DIR=/c/users/carlosedp/Rack-SDK", "clean"],
+      "args": ["clean"],
       "options": {
         "cwd": "${workspaceFolder}/vcv-plugin",
         "env": {
