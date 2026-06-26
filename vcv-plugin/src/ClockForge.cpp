@@ -242,9 +242,55 @@ struct EncoderKnob : OpaqueWidget {
     void draw(const DrawArgs &args) override {
         float r = box.size.x / 2.f;
         Vec c = box.size.div(2.f);
-        // Outer body
+        // Outer metallic rim: subtle highlight/shadow so it reads as hardware.
+        float rimOuter = r - 0.45f;
+        float rimInner = r - 2.8f;
+        float rimCenter = (rimOuter + rimInner) * 0.5f;
+
         nvgBeginPath(args.vg);
-        nvgCircle(args.vg, c.x, c.y, r - 1.f);
+        nvgCircle(args.vg, c.x, c.y, rimOuter);
+        nvgCircle(args.vg, c.x, c.y, rimInner);
+        nvgPathWinding(args.vg, NVG_HOLE);
+        nvgFillColor(args.vg, nvgRGB(128, 130, 138));
+        nvgFill(args.vg);
+
+        NVGpaint rimSheen = nvgLinearGradient(
+            args.vg, c.x - r, c.y - r, c.x + r, c.y + r,
+            nvgRGBA(255, 255, 255, 70), nvgRGBA(255, 255, 255, 0));
+        nvgBeginPath(args.vg);
+        nvgCircle(args.vg, c.x, c.y, rimOuter);
+        nvgCircle(args.vg, c.x, c.y, rimInner);
+        nvgPathWinding(args.vg, NVG_HOLE);
+        nvgFillPaint(args.vg, rimSheen);
+        nvgFill(args.vg);
+
+        NVGpaint rimShade = nvgLinearGradient(
+            args.vg, c.x + r, c.y + r, c.x - r, c.y - r,
+            nvgRGBA(0, 0, 0, 58), nvgRGBA(0, 0, 0, 0));
+        nvgBeginPath(args.vg);
+        nvgCircle(args.vg, c.x, c.y, rimOuter);
+        nvgCircle(args.vg, c.x, c.y, rimInner);
+        nvgPathWinding(args.vg, NVG_HOLE);
+        nvgFillPaint(args.vg, rimShade);
+        nvgFill(args.vg);
+
+        // Bright and dark edge accents make the rim pop at small sizes.
+        nvgBeginPath(args.vg);
+        nvgArc(args.vg, c.x, c.y, rimCenter, 3.2f, 4.9f, NVG_CW);
+        nvgStrokeColor(args.vg, nvgRGBA(255, 255, 255, 96));
+        nvgStrokeWidth(args.vg, 1.1f);
+        nvgStroke(args.vg);
+
+        nvgBeginPath(args.vg);
+        nvgArc(args.vg, c.x, c.y, rimCenter, 0.25f, 1.85f, NVG_CW);
+        nvgStrokeColor(args.vg, nvgRGBA(0, 0, 0, 120));
+        nvgStrokeWidth(args.vg, 1.2f);
+        nvgStroke(args.vg);
+
+        float bodyR = rimInner - 0.35f;
+        // Knob body
+        nvgBeginPath(args.vg);
+        nvgCircle(args.vg, c.x, c.y, bodyR);
         nvgFillColor(args.vg, nvgRGB(45, 45, 50));
         nvgFill(args.vg);
         nvgStrokeColor(args.vg, nvgRGB(20, 20, 22));
@@ -255,8 +301,8 @@ struct EncoderKnob : OpaqueWidget {
         // pattern is rotationally symmetric there is no "start/end" position
         // (unlike a pointer line) but it visibly spins as the encoder turns.
         const int teeth = 12;
-        float rOut = r - 1.5f;
-        float rIn = r * 0.64f;
+        float rOut = bodyR - 0.55f;
+        float rIn = bodyR * 0.64f;
         nvgStrokeColor(args.vg, nvgRGB(120, 120, 128));
         nvgStrokeWidth(args.vg, 2.2f);
         nvgLineCap(args.vg, NVG_ROUND);
