@@ -14,6 +14,8 @@ Project Improvements:
 - [ ] Organize code to find the defines and configurations easier also centralize default configs
 - [x] Make the screen output indicators follow the outputs with probability, euclidean and things that affect it
 - [x] Probability doesn't affect outputs with envelopes
+- [x] CV 1/CV 2 passthrough: Probability and Euclidean are inert (value always passes through and the blink indicator follows the flowing CV instead of blinking "off")
+- [x] Guard so the CV "Output X Div" target (and divider menu) can't move an envelope output off the "Env" divider slot
 - [ ] Improve user manual and documentation
 - [x] Check the slight clipping in the outputs... could be adjustment but also firmware calibration issue
 - [x] Add hatchet x2 and x4 to the output waveform where x2 generates 2 square pulses in one up clock cycle and x4 generates 4 square pulses in one up clock cycle, this will be useful for people who want to generate faster clock divisions without having to change the master clock BPM
@@ -47,7 +49,3 @@ Test:
 Misc:
 
 - [ ] Create a VCV Rack plugin for the module
-
-A CV 1/CV 2 passthrough output ignores Probability and Euclidean (the value always passes through), but its blink indicator still reacts to them — so the LED can blink "off" while the CV is still flowing. Harmless, but if you'd rather it be tidy I can either force probability/euclidean inert for those waveforms or gate the passthrough. Your call.
-
-Want me to also add a guard so the CV Output X Div target can't move an envelope output off the "Env" divider slot (currently cosmetic-only — it doesn't affect envelope timing, just the main-screen label)?

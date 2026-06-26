@@ -154,6 +154,13 @@ class Output {
     // Divider
     int GetDividerIndex() { return _dividerIndex; }
     void SetDivider(int index) {
+        // Envelope (trigger-mode) outputs are locked to the "Env" divider slot.
+        // Ignore divider changes from the menu or a CV "Output X Div" target so
+        // the slot and its main-screen label stay on "Env".  SetWaveformType
+        // selects the Env slot via SetDividerInternal; its x1 revert when leaving
+        // an envelope runs after _waveformType is updated so this guard allows it.
+        if (IsEnvelopeType())
+            return;
         // Env slot (last index) is not user-selectable; SetWaveformType uses SetDividerInternal.
         _dividerIndex = constrain(index, 0, _dividerAmount - 2);
     }
@@ -1211,6 +1218,17 @@ void Output::GenEnvelope() {
 }
 
 void Output::GeneratePulse(int PPQN, unsigned long globalTick) {
+    // CV passthrough (CV 1 / CV 2) always passes the input value through —
+    // Probability and Euclidean don't gate its output, so make them inert here
+    // too and keep the blink indicator following the flowing CV (rather than
+    // blinking "off" while the CV is still being emitted).
+    if (_waveformType == WaveformType::CVInput1 || _waveformType == WaveformType::CVInput2) {
+        _pulseFired = true;
+        _blinkOnStartTick = globalTick;
+        StartWaveform();
+        return;
+    }
+
     bool shouldTrigger = ((int)_RandomBelow(100) < _pulseProbability);
     if (!_euclideanParams.enabled) {
         // If not using Euclidean rhythm, generate waveform based on the pulse probability
@@ -1455,17 +1473,18 @@ void Output::SetWaveformType(WaveformType type) {
     // Clamp defensively (corrupt preset or CV-mapped value) so indexing into
     // WaveformTypeDescriptions[] can never go out of bounds.
     type = (WaveformType)constrain((int)type, 0, WaveformTypeLength - 1);
-    // If reverting from a trigger to a waveform, reset the divider to x1
-    if (((_waveformType == WaveformType::ADEnvelope) ||
-         (_waveformType == WaveformType::AREnvelope) ||
-         (_waveformType == WaveformType::ADSREnvelope)) &&
-        ((type != WaveformType::ADEnvelope) &&
-         (type != WaveformType::AREnvelope) &&
-         (type != WaveformType::ADSREnvelope))) {
-        SetDivider(9);
-    }
+    // Capture whether we are leaving an envelope (trigger) waveform before we
+    // overwrite _waveformType, so SetDivider's envelope guard sees the new type.
+    bool wasEnvelope = IsEnvelopeType();
     // Set the waveform
     _waveformType = type;
+    // If reverting from a trigger to a waveform, reset the divider to x1.  Done
+    // after updating _waveformType so SetDivider's envelope guard allows it (the
+    // new type is no longer an envelope), otherwise the output would stay stuck
+    // on the "Env" slot and never pulse.
+    if (wasEnvelope && !IsEnvelopeType()) {
+        SetDivider(9);
+    }
     if (_waveformType == WaveformType::ADEnvelope || _waveformType == WaveformType::AREnvelope || _waveformType == WaveformType::ADSREnvelope) {
         _waveActive = false;
         _envState = EnvelopeState::Idle;
