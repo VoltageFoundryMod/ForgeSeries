@@ -919,38 +919,38 @@ const MenuItem MENU_ITEMS[] = {
     {"CV 2:", getCVAttn1, getCVOff1, 60, 100, 10, ROW_TWOCOL, MENU_EDIT, setCVAttn1, nullptr},   // 65
     {"CV 2:", getCVAttn1, getCVOff1, 60, 100, 10, ROW_HIDDEN, MENU_EDIT, setCVOffset1, nullptr}, // 66
 
-    // ── Group 11: Quantizer ───────────────────────────────── items 67–71
-    {"OUTPUT:", getQtzSel, nullptr, 80, 0, 11, ROW_SINGLE, MENU_EDIT, setQtzOutputSel, nullptr},     // 67
-    {"ENABLED:", getQtzEn, nullptr, 80, 0, 11, ROW_SINGLE, MENU_TOGGLE, nullptr, toggleQuantizer},   // 68
-    {"ROOT NOTE:", getQtzNote, nullptr, 80, 0, 11, ROW_SINGLE, MENU_EDIT, setQtzNote, nullptr},      // 69
-    {"SCALE:", getQtzScale, nullptr, 80, 0, 11, ROW_SINGLE, MENU_EDIT, setQtzScale, nullptr},        // 70
-    {"OCT TRANSPOSE:", getQtzOct, nullptr, 96, 0, 11, ROW_SINGLE, MENU_EDIT, setQtzOctave, nullptr}, // 71
-
-    // ── Group 12: Settings / save-load ───────────────────── items 72–77
-    {"TAP TEMPO", nullptr, nullptr, 0, 0, 12, ROW_ACTION, MENU_ACTION, nullptr, SetTapTempo},            // 72
-    {"SCR TIMEOUT:", getTimeout, nullptr, 64, 0, 12, ROW_SINGLE, MENU_EDIT, setMenuTimeout, nullptr},    // 73
-    {"PRESET SLOT:", getSaveSlot, nullptr, 64, 0, 12, ROW_SINGLE, MENU_EDIT, setSaveSlot, nullptr},      // 74
-    {"SAVE", nullptr, nullptr, 0, 0, 12, ROW_ACTION, MENU_ACTION, nullptr, actionSave},                  // 75
-    {"LOAD", nullptr, nullptr, 0, 0, 12, ROW_ACTION, MENU_ACTION, nullptr, actionLoad},                  // 76
-    {"LOAD DEFAULTS", nullptr, nullptr, 0, 0, 12, ROW_ACTION, MENU_ACTION, nullptr, actionLoadDefaults}, // 77
-
-    // ── Group 14: Cross operations (all 4 outputs) ──────────── items 78–85
+    // ── Group 14: Cross operations (all 4 outputs) ──────────── items 67–74
     // col1x=48 (OP), col2x=92 (SRC); even items = TWOCOL, odd = HIDDEN
-    {"OUT 1:", getCrossOp0, getCrossSrc0, 48, 92, 14, ROW_TWOCOL, MENU_EDIT, setCrossOp0, nullptr},  // 78
-    {"OUT 1:", getCrossOp0, getCrossSrc0, 48, 92, 14, ROW_HIDDEN, MENU_EDIT, setCrossSrc0, nullptr}, // 79
-    {"OUT 2:", getCrossOp1, getCrossSrc1, 48, 92, 14, ROW_TWOCOL, MENU_EDIT, setCrossOp1, nullptr},  // 80
-    {"OUT 2:", getCrossOp1, getCrossSrc1, 48, 92, 14, ROW_HIDDEN, MENU_EDIT, setCrossSrc1, nullptr}, // 81
-    {"OUT 3:", getCrossOp2, getCrossSrc2, 48, 92, 14, ROW_TWOCOL, MENU_EDIT, setCrossOp2, nullptr},  // 82
-    {"OUT 3:", getCrossOp2, getCrossSrc2, 48, 92, 14, ROW_HIDDEN, MENU_EDIT, setCrossSrc2, nullptr}, // 83
-    {"OUT 4:", getCrossOp3, getCrossSrc3, 48, 92, 14, ROW_TWOCOL, MENU_EDIT, setCrossOp3, nullptr},  // 84
-    {"OUT 4:", getCrossOp3, getCrossSrc3, 48, 92, 14, ROW_HIDDEN, MENU_EDIT, setCrossSrc3, nullptr}, // 85
+    {"OUT 1:", getCrossOp0, getCrossSrc0, 48, 92, 14, ROW_TWOCOL, MENU_EDIT, setCrossOp0, nullptr},  // 67
+    {"OUT 1:", getCrossOp0, getCrossSrc0, 48, 92, 14, ROW_HIDDEN, MENU_EDIT, setCrossSrc0, nullptr}, // 68
+    {"OUT 2:", getCrossOp1, getCrossSrc1, 48, 92, 14, ROW_TWOCOL, MENU_EDIT, setCrossOp1, nullptr},  // 69
+    {"OUT 2:", getCrossOp1, getCrossSrc1, 48, 92, 14, ROW_HIDDEN, MENU_EDIT, setCrossSrc1, nullptr}, // 70
+    {"OUT 3:", getCrossOp2, getCrossSrc2, 48, 92, 14, ROW_TWOCOL, MENU_EDIT, setCrossOp2, nullptr},  // 71
+    {"OUT 3:", getCrossOp2, getCrossSrc2, 48, 92, 14, ROW_HIDDEN, MENU_EDIT, setCrossSrc2, nullptr}, // 72
+    {"OUT 4:", getCrossOp3, getCrossSrc3, 48, 92, 14, ROW_TWOCOL, MENU_EDIT, setCrossOp3, nullptr},  // 73
+    {"OUT 4:", getCrossOp3, getCrossSrc3, 48, 92, 14, ROW_HIDDEN, MENU_EDIT, setCrossSrc3, nullptr}, // 74
 
-    // ── Group 15: Loops (output selector + params) ──────────── items 86–90
-    {"OUTPUT:", getLoopSel, nullptr, 80, 0, 15, ROW_SINGLE, MENU_EDIT, setLoopOutputSel, nullptr}, // 86
-    {"LOOP BEATS:", getLoopBeats, nullptr, 80, 0, 15, ROW_SINGLE, MENU_EDIT, setLoopBeats, nullptr}, // 87
-    {"WAKE:", getLoopWake, nullptr, 80, 0, 15, ROW_SINGLE, MENU_EDIT, setLoopWake, nullptr},         // 88
-    {"NAP:", getLoopNap, nullptr, 80, 0, 15, ROW_SINGLE, MENU_EDIT, setLoopNap, nullptr},            // 89
-    {"SHIFT:", getLoopShift, nullptr, 80, 0, 15, ROW_SINGLE, MENU_EDIT, setLoopShift, nullptr},      // 90
+    // ── Group 15: Loops (output selector + params) ──────────── items 75–79
+    {"OUTPUT:", getLoopSel, nullptr, 80, 0, 15, ROW_SINGLE, MENU_EDIT, setLoopOutputSel, nullptr}, // 75
+    {"LOOP BEATS:", getLoopBeats, nullptr, 80, 0, 15, ROW_SINGLE, MENU_EDIT, setLoopBeats, nullptr}, // 76
+    {"WAKE:", getLoopWake, nullptr, 80, 0, 15, ROW_SINGLE, MENU_EDIT, setLoopWake, nullptr},         // 77
+    {"NAP:", getLoopNap, nullptr, 80, 0, 15, ROW_SINGLE, MENU_EDIT, setLoopNap, nullptr},            // 78
+    {"SHIFT:", getLoopShift, nullptr, 80, 0, 15, ROW_SINGLE, MENU_EDIT, setLoopShift, nullptr},      // 79
+
+    // ── Group 11: Quantizer ───────────────────────────────── items 80–84
+    {"OUTPUT:", getQtzSel, nullptr, 80, 0, 11, ROW_SINGLE, MENU_EDIT, setQtzOutputSel, nullptr},     // 80
+    {"ENABLED:", getQtzEn, nullptr, 80, 0, 11, ROW_SINGLE, MENU_TOGGLE, nullptr, toggleQuantizer},   // 81
+    {"ROOT NOTE:", getQtzNote, nullptr, 80, 0, 11, ROW_SINGLE, MENU_EDIT, setQtzNote, nullptr},      // 82
+    {"SCALE:", getQtzScale, nullptr, 80, 0, 11, ROW_SINGLE, MENU_EDIT, setQtzScale, nullptr},        // 83
+    {"OCT TRANSPOSE:", getQtzOct, nullptr, 96, 0, 11, ROW_SINGLE, MENU_EDIT, setQtzOctave, nullptr}, // 84
+
+    // ── Group 12: Settings / save-load ───────────────────── items 85–90
+    {"TAP TEMPO", nullptr, nullptr, 0, 0, 12, ROW_ACTION, MENU_ACTION, nullptr, SetTapTempo},            // 85
+    {"SCR TIMEOUT:", getTimeout, nullptr, 64, 0, 12, ROW_SINGLE, MENU_EDIT, setMenuTimeout, nullptr},    // 86
+    {"PRESET SLOT:", getSaveSlot, nullptr, 64, 0, 12, ROW_SINGLE, MENU_EDIT, setSaveSlot, nullptr},      // 87
+    {"SAVE", nullptr, nullptr, 0, 0, 12, ROW_ACTION, MENU_ACTION, nullptr, actionSave},                  // 88
+    {"LOAD", nullptr, nullptr, 0, 0, 12, ROW_ACTION, MENU_ACTION, nullptr, actionLoad},                  // 89
+    {"LOAD DEFAULTS", nullptr, nullptr, 0, 0, 12, ROW_ACTION, MENU_ACTION, nullptr, actionLoadDefaults}, // 90
 };
 
 const int MENU_ITEM_COUNT = (int)(sizeof(MENU_ITEMS) / sizeof(MENU_ITEMS[0]));

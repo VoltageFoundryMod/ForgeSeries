@@ -431,7 +431,7 @@ void HandleDisplay() {
             display.setCursor(MD_LABEL_X, yPosition);
             display.print("TAP TEMPO");
             display.print(" (" + String(BPM) + " BPM)");
-            if (menuItem == 72) {
+            if (menuItem == 85) {
                 display.drawTriangle(MD_CURSOR_X, yPosition - 1, MD_CURSOR_X, yPosition + 7, MD_CURSOR_X + 4, yPosition + 3, 1);
             }
             yPosition += MD_ROW_H; // gap
@@ -439,9 +439,9 @@ void HandleDisplay() {
             display.setCursor(MD_LABEL_X, yPosition);
             display.print("SCR TIMEOUT: ");
             display.print(getTimeout());
-            if (menuItem == 73 && menuMode == 0) {
+            if (menuItem == 86 && menuMode == 0) {
                 display.drawTriangle(MD_CURSOR_X, yPosition - 1, MD_CURSOR_X, yPosition + 7, MD_CURSOR_X + 4, yPosition + 3, 1);
-            } else if (menuMode == 73) {
+            } else if (menuMode == 86) {
                 display.fillTriangle(MD_CURSOR_X, yPosition - 1, MD_CURSOR_X, yPosition + 7, MD_CURSOR_X + 4, yPosition + 3, 1);
             }
             yPosition += MD_ROW_H;
@@ -449,28 +449,28 @@ void HandleDisplay() {
             display.setCursor(MD_LABEL_X, yPosition);
             display.print("PRESET SLOT: ");
             display.print(saveSlot);
-            if (menuItem == 74 && menuMode == 0) {
+            if (menuItem == 87 && menuMode == 0) {
                 display.drawTriangle(MD_CURSOR_X, yPosition - 1, MD_CURSOR_X, yPosition + 7, MD_CURSOR_X + 4, yPosition + 3, 1);
-            } else if (menuMode == 74) {
+            } else if (menuMode == 87) {
                 display.fillTriangle(MD_CURSOR_X, yPosition - 1, MD_CURSOR_X, yPosition + 7, MD_CURSOR_X + 4, yPosition + 3, 1);
             }
             yPosition += MD_ROW_H;
             // Save
             display.setCursor(MD_LABEL_X, yPosition);
             display.print("SAVE");
-            if (menuItem == 75)
+            if (menuItem == 88)
                 display.drawTriangle(MD_CURSOR_X, yPosition - 1, MD_CURSOR_X, yPosition + 7, MD_CURSOR_X + 4, yPosition + 3, 1);
             yPosition += MD_ROW_H;
             // Load
             display.setCursor(MD_LABEL_X, yPosition);
             display.print("LOAD");
-            if (menuItem == 76)
+            if (menuItem == 89)
                 display.drawTriangle(MD_CURSOR_X, yPosition - 1, MD_CURSOR_X, yPosition + 7, MD_CURSOR_X + 4, yPosition + 3, 1);
             yPosition += MD_ROW_H;
             // Load defaults
             display.setCursor(MD_LABEL_X, yPosition);
             display.print("LOAD DEFAULTS");
-            if (menuItem == 77)
+            if (menuItem == 90)
                 display.drawTriangle(MD_CURSOR_X, yPosition - 1, MD_CURSOR_X, yPosition + 7, MD_CURSOR_X + 4, yPosition + 3, 1);
             RedrawDisplay();
             return;
