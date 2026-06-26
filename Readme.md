@@ -8,6 +8,8 @@ ClockForge provides clock signals and waveforms for synchronizing and modulating
 
 Part of the **Forge** series of modules which share a single hardware platform. The new ClockForge 2 is an updated version with a more powerful microcontroller and 4 outputs that can generate clocks, waveforms and envelopes.
 
+The hardware schematics and design files are completely open-source and available in the [GitHub repository](https://github.com/VoltageFoundryMod/ForgeSeries-Hardware).
+
 <img src="./images/Front.jpg" alt="Logo" style="width:20%"/>
 
 [ModularGrid](https://modulargrid.net/e/other-unknown-clockforge-by-voltage-foundry-modular)
