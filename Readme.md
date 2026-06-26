@@ -81,7 +81,6 @@ Whenever a parameter is changed, a small circle will be shown in the top-left co
   - [Powering](#powering)
   - [Specifications](#specifications)
   - [Contact](#contact)
-  - [Development](#development)
   - [Acknowledgements](#acknowledgements)
   - [License](#license)
 
@@ -467,10 +466,6 @@ The module uses only 5V internally. This can be provided directly by a Eurorack 
 ## Contact
 
 For support and inquiries, please open an issue on the [GitHub repository](https://github.com/VoltageFoundryMod/ForgeSeries).
-
-## Development
-
-If you want to build and develop for the module, check [this file](Building-Developing.md) for more information.
 
 ## Acknowledgements
 
