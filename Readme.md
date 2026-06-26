@@ -8,11 +8,13 @@ ClockForge provides clock signals and waveforms for synchronizing and modulating
 
 Part of the **Forge** series of modules which share a single hardware platform. The new ClockForge 2 is an updated version with a more powerful microcontroller and 4 outputs that can generate clocks, waveforms and envelopes.
 
+Most parts of this manual applies to both Hardware and VCV Rack plugin with exceptions to hardware specific features like calibration, powering and firmware update. The VCV Rack plugin is a full software emulation of the hardware module and can be used to test the module without having the physical hardware.
+
 The hardware schematics and design files are completely open-source and available in the [GitHub repository](https://github.com/VoltageFoundryMod/ForgeSeries-Hardware).
 
-<img src="./images/Front.jpg" alt="Logo" style="width:20%"/>
+<img alt="ClockForge 2 Module" src="./images/Front.png" width="20%">
 
-[ModularGrid](https://modulargrid.net/e/other-unknown-clockforge-by-voltage-foundry-modular)
+Check the module on [ModularGrid](https://modulargrid.net/e/other-unknown-clockforge-by-voltage-foundry-modular).
 
 ## Features
 
@@ -55,24 +57,25 @@ Whenever a parameter is changed, a small circle will be shown in the top-left co
     - [Setting the BPM](#setting-the-bpm)
     - [Global Play/Stop](#global-playstop)
     - [Output clock division/multiplication](#output-clock-divisionmultiplication)
+    - [Output Waveform](#output-waveform)
+    - [Output Level and Offset](#output-level-and-offset)
     - [Output Enable/Disable and Invert](#output-enabledisable-and-invert)
     - [Pulse Probability](#pulse-probability)
     - [Euclidean Rhythm Configuration](#euclidean-rhythm-configuration)
     - [Swing Configuration](#swing-configuration)
     - [Output Phase Shift](#output-phase-shift)
     - [Duty Cycle (pulse width)](#duty-cycle-pulse-width)
-    - [Output Level and Offset](#output-level-and-offset)
-    - [Output Waveform](#output-waveform)
     - [Envelopes](#envelopes)
-    - [Tap Tempo](#tap-tempo)
     - [CV Input Modulation](#cv-input-modulation)
-    - [Quantization](#quantization)
     - [Cross Operations](#cross-operations)
     - [Loops](#loops)
+    - [Quantization](#quantization)
     - [Misc Settings](#misc-settings)
+      - [Tap Tempo](#tap-tempo)
       - [Main screen timeout](#main-screen-timeout)
     - [Save/Load Configuration](#saveload-configuration)
     - [External Clock Sync](#external-clock-sync)
+  - [VCV Rack Plugin](#vcv-rack-plugin)
   - [Hardware Calibration](#hardware-calibration)
     - [What you need](#what-you-need)
     - [Running calibration](#running-calibration)
@@ -119,7 +122,11 @@ Each of the four outputs can be individually configured with the following param
 
 ### Interface
 
-- TRIG: Optional Clock input (0-5V)
+On it's main page, the module shows the current BPM and the status of each output. The small squares on the main screen show the status of each output. If the square is filled, the output is active. If the square is empty, the output is stopped.
+
+![Main Screen](images/display/MainScreen.png)
+
+- CLK In: Optional CV Clock input (0-5V)
 - IN1, IN2: CV input to control internal parameters via matrix (0-5V)
 - OUT 1 / 2 / 3 / 4: Outputs which are waveform capable (0-5V)
 
@@ -136,6 +143,8 @@ With the **PLAY** or **STOP** word underlined, press the encoder button to stop 
 
 ### Output clock division/multiplication
 
+![clock dividers](images/display/ClockDividers.png)
+
 Outputs can be configured to multiply or divide the master clock. The default value is 1x which means the output will be in sync with the master clock. The outputs can be multiplied up to 64x or divided down to /128 with some triplets and dotted notes in between in the "1.5" and "3" division and multiplier values.
 
 1. Navigate to the selected output.
@@ -143,80 +152,9 @@ Outputs can be configured to multiply or divide the master clock. The default va
 3. Use the encoder to select the desired divider value.
 4. Click the encoder to exit edit mode.
 
-### Output Enable/Disable and Invert
-
-The Output State page has two columns per output: **STATE** and **INV**.
-
-Outputs can be stopped individually (STATE). When stopped, the output will not generate any pulses. When master stop is activated, all outputs will be stopped and when master play is resumed, any stopped output will be kept stopped.
-
-The **INV** column inverts the output polarity (the final voltage becomes 5V − value), so a rising ramp becomes falling, and a high gate becomes low. This is applied at the very last stage, after cross-operations and quantization. (Note: inverting a quantized pitch mirrors it around mid-scale rather than transposing it, so invert is mainly useful for gates, triggers and modulation shapes.)
-
-1. Navigate to the output state menu page.
-2. Use the encoder to move between the STATE and INV columns for each output (the arrow indicates the active column).
-3. Click the encoder to toggle the selected output's state (ON/OFF) or invert (Inv/-).
-
-### Pulse Probability
-
-This is the percentage of probability that a pulse will be generated on the output. This is useful for creating random patterns or adding some variation to the output.
-
-1. Navigate to the probability menu page.
-2. Click the encoder to enter edit mode on the selected output.
-3. Use the encoder to select the desired pulse probability in percentage.
-4. Click the encoder to exit edit mode.
-
-### Euclidean Rhythm Configuration
-
-Euclidean rhythms are generated by an algorithm that takes a number of steps, a number of triggers (HITS — the active steps) and a rotation (RT) of the pattern, then spaces the hits as equidistant from each other as possible. See <https://en.wikipedia.org/wiki/Euclidean_rhythm> for more info.
-
-Additional empty steps can be added to the end of the pattern using the pad (PD) parameter. This is useful for creating more complex rhythms.
-
-1. Navigate to the euclidean rhythm menu page.
-2. Select the output item and click the encoder to select the output to be edited. Click the encoder again to exit the output selection.
-3. First setting enables or disables the Euclidean rhythm generation by clicking the encoder.
-4. Select the Steps, Triggers and Rotation parameters, click the encoder to edit the values.
-5. The pattern will be updated in real-time and displayed on the right of the screen. Euclidean rhythm allows up to 64 steps but only the first 47 are displayed. Rhythm steps are shown in columns, top to bottom, left to right.
-
-The euclidean rhythm pulse is affected by the pulse probability setting.
-
-### Swing Configuration
-
-The outputs can have a swing pattern applied to them. The swing amount is in 1/96th of a note based on current BPM and the swing every is the interval between applying the swing. The swing amount can be set from 2/96th to 12/96th delay and the swing every from 1 to 16 pulses.
-
-1. Navigate to the selected output. The first parameter to be edited is the swing amount.
-2. Click the encoder to enter edit mode.
-3. Use the encoder to select the desired swing amount.
-4. Click the encoder to exit edit mode.
-5. Navigate to the selected output, the second parameter to be edited is the swing every.
-6. Click the encoder to enter edit mode.
-7. Use the encoder to select the desired swing every value.
-8. Click the encoder to exit edit mode.
-
-### Output Phase Shift
-
-Outputs can have their phase adjusted in percentage in relation to the master pulse. This allows for phase shifting the output in relation to the master clock. The default value is 0% which means the output is in phase with the master clock.
-An adjustment of 50% will shift the output by half a pulse width, which means this output will hit on the upbeats of the master clock (or of an output with a 0% phase shift).
-
-Just be careful with phase wraps as shifting an output phase by more than 50% with a duty-cycle bigger than 50% can lead to unexpected triggers.
-
-### Duty Cycle (pulse width)
-
-Duty cycle or width is the percentage of the pulse that remains high or low. The default value is 50% which means the pulse high cycle has the same length as the low cycle. The duty cycle can be set from 1 to 99% where 1% will generate a very short pulse and 99% a very long high pulse.
-
-The non-square waveforms can also have their shape modified by the duty cycle parameter. For example, a 50% duty cycle (default) in the triangle wave output will generate a perfect triangle wave, setting the duty cycle to 1% will generate a sawtooth wave and setting it to 99% will generate an inverted sawtooth wave. The duty cycle also affects the envelopes by shortening or lengthening the decay time during the pulse.
-
-1. Select the duty cycle parameter for the desired output. Click the encoder to enter edit mode.
-2. Use the encoder to select the desired duty cycle value from 1 to 99%.
-3. Click the encoder to exit edit mode.
-
-### Output Level and Offset
-
-Allows setting the output level and offset which ranges from 0 to 100% corresponding to 0 to 5V.
-
-1. Navigate to the selected output. Click the encoder to enter edit mode.
-2. Use the encoder to select the desired output level from 0 to 100% which corresponds to 0 to 5V.
-3. Click the encoder to exit edit mode.
-
 ### Output Waveform
+
+![waveforms](images/display/Waveforms.png)
 
 Outputs can be configured to multiple waveforms and envelopes.
 
@@ -247,27 +185,113 @@ They support the following:
 2. Use the encoder to select the desired waveform. The waveform will be updated in real-time.
 3. Click the encoder to exit edit mode.
 
+### Output Level and Offset
+
+![output level](images/display/OutputLevels.png)
+
+Allows setting the output level and offset which ranges from 0 to 100% corresponding to 0 to 5V.
+
+1. Navigate to the selected output. Click the encoder to enter edit mode.
+2. Use the encoder to select the desired output level from 0 to 100% which corresponds to 0 to 5V.
+3. Click the encoder to exit edit mode.
+
+### Output Enable/Disable and Invert
+
+![output state](images/display/OutputState.png)
+
+The Output State page has two columns per output: **STATE** and **INV**.
+
+Outputs can be stopped individually (STATE). When stopped, the output will not generate any pulses. When master stop is activated, all outputs will be stopped and when master play is resumed, any stopped output will be kept stopped.
+
+The **INV** column inverts the output polarity (the final voltage becomes 5V − value), so a rising ramp becomes falling, and a high gate becomes low. This is applied at the very last stage, after cross-operations and quantization. (Note: inverting a quantized pitch mirrors it around mid-scale rather than transposing it, so invert is mainly useful for gates, triggers and modulation shapes.)
+
+1. Navigate to the output state menu page.
+2. Use the encoder to move between the STATE and INV columns for each output (the arrow indicates the active column).
+3. Click the encoder to toggle the selected output's state (ON/OFF) or invert (Inv/-).
+
+### Pulse Probability
+
+![probability](images/display/Probability.png)
+
+This is the percentage of probability that a pulse will be generated on the output. This is useful for creating random patterns or adding some variation to the output.
+
+1. Navigate to the probability menu page.
+2. Click the encoder to enter edit mode on the selected output.
+3. Use the encoder to select the desired pulse probability in percentage.
+4. Click the encoder to exit edit mode.
+
+### Euclidean Rhythm Configuration
+
+![euclidean](images/display/Euclidean.png)
+
+Euclidean rhythms are generated by an algorithm that takes a number of steps, a number of triggers (HITS — the active steps) and a rotation (ROT) of the pattern, then spaces the hits as equidistant from each other as possible. See <https://en.wikipedia.org/wiki/Euclidean_rhythm> for more info.
+
+Additional empty steps can be added to the end of the pattern using the pad (PAD) parameter. This is useful for creating more complex rhythms.
+
+1. Navigate to the euclidean rhythm menu page.
+2. Select the output item and click the encoder to select the output to be edited. Click the encoder again to exit the output selection.
+3. First setting enables or disables the Euclidean rhythm generation by clicking the encoder.
+4. Select the Steps, Triggers and Rotation parameters, click the encoder to edit the values.
+5. The pattern will be updated in real-time and displayed on the right of the screen. Euclidean rhythm allows up to 64 steps but only the first 47 are displayed. Rhythm steps are shown in columns, top to bottom, left to right.
+
+The euclidean rhythm pulse is affected by the pulse probability setting.
+
+### Swing Configuration
+
+![swing](images/display/Swing.png)
+
+The outputs can have a swing pattern applied to them. The swing amount is in 1/96th of a note based on current BPM and the swing every is the interval between applying the swing. The swing amount can be set from 2/96th to 12/96th delay and the swing every from 1 to 16 pulses.
+
+1. Navigate to the selected output. The first parameter to be edited is the swing amount.
+2. Click the encoder to enter edit mode.
+3. Use the encoder to select the desired swing amount.
+4. Click the encoder to exit edit mode.
+5. Navigate to the selected output, the second parameter to be edited is the swing every.
+6. Click the encoder to enter edit mode.
+7. Use the encoder to select the desired swing every value.
+8. Click the encoder to exit edit mode.
+
+### Output Phase Shift
+
+![phase](images/display/Phase.png)
+
+Outputs can have their phase adjusted in percentage in relation to the master pulse. This allows for phase shifting the output in relation to the master clock. The default value is 0% which means the output is in phase with the master clock.
+An adjustment of 50% will shift the output by half a pulse width, which means this output will hit on the upbeats of the master clock (or of an output with a 0% phase shift).
+
+Just be careful with phase wraps as shifting an output phase by more than 50% with a duty-cycle bigger than 50% can lead to unexpected triggers.
+
+### Duty Cycle (pulse width)
+
+![duty](images/display/Duty.png)
+
+Duty cycle or width is the percentage of the pulse that remains high or low. The default value is 50% which means the pulse high cycle has the same length as the low cycle. The duty cycle can be set from 1 to 99% where 1% will generate a very short pulse and 99% a very long high pulse.
+
+The non-square waveforms can also have their shape modified by the duty cycle parameter. For example, a 50% duty cycle (default) in the triangle wave output will generate a perfect triangle wave, setting the duty cycle to 1% will generate a sawtooth wave and setting it to 99% will generate an inverted sawtooth wave. The duty cycle also affects the envelopes by shortening or lengthening the decay time during the pulse.
+
+1. Select the duty cycle parameter for the desired output. Click the encoder to enter edit mode.
+2. Use the encoder to select the desired duty cycle value from 1 to 99%.
+3. Click the encoder to exit edit mode.
+
 ### Envelopes
 
-The module supports envelope generators based on input CV triggers. Refer to the Output Waveform section for more information on the envelope types.
+![envelope](images/display/Envelope.png)
 
-The AD, AR and ADSR envelopes can only be generated by using triggers/gates on the CV inputs. They can have configurable curves between logarithmic, linear and exponential and also allow retriggering while the envelope is still active. The other waveforms (square, sine, etc) cannot be triggered by CV inputs.
+The module supports envelope generators based on input CV triggers. Refer to the Output Waveform section for more information on setting the envelope types.
+
+The AD, AR and ADSR envelopes can only be generated by using triggers/gates on the CV inputs. They can have configurable curves between logarithmic, linear and exponential and also allow retriggering while the envelope is still active. The other waveforms (square, sine, Exp Env, Log Env and its inverted modes, etc) cannot be triggered by CV inputs.
 
 To set an envelope generation, follow these steps:
 
-1. Go to the waveform selection like in previous section and choose between "AD Env", "AR Env" or "ADSR Env".
-2. Then, go to CV Input target configuration, select which CV input will receive the gate/trigger and assign it to the Output X Env parameter.
+1. Go to the waveform selection and choose between "AD Env", "AR Env" or "ADSR Env".
+2. Go to CV Input target configuration, select which CV input will receive the gate/trigger and assign it to the Output X Env parameter.
 
 Tip: You can have up to 2 envelopes running at the same time, as there are only 2 CV inputs that can be assigned as triggers. Each output can have its own parameters like envelope type, levels, offsets, curves and retriggering settings.
 
-### Tap Tempo
-
-In addition to setting the BPM manually, the module can be set to the desired BPM by clicking the encoder. The module will calculate the BPM based on the interval between taps.
-
-1. Select the tap tempo parameter.
-2. Press the encoder button at least 3 times to set the BPM based on the interval between taps. If more than 3 taps are entered, the average time between the last 3 is used. BPM is updated in real-time.
+Adjust the envelope parameters like Attack, Decay and Release times, Sustain level, curve percentage and retriggering to your needs.
 
 ### CV Input Modulation
+
+![cv input targets](images/display/CVTargets.png)
 
 Many parameters can be modulated by the CV inputs. The CV inputs are 0-5V and can be used on the modulation matrix to control the parameters below:
 
@@ -296,21 +320,9 @@ Each input can be assigned to one of the parameters above. The CV input can be a
 
 The CV target is only applied to the selected parameter when the user exits edit mode. This way, a CV connected to an input does not change the scrolled parameters while the user is selecting the target.
 
-### Quantization
-
-The module supports quantization of the output to a specific scale and root note. The quantization can be applied to the output waveform or to the CV input.
-
-The Quantize Settings menu allows you to enable/disable quantization for the selected output, choose the root note, scale to be used and octave transpose with 3 octave levels higher or lower.
-
-To use quantization on the generated output, first select the output waveform type (sine, S&H, etc) and then enable the quantization on Quantize menu. Select the root note and scale to be used. The quantization will be applied to the output waveform.
-
-It's also possible to quantize an input CV signal to a specific scale and root note. This is useful for using CV values generated by external modules (e.g. a sequencer or random source) to drive pitch. To do this, select the **"CV 1"** or **"CV 2"** waveform type for the output — this mirrors the corresponding CV input jack to that output. Then enable quantization in the Quantize menu and pick the root note and scale.
-
-Eg. to quantize CV input 1 on output 3: set output 3's waveform to "CV 1", then enable Quantize on output 3 and choose the scale/root note. The CV input is copied to the output and snapped to the selected scale — no CV Input Target assignment is needed.
-
-With quantization disabled, the "CV 1"/"CV 2" waveform simply passes the CV input through to the output (a buffered copy), which can be used as a CV mult/buffer.
-
 ### Cross Operations
+
+![cross operations](images/display/CrossOps.png)
 
 Cross operations allow the value of an output to be influenced by another signal (a _source_) through a selected operation. This can be as simple as mixing two outputs together, a logic gate, or something more involved like sample-and-hold or reseeding randomness. It greatly extends the basic logic operations found on similar modules.
 
@@ -347,6 +359,8 @@ Logic operations treat a value above half scale as "high". The HOLD, MASK, NOT, 
 
 ### Loops
 
+![loops](images/display/Loops.png)
+
 Loops turn free-running or random patterns into repeating, musically structured phrases by periodically rewinding an output. A loop length is specified in **beats** (quarter notes, not steps), and at each loop boundary the output's pattern generators — random values, probability decisions and the Euclidean step position — are rewound to their start, so the pattern repeats identically.
 
 This is especially useful for random waveforms (Noise, Smooth Noise, S&H) and probability or Euclidean patterns: with a loop set, an otherwise endless random sequence becomes a locked, repeating groove aligned to the bar.
@@ -366,7 +380,32 @@ For example, with Loop Beats = 4, Wake = 2 and Nap = 1, the output plays the sam
 4. Optionally set **WAKE**, **NAP** and **SHIFT** to build the mute pattern.
 5. Click the encoder to exit edit mode.
 
+### Quantization
+
+![quantize](images/display/Quantize.png)
+
+The module supports quantization of the output to a specific scale and root note. The quantization can be applied to the output waveform or to the CV input.
+
+The Quantize Settings menu allows you to enable/disable quantization for the selected output, choose the root note, scale to be used and octave transpose with 3 octave levels higher or lower.
+
+To use quantization on the generated output, first select the output waveform type (sine, S&H, etc) and then enable the quantization on Quantize menu. Select the root note and scale to be used. The quantization will be applied to the output waveform.
+
+It's also possible to quantize an input CV signal to a specific scale and root note. This is useful for using CV values generated by external modules (e.g. a sequencer or random source) to drive pitch. To do this, select the **"CV 1"** or **"CV 2"** waveform type for the output — this mirrors the corresponding CV input jack to that output. Then enable quantization in the Quantize menu and pick the root note and scale.
+
+Eg. to quantize CV input 1 on output 3: set output 3's waveform to "CV 1", then enable Quantize on output 3 and choose the scale/root note. The CV input is copied to the output and snapped to the selected scale — no CV Input Target assignment is needed.
+
+With quantization disabled, the "CV 1"/"CV 2" waveform simply passes the CV input through to the output (a buffered copy), which can be used as a CV mult/buffer.
+
 ### Misc Settings
+
+![misc settings](images/display/MiscSettings.png)
+
+#### Tap Tempo
+
+In addition to setting the BPM manually, the module can be set to the desired BPM by clicking the encoder. The module will calculate the BPM based on the interval between taps.
+
+1. Select the tap tempo parameter.
+2. Press the encoder button at least 3 times to set the BPM based on the interval between taps. If more than 3 taps are entered, the average time between the last 3 is used. BPM is updated in real-time.
 
 #### Main screen timeout
 
@@ -386,13 +425,24 @@ The "LOAD DEFAULTS" option will load the default configuration to current parame
 
 ### External Clock Sync
 
-1. Connect an external clock signal to the **TRIG** input.
+![external clock](images/display/ExternalClock.png)
+
+1. Connect an external clock signal to the **CLK IN** input.
 2. The module will automatically adjust the BPM to match the external clock. A small "E" will be displayed on the screen next to BPM when the external clock is detected.
 3. When the external clock is disconnected, the module will revert to the last used internal BPM.
 
 If the external clock is faster than needed (for example running at higher PPQN), it's possible to apply an external clock divider (from no division to 48PPQN) to the input signal in the Clock Divider section.
 
 The module works with external clocks from 30 to 300 BPM. Due to timer resolution, using very slow external clocks with high multipliers may lead to jitter on the outputs.
+
+## VCV Rack Plugin
+
+The VCV Rack plugin is a full software emulation of the hardware module and can be used to test the module without having the physical hardware. The plugin saves and loads the configuration in the same way as the hardware module internally without the use of VCV Rack presets.
+
+Some features of the VCV Rack module are exclusive to the plugin and not available on the hardware module. These include:
+
+- Setting the input CV range to 0-5V or 0-10V or -5V to +5V. The hardware module only supports 0-5V.
+- Setting the Encoder sensitivity.
 
 ## Hardware Calibration
 
