@@ -49,6 +49,14 @@ bool extClockBlinkState = false; // toggled each QN for the blink indicator
 static const int MIN_EXT_CLOCK_PULSES = 3;
 static int pendingExtClockPulses = 0; // consecutive valid QN pulses seen so far
 
+// Ring-buffer of the last 3 inter-pulse intervals for external-clock averaging.
+// File-scope (not function-local static in ClockReceived) so the VCV port can
+// include it in its per-instance state swap — otherwise two module instances
+// driven by external clocks would share one averaging buffer.  On hardware this
+// is behaviourally identical to a function-local static (single instance).
+static unsigned long _extInterval[3] = {0, 0, 0};
+static int _extIntervalIndex = 0;
+
 static int const dividerAmount = 7;
 int externalClockDividers[dividerAmount] = {1, 2, 4, 8, 16, 24, 48};
 // Labels reflect the number of pulses-per-quarter-note the attached clock
@@ -105,21 +113,19 @@ void ClockReceived() {
         return;
     }
 
-    // Ring-buffer of the last 3 inter-pulse intervals for averaging.
+    // Ring-buffer of the last 3 inter-pulse intervals for averaging (state is
+    // file-scope: _extInterval / _extIntervalIndex, declared above).
     // New intervals that differ from the current one by more than 50% are treated
     // as outliers (e.g. cable reconnect, first pulse after a pause).
-    static unsigned long intervals[3] = {0, 0, 0};
-    static int intervalIndex = 0;
-
-    intervals[intervalIndex] = interval;
-    intervalIndex = (intervalIndex + 1) % 3;
+    _extInterval[_extIntervalIndex] = interval;
+    _extIntervalIndex = (_extIntervalIndex + 1) % 3;
 
     unsigned long averageInterval = 0;
     int validIntervals = 0;
     for (int i = 0; i < 3; i++) {
-        if (intervals[i] > 0 &&
-            abs((long)intervals[i] - (long)interval) < (long)(interval / 2)) {
-            averageInterval += intervals[i];
+        if (_extInterval[i] > 0 &&
+            abs((long)_extInterval[i] - (long)interval) < (long)(interval / 2)) {
+            averageInterval += _extInterval[i];
             validIntervals++;
         }
     }

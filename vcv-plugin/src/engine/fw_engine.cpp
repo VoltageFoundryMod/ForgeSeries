@@ -10,6 +10,9 @@
 #include "../shim/Wire.h"
 #include "../shim/EEPROM.h"
 
+#include <mutex>
+#include <utility> // std::swap
+
 // ── Shim symbol definitions ──────────────────────────────────────────────────
 HostBridge *g_host = nullptr;
 SerialShim Serial;
@@ -155,35 +158,129 @@ void RunCalibration() {
 
 namespace cfengine {
 
+// ── Per-instance firmware state (registry: engine_state.def) ──────────────────
+// The firmware keeps its DSP/menu state in file-scope globals so the same lib/
+// builds unchanged for the RP2040.  To let multiple Rack instances coexist, each
+// Engine owns an EngineState snapshot that is *swapped* with the live globals
+// around every entry point (swap-in → run firmware → swap-out).  Swapping rather
+// than copying keeps every heap-backed String/std::vector living in exactly one
+// place at a time, so it is allocation-free and safe.  The swap is symmetric:
+// the same call swaps in and swaps out (swap∘swap = identity), and it restores
+// the globals to whatever they held before, so the resting global values are
+// irrelevant scratch.
+struct EngineState {
+    // Mirror one field per registered global.
+#define CF_SCALAR(T, n) T n;
+#define CF_ARRAY(T, n, N) T n[N];
+#define CF_OBJECT(T, n) T n;
+#include "engine_state.def"
+#undef CF_SCALAR
+#undef CF_ARRAY
+#undef CF_OBJECT
+
+    // outputs[] is handled outside the registry: Output has no default ctor, so
+    // the array member needs an initializer (mirroring the global definition).
+    Output outputs[NUM_OUTPUTS] = {
+        Output(1, OutputType::DACOut),
+        Output(2, OutputType::DACOut),
+        Output(3, OutputType::DACOut),
+        Output(4, OutputType::DACOut)};
+
+    // Exchange this snapshot with the live firmware globals (symmetric).
+    void swapWithGlobals() {
+        using std::swap;
+#define CF_SCALAR(T, n)          \
+    {                            \
+        T _t = (T)::n;           \
+        ::n = this->n;           \
+        this->n = _t;            \
+    }
+#define CF_ARRAY(T, n, N)             \
+    for (int _i = 0; _i < (N); ++_i) { \
+        T _t = (T)::n[_i];             \
+        ::n[_i] = this->n[_i];         \
+        this->n[_i] = _t;              \
+    }
+#define CF_OBJECT(T, n) swap(::n, this->n);
+#include "engine_state.def"
+#undef CF_SCALAR
+#undef CF_ARRAY
+#undef CF_OBJECT
+        for (int i = 0; i < NUM_OUTPUTS; ++i)
+            swap(::outputs[i], this->outputs[i]);
+    }
+
+    // Deep-copy the live globals into this snapshot (globals unchanged).  Used
+    // once to capture the firmware's initialised power-on defaults — the scalar
+    // globals get their defaults from their *initializers* (e.g. `menuItem = 2`),
+    // which a default-constructed EngineState would not have.
+    void copyFromGlobals() {
+#define CF_SCALAR(T, n) this->n = (T)::n;
+#define CF_ARRAY(T, n, N) \
+    for (int _i = 0; _i < (N); ++_i) this->n[_i] = (T)::n[_i];
+#define CF_OBJECT(T, n) this->n = ::n;
+#include "engine_state.def"
+#undef CF_SCALAR
+#undef CF_ARRAY
+#undef CF_OBJECT
+        for (int i = 0; i < NUM_OUTPUTS; ++i)
+            this->outputs[i] = ::outputs[i];
+    }
+};
+
 struct Engine {
     HostBridge host;
+    EngineState state;
     double tickAccum = 0.0;
     bool lastClock = false;
     bool lastButton = false; // true = currently pressed
 };
 
-// NOTE: v1 backs the firmware's file-scope globals with a single shared set.
-// One instance is fully correct; the per-instance EngineState context-swap is
-// the next task. g_host (framebuffer/DAC/ADC) is already per-instance.
-static bool _inited = false;
+// One mutex guards the single shared set of firmware globals: all engine entry
+// points serialize on it (process() on the audio thread, getFramebuffer()/UI on
+// the draw thread), so the swap-in→run→swap-out region is never interleaved.
+static std::mutex g_globalsMutex;
+
+// RAII: lock the globals, point IO at this instance, swap its state into the live
+// globals for the duration of the call, then swap it back out and unlock.
+struct EngineScope {
+    std::lock_guard<std::mutex> _lock;
+    Engine *_e;
+    explicit EngineScope(Engine *e) : _lock(g_globalsMutex), _e(e) {
+        g_host = &_e->host;
+        _e->state.swapWithGlobals(); // swap in
+    }
+    ~EngineScope() {
+        _e->state.swapWithGlobals(); // swap out
+    }
+};
 
 static uint16_t voltsToAdc(float v) {
     int a = (int)(v / 5.0f * 4095.0f + 0.5f);
     return (uint16_t)constrain(a, 0, 4095);
 }
 
-static void engineInitOnce() {
-    if (_inited) return;
-    _inited = true;
-    EEPROMInit();
-    InitIO();
-    // Wire the external-clock interrupt exactly as main.cpp setup() does. Without
-    // this the CLK IN rising-edge ISR (ClockReceived) is never registered, so the
-    // engine's edge detector in process() has no callback to fire and external
-    // clock sync never engages.
+// One-time setup of the *shared* shim objects — the external-clock interrupt
+// vector, the SSD1306, and the MCP4728.  These are process-global (not part of
+// any instance's swapped state), so they run exactly once regardless of how many
+// modules are instantiated.  Wiring the CLK IN rising-edge ISR (ClockReceived)
+// here mirrors main.cpp setup(); without it external-clock sync never engages.
+static void globalOneTimeInit() {
+    static bool done = false;
+    if (done) return;
+    done = true;
     attachInterrupt(digitalPinToInterrupt(CLK_IN_PIN), ClockReceived, RISING);
     display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS);
     InitDAC();
+}
+
+// Per-instance boot: runs against whatever EngineState is currently swapped into
+// the globals (the caller must hold an EngineScope).  Mirrors main.cpp setup()
+// minus the shared one-time bits.  A fresh instance starts from a blank EEPROM,
+// so Load(0)/LoadCalibration fall back to defaults.
+static void engineInstanceInit() {
+    EEPROMInit();
+    InitIO();
     cal = LoadCalibration();
     LoadSaveParams p = Load(0);
     UpdateParameters(p);
@@ -219,18 +316,35 @@ static void doEncoderClick() {
 
 Engine *createEngine() {
     Engine *e = new Engine();
-    g_host = &e->host;
-    engineInitOnce();
+    std::lock_guard<std::mutex> lock(g_globalsMutex);
+
+    // The firmware's power-on defaults live in the globals' static initializers
+    // (e.g. `menuItem = 2`, `BPM = 120`), not in EngineState's members.  On the
+    // first instance the globals are still at those defaults, so run the one-time
+    // shared setup + a full instance init against them and capture the result as
+    // the template every instance is seeded from.
+    static bool havePristine = false;
+    static EngineState pristine;
+    if (!havePristine) {
+        g_host = &e->host; // InitDAC / display.begin write through g_host
+        globalOneTimeInit();
+        engineInstanceInit();
+        pristine.copyFromGlobals();
+        havePristine = true;
+    }
+
+    e->state = pristine; // seed this instance (independent deep copy)
     return e;
 }
 
 void destroyEngine(Engine *e) {
+    std::lock_guard<std::mutex> lock(g_globalsMutex);
     if (g_host == &e->host) g_host = nullptr;
     delete e;
 }
 
 void process(Engine *e, float dt, const float cvVolts[2], bool clockGateHigh, float outVolts[4]) {
-    g_host = &e->host;
+    EngineScope scope(e);
 
     // Advance engine time by the elapsed block.
     g_engineMicros += (unsigned long)(dt * 1.0e6f + 0.5f);
@@ -264,7 +378,7 @@ void process(Engine *e, float dt, const float cvVolts[2], bool clockGateHigh, fl
 }
 
 void encoderTurn(Engine *e, int detents) {
-    g_host = &e->host;
+    EngineScope scope(e);
     int dir = detents > 0 ? 1 : -1;
     int n = detents > 0 ? detents : -detents;
     for (int k = 0; k < n; k++) {
@@ -281,14 +395,14 @@ void encoderTurn(Engine *e, int detents) {
 }
 
 void encoderButton(Engine *e, bool pressed) {
-    g_host = &e->host;
+    EngineScope scope(e);
     if (pressed && !e->lastButton) doEncoderClick(); // press edge
     e->lastButton = pressed;
     e->host.gpio[ENCODER_SW] = pressed ? 0 : 1;
 }
 
 void getFramebuffer(Engine *e, uint8_t out[1024]) {
-    g_host = &e->host;
+    EngineScope scope(e);
     bool msgActive = _tempMsg[0] && (long)(millis() - _tempMsgUntil) < 0;
     if (msgActive) {
         display.clearDisplay();
@@ -306,12 +420,12 @@ void getFramebuffer(Engine *e, uint8_t out[1024]) {
 }
 
 std::string serialize(Engine *e) {
-    g_host = &e->host;
+    EngineScope scope(e);
     return std::string((const char *)EEPROM.data.data(), EEPROM.data.size());
 }
 
 void deserialize(Engine *e, const std::string &blob) {
-    g_host = &e->host;
+    EngineScope scope(e);
     EEPROM.data.assign(blob.begin(), blob.end());
     // Reload settings from slot 0 into the live state.
     cal = LoadCalibration();
@@ -321,6 +435,9 @@ void deserialize(Engine *e, const std::string &blob) {
     REQUEST_DISPLAY_REFRESH();
 }
 
-int bpm(Engine *) { return (int)BPM; }
+int bpm(Engine *e) {
+    EngineScope scope(e);
+    return (int)BPM;
+}
 
 } // namespace cfengine

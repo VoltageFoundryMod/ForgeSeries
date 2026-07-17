@@ -116,14 +116,49 @@ Notes:
 - `RACK_USER_DIR` must be passed explicitly: in the MSYS2 shell `LOCALAPPDATA`
   isn't exported, so `make install` would otherwise target the wrong folder.
 
+### Per-instance state (multi-instance context-swap)
+
+The firmware keeps all DSP/menu state in **file-scope globals** so the same
+`lib/` builds unchanged for the RP2040. That makes the state process-global,
+which VCV — where a patch can hold many module instances — cannot allow. IO
+(framebuffer/DAC/ADC) was already per-instance via the `g_host` pointer; the
+DSP/menu state is made per-instance by a **context-swap** instead of a rewrite:
+
+- Each `Engine` owns an `EngineState` snapshot mirroring every mutable global.
+  The globals it covers are registered **once** in
+  [`engine_state.def`](../vcv-plugin/src/engine/engine_state.def) (an X-macro
+  list expanded three ways — struct fields, swap, and copy). Adding a firmware
+  global is a one-line edit there.
+- Every `cfengine` entry point wraps its body in an `EngineScope` RAII guard
+  that locks a mutex, points `g_host` at the instance, **swaps** its `EngineState`
+  into the live globals, runs the firmware, then swaps it back out. Swapping
+  (never copying) keeps every heap-backed `String`/`std::vector` living in
+  exactly one place at a time, so it is allocation-free and safe; the swap is
+  symmetric and self-restoring, so the resting global values are irrelevant.
+- One `std::mutex` serializes all entry points across all instances, so
+  `process()` (audio thread) and `getFramebuffer()` (draw thread) never
+  interleave on the shared globals.
+- New instances are seeded from a **pristine snapshot** captured on the first
+  `createEngine()` (the firmware's power-on defaults live in the globals'
+  static initializers, e.g. `menuItem = 2`, not in `EngineState`).
+
+Verified by [`test/isolation_test.cpp`](../vcv-plugin/test/isolation_test.cpp),
+a host harness (no Rack needed) that drives two engines independently; build/run
+with `test/build_isolation_test.sh`. It is also the guard against a future global
+being added to the firmware but not to the registry.
+
+Two firmware-side changes support the swap, both behaviour-identical on hardware:
+`Output::MaxWaveValue` became `static constexpr` (so `Output` is assignable), and
+the external-clock averaging ring buffer in `clockEngine.hpp` moved from a
+function-local `static` to file scope (so it is nameable by the registry).
+
+Deliberately **shared** (safe under the entry-point lock): `display` (redrawn
+each frame), `displayMgr`/`metrics` (rate-limiter/diagnostic state), and the
+one-time shim setup (interrupt vector, `display.begin`, `InitDAC`). Promote any
+of these into `engine_state.def` if a visible cross-instance artifact appears.
+
 ## Known limitations / TODO
 
-- **Per-instance state**: the firmware uses file-scope globals, and the same
-  `lib/` must keep building for the RP2040 hardware, so it can't be rewritten
-  into members. The framebuffer/DAC/ADC are already per-instance (`g_host`), but
-  the DSP/menu state is shared — a second module instance in the same patch will
-  share it. The planned fix is a per-instance "context-swap" of an `EngineState`
-  snapshot around each engine entry point.
 - Encoder feel (sensitivity, direction) and CV input ranges (0–5 V vs Rack's
   ±5/±10 V norms) are candidates for tuning / context-menu options.
 

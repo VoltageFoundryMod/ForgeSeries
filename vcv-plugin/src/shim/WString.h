@@ -17,6 +17,14 @@ class String {
     String(const String &str) : s(str.s) {}
     String(char c) : s(1, c) {}
 
+    // Rule-of-five: a user-provided copy ctor suppresses the implicit copy
+    // assignment (deprecated to rely on in C++17).  Default the assignment/move
+    // ops explicitly so copying/swapping String (and Output, which holds String
+    // arrays, during the per-instance state swap) is warning-clean.
+    String &operator=(const String &) = default;
+    String(String &&) = default;
+    String &operator=(String &&) = default;
+
     // Integer constructors with optional base (Arduino: 10=DEC, 16=HEX, ...).
     String(int v, int base = 10) { fromInt((long)v, base); }
     String(unsigned int v, int base = 10) { fromUInt((unsigned long)v, base); }
