@@ -377,7 +377,10 @@ class Output {
     // is calibrated on the 6V opamp rail).  The entire 0..MAXDAC range is linear,
     // so "100% level" maps directly to MAXDAC with no software cap.  (The old
     // design capped output at ~4V because a 5V-rail MCP6004 saturated near 5V.)
-    const float MaxWaveValue = 255.0;
+    // static constexpr (not a per-instance const member) so Output stays
+    // copy/move-assignable — the VCV port swaps whole Output objects between
+    // per-instance state snapshots.  Value/codegen identical on hardware.
+    static constexpr float MaxWaveValue = 255.0;
     static int const _dividerAmount = 21;
     float _clockDividers[_dividerAmount] = {0.0078125, 0.015625, 0.03125, 0.0625, 0.125, 0.25, 0.3333333333, 0.5, 0.6666666667, 1.0, 1.5, 2.0, 3.0, 4.0, 8.0, 16.0, 24.0, 32.0, 48.0, 64.0, 10000};
     String _dividerDescription[_dividerAmount] = {"/128", "/64", "/32", "/16", "/8", "/4", "/3", "/2", "/1.5", "x1", "x1.5", "x2", "x3", "x4", "x8", "x16", "x24", "x32", "x48", "x64", "Env"};
