@@ -165,6 +165,7 @@ class Output {
         _dividerIndex = constrain(index, 0, _dividerAmount - 2);
     }
     String GetDividerDescription() { return _dividerDescription[_dividerIndex]; }
+    String GetDividerDescriptionAt(int i) { return _dividerDescription[constrain(i, 0, _dividerAmount - 1)]; }
     int GetDividerAmounts() { return _dividerAmount - 1; } // Env slot is not user-selectable
 
     // Duty Cycle

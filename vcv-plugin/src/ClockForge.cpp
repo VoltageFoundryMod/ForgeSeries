@@ -326,6 +326,30 @@ struct EncoderKnob : OpaqueWidget {
     }
 };
 
+// ── BPM slider for the context menu ──────────────────────────────────────────
+// A Quantity that reads/writes BPM straight through the engine bridge, driven by
+// a standard Rack horizontal slider inside a submenu.
+struct BpmQuantity : Quantity {
+    ClockForge *module = nullptr;
+    void setValue(float v) override {
+        if (module)
+            cfengine::setBpm(module->engine, (int)std::round(v));
+    }
+    float getValue() override { return module ? cfengine::bpm(module->engine) : 120.f; }
+    float getMinValue() override { return cfengine::bpmMin(); }
+    float getMaxValue() override { return cfengine::bpmMax(); }
+    float getDefaultValue() override { return 120.f; }
+    float getDisplayValue() override { return getValue(); }
+    void setDisplayValue(float v) override { setValue(v); }
+    int getDisplayPrecision() override { return 3; }
+    std::string getLabel() override { return "Tempo"; }
+    std::string getUnit() override { return " BPM"; }
+};
+
+struct BpmSlider : ui::Slider {
+    BpmSlider() { box.size.x = 200.f; }
+};
+
 struct ClockForgeWidget : ModuleWidget {
     ClockForgeWidget(ClockForge *module) {
         setModule(module);
@@ -362,12 +386,68 @@ struct ClockForgeWidget : ModuleWidget {
         ClockForge *m = dynamic_cast<ClockForge *>(module);
         if (!m)
             return;
+        // ── Hardware: the two host-side settings, grouped under a submenu ──────
         menu->addChild(new MenuSeparator);
         menu->addChild(createMenuLabel("ClockForge Settings"));
-        menu->addChild(createIndexPtrSubmenuItem(
-            "Input CV Range", {"0V – 5V", "-5V – +5V", "0V – 10V"}, &m->cvRange));
-        menu->addChild(createIndexPtrSubmenuItem(
-            "Encoder Sensitivity", {"Low", "Medium", "High"}, &m->encoderSensitivity));
+        menu->addChild(createSubmenuItem("Hardware", "", [=](Menu *menu) {
+            menu->addChild(createIndexPtrSubmenuItem(
+                "Input CV Range", {"0V – 5V", "-5V – +5V", "0V – 10V"}, &m->cvRange));
+            menu->addChild(createIndexPtrSubmenuItem(
+                "Encoder Sensitivity", {"Low", "Medium", "High"}, &m->encoderSensitivity));
+        }));
+
+        // ── Module parameters, mirrored from the firmware menu ────────────────
+        // These drive the engine's live state directly (same values the on-panel
+        // encoder menu edits), so changes are reflected on the emulated OLED and
+        // persisted with the patch.
+        menu->addChild(new MenuSeparator);
+        menu->addChild(createMenuLabel("Module Parameters"));
+
+        // Transport: master play/stop.
+        menu->addChild(createBoolMenuItem(
+            "Running", "",
+            [=]() { return cfengine::isRunning(m->engine); },
+            [=](bool v) { cfengine::setRunning(m->engine, v); }));
+
+        // BPM: horizontal slider in a submenu (current value shown at right).
+        menu->addChild(createSubmenuItem("BPM", string::f("%d", cfengine::bpm(m->engine)), [=](Menu *menu) {
+            BpmQuantity *q = new BpmQuantity;
+            q->module = m;
+            BpmSlider *slider = new BpmSlider;
+            slider->quantity = q; // Slider takes ownership (deletes it on destruction)
+            menu->addChild(slider);
+        }));
+
+        // Per-output: enable, waveform, and clock divider.
+        for (int i = 0; i < 4; i++) {
+            menu->addChild(createSubmenuItem(string::f("Output %d", i + 1), "", [=](Menu *menu) {
+                menu->addChild(createBoolMenuItem(
+                    "Enabled", "",
+                    [=]() { return cfengine::outputEnabled(m->engine, i); },
+                    [=](bool v) { cfengine::setOutputEnabled(m->engine, i, v); }));
+
+                std::vector<std::string> waves;
+                for (int w = 0; w < cfengine::waveformCount(); w++)
+                    waves.push_back(cfengine::waveformName(w));
+                menu->addChild(createIndexSubmenuItem(
+                    "Waveform", waves,
+                    [=]() { return (size_t)cfengine::outputWaveform(m->engine, i); },
+                    [=](size_t w) { cfengine::setOutputWaveform(m->engine, i, (int)w); }));
+
+                // Divider is locked to "Env" while the output is an envelope type.
+                if (cfengine::outputIsEnvelope(m->engine, i)) {
+                    menu->addChild(createMenuLabel("Divider: Env (locked)"));
+                } else {
+                    std::vector<std::string> divs;
+                    for (int d = 0; d < cfengine::dividerCount(m->engine); d++)
+                        divs.push_back(cfengine::dividerName(m->engine, d));
+                    menu->addChild(createIndexSubmenuItem(
+                        "Divider", divs,
+                        [=]() { return (size_t)cfengine::outputDivider(m->engine, i); },
+                        [=](size_t d) { cfengine::setOutputDivider(m->engine, i, (int)d); }));
+                }
+            }));
+        }
     }
 };
 

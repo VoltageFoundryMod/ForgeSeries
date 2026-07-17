@@ -440,4 +440,85 @@ int bpm(Engine *e) {
     return (int)BPM;
 }
 
+// ── Curated parameter bridge ──────────────────────────────────────────────────
+// Absolute get/set helpers backing the Rack context menu.  Each mutates the live
+// firmware state under an EngineScope (globals lock + swap-in), then requests a
+// display refresh so the emulated OLED tracks changes made from the menu.
+
+static int clampOut(int out) { return out < 0 ? 0 : (out > NUM_OUTPUTS - 1 ? NUM_OUTPUTS - 1 : out); }
+
+bool isRunning(Engine *e) {
+    EngineScope scope(e);
+    return masterState;
+}
+void setRunning(Engine *e, bool running) {
+    EngineScope scope(e);
+    SetMasterState(running);
+    REQUEST_DISPLAY_REFRESH();
+}
+
+int bpmMin() { return (int)minBPM; }
+int bpmMax() { return (int)maxBPM; }
+void setBpm(Engine *e, int newBpm) {
+    EngineScope scope(e);
+    BPM = (unsigned int)constrain(newBpm, (int)minBPM, (int)maxBPM);
+    lastInternalBPM = BPM;
+    bpmNeedsUpdate = true; // process() calls UpdateBPM on the next block
+    unsavedChanges = true;
+    REQUEST_DISPLAY_REFRESH();
+}
+
+int waveformCount() { return WaveformTypeLength; }
+std::string waveformName(int index) {
+    if (index < 0 || index >= WaveformTypeLength)
+        return "";
+    return WaveformTypeDescriptions[index].c_str();
+}
+int outputWaveform(Engine *e, int out) {
+    EngineScope scope(e);
+    return outputs[clampOut(out)].GetWaveformTypeIndex();
+}
+void setOutputWaveform(Engine *e, int out, int waveform) {
+    EngineScope scope(e);
+    if (waveform < 0 || waveform >= WaveformTypeLength)
+        return;
+    outputs[clampOut(out)].SetWaveformType(static_cast<WaveformType>(waveform));
+    unsavedChanges = true;
+    REQUEST_DISPLAY_REFRESH();
+}
+
+int dividerCount(Engine *e) {
+    EngineScope scope(e);
+    return outputs[0].GetDividerAmounts(); // user-selectable slots (excludes "Env")
+}
+std::string dividerName(Engine *e, int index) {
+    EngineScope scope(e);
+    return outputs[0].GetDividerDescriptionAt(index).c_str();
+}
+int outputDivider(Engine *e, int out) {
+    EngineScope scope(e);
+    return outputs[clampOut(out)].GetDividerIndex();
+}
+void setOutputDivider(Engine *e, int out, int index) {
+    EngineScope scope(e);
+    outputs[clampOut(out)].SetDivider(index); // no-op for envelope outputs (locked to "Env")
+    unsavedChanges = true;
+    REQUEST_DISPLAY_REFRESH();
+}
+bool outputIsEnvelope(Engine *e, int out) {
+    EngineScope scope(e);
+    return outputs[clampOut(out)].IsEnvelopeType();
+}
+
+bool outputEnabled(Engine *e, int out) {
+    EngineScope scope(e);
+    return outputs[clampOut(out)].GetOutputState();
+}
+void setOutputEnabled(Engine *e, int out, bool on) {
+    EngineScope scope(e);
+    outputs[clampOut(out)].SetOutputState(on);
+    unsavedChanges = true;
+    REQUEST_DISPLAY_REFRESH();
+}
+
 } // namespace cfengine
