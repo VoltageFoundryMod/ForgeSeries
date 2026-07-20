@@ -204,10 +204,17 @@ struct EncoderKnob : OpaqueWidget {
     float pathLen = 0.f;  // total drag distance, to distinguish click from turn
     float visAngle = 0.f; // visual indicator angle
 
+    // Queue rotation detents for the engine and spin the graphic. Also called
+    // from the widget's keyboard shortcuts so both input paths stay in sync.
     void emit(int steps) {
         if (module)
             module->encDelta.fetch_add(steps);
         visAngle -= steps * 0.35f;
+    }
+
+    void push() {
+        if (module)
+            module->encClick.fetch_add(1);
     }
 
     void onDragStart(const event::DragStart &e) override {
@@ -235,8 +242,8 @@ struct EncoderKnob : OpaqueWidget {
 
     void onDragEnd(const event::DragEnd &e) override {
         APP->window->cursorUnlock();
-        if (pathLen < 3.f && module) // negligible movement -> treat as a push
-            module->encClick.fetch_add(1);
+        if (pathLen < 3.f) // negligible movement -> treat as a push
+            push();
     }
 
     void draw(const DrawArgs &args) override {
@@ -351,6 +358,8 @@ struct BpmSlider : ui::Slider {
 };
 
 struct ClockForgeWidget : ModuleWidget {
+    EncoderKnob *encoder = nullptr; // for the keyboard shortcuts (see onHoverKey)
+
     ClockForgeWidget(ClockForge *module) {
         setModule(module);
         setPanel(createPanel(asset::plugin(pluginInstance, "res/ClockForge.svg")));
@@ -380,6 +389,35 @@ struct ClockForgeWidget : ModuleWidget {
         enc->box.size = mm2px(Vec(9.0, 9.0));
         enc->box.pos = mm2px(Vec(14.924, 50.918)).minus(enc->box.size.div(2));
         addChild(enc);
+        encoder = enc;
+    }
+
+    // ── Keyboard shortcuts (while hovering the module) ───────────────────────
+    // '[' / ']' turn the encoder one detent, space pushes it. Bracket keys are
+    // matched by keyName so they follow the user's keyboard layout; space has no
+    // printable name, so it is matched by keycode.
+    void onHoverKey(const event::HoverKey &e) override {
+        if (encoder && (e.mods & RACK_MOD_MASK) == 0) {
+            if (e.action == GLFW_PRESS || e.action == GLFW_REPEAT) {
+                if (e.keyName == "[") {
+                    encoder->emit(-1);
+                    e.consume(this);
+                    return;
+                }
+                if (e.keyName == "]") {
+                    encoder->emit(+1);
+                    e.consume(this);
+                    return;
+                }
+            }
+            // Push on press only: no auto-repeat, so holding space is one click.
+            if (e.action == GLFW_PRESS && e.key == GLFW_KEY_SPACE) {
+                encoder->push();
+                e.consume(this);
+                return;
+            }
+        }
+        ModuleWidget::onHoverKey(e);
     }
 
     void appendContextMenu(Menu *menu) override {

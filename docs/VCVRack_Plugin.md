@@ -37,6 +37,8 @@ The module replicates the functionality of the hardware module, including:
 
 ## Keyboard Shortcuts
 
+With the mouse hovering over the module:
+
 Encoder Left: **[**
 Encoder Right: **]**
 Encoder Push: **Spacebar**
