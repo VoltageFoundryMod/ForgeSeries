@@ -15,20 +15,34 @@
 #include "pinouts.hpp" // NUM_CV_INS
 #include <Arduino.h>
 
-// Reference voltages (mV) used during calibration capture.
+// Reference voltages (mV) used during CV input calibration capture.
 #define CAL_REF1_MV 1000 // first reference: 1 V
 #define CAL_REF2_MV 3000 // second reference: 3 V
-// Output calibration is purely a hardware trimmer adjustment: all outputs are
-// driven to MAXDAC and the user trims each jack to 5.00V.  With the MCP6004 on
-// a 6V rail the full DAC range is linear, so there is no software output
-// scaling — only the CV inputs require stored calibration coefficients.
+
+// Output calibration is a two-point linear correction of the DAC command code:
+//   - Full-scale anchor: all outputs driven to MAXDAC and the user trims each
+//     on-board trimmer so the jack reads 5.00V (command 4095 → 5.000V).
+//   - Low point: the DAC is driven to the ideal-1V code and the user measures
+//     the actual jack voltage, capturing the op-amp offset the trimmer leaves.
+// The two points define a per-channel remap  cmd = dacScale*desired + dacOffset
+// applied on every DAC write (see boardIO.hpp).  Identity (1,0) = uncalibrated.
+
+// Magic/version stamp for the stored blob. Bump whenever this struct's layout
+// changes so an older-firmware blob is rejected rather than misinterpreted.
+#define CAL_MAGIC 0x434C4B32UL // 'CLK2'
+
 // ── Calibration data struct ─────────────────────────────────────────────────
 // Stored at EEPROM_CAL_BASE, past all preset slots, so it survives firmware
 // flashes and preset load/save operations.
 struct CalibrationData {
+    uint32_t magic; // must equal CAL_MAGIC for a valid, current-layout blob
     boolean valid;
-    // Per-channel linear coefficients derived from two external references.
+    // Per-channel CV input linear coefficients derived from two external refs.
     // Conversion: mv = cvScale[ch] * raw_adc + cvOffset[ch]
     float cvScale[NUM_CV_INS];
     float cvOffset[NUM_CV_INS];
+    // Per-channel output (DAC) correction: cmd = dacScale*desired + dacOffset,
+    // where desired/cmd are DAC counts (0..MAXDAC == 0..5V).
+    float dacScale[NUM_OUTPUTS];
+    float dacOffset[NUM_OUTPUTS];
 };

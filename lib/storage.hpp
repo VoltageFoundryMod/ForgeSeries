@@ -54,21 +54,33 @@ CalibrationData LoadCalibration() {
     // past a bare `if (!cal.valid)` check and make AdjustADCReadings() compute NaN
     // CV readings (CV inputs appear completely dead). Reject non-finite
     // coefficients too (NaN compares unequal to itself) so an uncalibrated module
-    // always falls back to the nominal linear mapping.
+    // always falls back to the nominal linear mapping.  A magic/version mismatch
+    // (older-firmware blob or blank flash) is likewise rejected so the struct is
+    // never reinterpreted under a stale layout.
     bool finite = true;
     for (int i = 0; i < NUM_CV_INS; i++) {
         if (cal.cvScale[i] != cal.cvScale[i] || cal.cvOffset[i] != cal.cvOffset[i])
             finite = false;
     }
-    if (!cal.valid || !finite) {
-        // No (or invalid) calibration stored yet — populate nominal linear
-        // coefficients (5000 mV full scale over 4095 counts, zero offset).
-        // AdjustADCReadings() also falls back to nominal when !cal.valid,
-        // so these values are a consistent starting point that avoids NaN.
+    for (int i = 0; i < NUM_OUTPUTS; i++) {
+        if (cal.dacScale[i] != cal.dacScale[i] || cal.dacOffset[i] != cal.dacOffset[i])
+            finite = false;
+    }
+    if (cal.magic != CAL_MAGIC || !cal.valid || !finite) {
+        // No (or invalid) calibration stored yet — populate nominal coefficients:
+        // CV inputs use 5000 mV full scale over 4095 counts / zero offset, and the
+        // output correction is identity (cmd = desired).  AdjustADCReadings() and
+        // the DAC write path also fall back to nominal when !cal.valid, so these
+        // values are a consistent, NaN-free starting point.
         for (int i = 0; i < NUM_CV_INS; i++) {
             cal.cvScale[i] = 5000.0f / 4095.0f;
             cal.cvOffset[i] = 0.0f;
         }
+        for (int i = 0; i < NUM_OUTPUTS; i++) {
+            cal.dacScale[i] = 1.0f;
+            cal.dacOffset[i] = 0.0f;
+        }
+        cal.magic = CAL_MAGIC;
         cal.valid = false;
     }
     return cal;

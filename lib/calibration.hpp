@@ -5,12 +5,19 @@
 // Entry point: RunCalibration()
 // Called from setup() when the encoder button is held during boot.
 //
-// Step 1 — Output trim:
+// Step 1 — Output trim (full-scale anchor):
 //   All 4 outputs driven to MAXDAC (5V after hardware trimming).
 //   User adjusts the on-board trimmers with a multimeter until each jack
 //   reads 5.00V.  Press encoder to proceed.
 //
-// Steps 2–5 — CV input 2-point linear capture:
+// Step 2 — Output low-point offset capture:
+//   All 4 outputs driven to the ideal-1V code (calibration bypassed).  For each
+//   channel the user measures the jack and dials the reading in with the encoder.
+//   With the full-scale anchor from Step 1 this gives a per-channel command
+//   remap (dacScale/dacOffset) that removes the residual op-amp offset.  The
+//   module cannot read its own outputs, hence the manual entry.
+//
+// Steps 3–6 — CV input 2-point linear capture:
 //   For each channel (CV1, CV2) at each reference voltage (1V, 3V):
 //     User applies an external reference to the CV input jack.
 //     Display shows the live ADC reading as an estimated voltage so the user
@@ -39,6 +46,12 @@ extern void SaveCalibration(const CalibrationData &);
 
 // ── Calibration constants ────────────────────────────────────────────────────
 static const int CAL_ADC_SAMPLES = 256; // samples averaged per capture point per channel
+
+// Output low-point capture: drive the DAC to the code that ideally yields 1.000V
+// and have the user measure the true jack voltage. Paired with the trimmed
+// full-scale anchor (MAXDAC → 5.000V) this fixes the op-amp offset.
+static const int CAL_DAC_LOW_MV = 1000;                          // ideal low point (mV)
+static const int CAL_DAC_LOW_CODE = MAXDAC * CAL_DAC_LOW_MV / 5000; // = 819 counts
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -90,6 +103,59 @@ static uint16_t _CalReadADC(int pin) {
 // Return a single raw ADC reading from a pin (used for live display).
 static uint16_t _CalReadADCRaw(int pin) { return (uint16_t)analogRead(pin); }
 
+// ── Encoder-driven voltage entry ─────────────────────────────────────────────
+// Let the user dial a voltage (mV) with the encoder (1 mV per detent) and
+// confirm with a click.  Used for output-offset capture, where the module
+// cannot read its own output and must be told the multimeter reading.
+// title  : header line.  prompt: one-line instruction (what to measure).
+// startMV: initial value (typically the ideal 1000 mV).  Returns the dialled mV.
+static int _CalEnterMV(const char *title, const char *prompt, int startMV) {
+    extern volatile bool _displayFrameReady;
+    int valMV = constrain(startMV, 0, 5000);
+    long base = encoder.read();
+    bool redraw = true;
+
+    // We were called just after a click — wait for release before accepting input.
+    while (digitalRead(ENCODER_SW) == LOW)
+        delay(10);
+    delay(20);
+
+    while (true) {
+        // Poll the encoder often so detents are not missed (shim: ±4 counts/detent).
+        long detents = (encoder.read() - base) / 4;
+        if (detents != 0) {
+            valMV = constrain(valMV + (int)detents, 0, 5000);
+            base += detents * 4;
+            redraw = true;
+        }
+        if (redraw) {
+            _CalHeader(title);
+            display.setTextSize(1);
+            display.setCursor(0, 13);
+            display.println(prompt);
+            display.setTextSize(2);
+            display.setCursor(0, 28);
+            display.printf("%d.%03dV", valMV / 1000, valMV % 1000);
+            display.setTextSize(1);
+            display.setCursor(0, 56);
+            display.print("Turn=set Click=save");
+            _displayFrameReady = true; // Core 1 flushes over Wire
+            redraw = false;
+        }
+        // Confirm on click (debounced), then wait for release.
+        if (digitalRead(ENCODER_SW) == LOW) {
+            delay(20);
+            if (digitalRead(ENCODER_SW) == LOW) {
+                while (digitalRead(ENCODER_SW) == LOW)
+                    delay(10);
+                delay(20);
+                return valMV;
+            }
+        }
+        delay(3);
+    }
+}
+
 // Convert a raw 12-bit ADC value to an approximate display voltage in mV.
 // Uses nominal full-scale (4095 counts = 5000 mV) — good enough for live
 // display before calibration coefficients exist.
@@ -105,7 +171,7 @@ static uint32_t _CalRawToMVDisplay(uint16_t raw) {
 static void _CalOutputTrim() {
     DACWriteAll(MAXDAC, MAXDAC, MAXDAC, MAXDAC);
 
-    _CalHeader("1/5  OUTPUT TRIM");
+    _CalHeader("1/6  OUTPUT TRIM");
     display.setTextSize(1);
     display.setCursor(0, 13);
     display.println("All outputs -> max.");
@@ -117,9 +183,48 @@ static void _CalOutputTrim() {
     _CalFlush();
     _CalWaitClick();
 
+    Serial.println("  Output trim done (MAXDAC trimmed to 5.00V).");
+}
+
+// ── Phase 2: Output low-point offset capture ─────────────────────────────────
+// Drive all outputs to the ideal-1V code (raw — calibration is bypassed by the
+// caller) and have the user measure each jack.  Combined with the full-scale
+// anchor from Phase 1 (code MAXDAC → 5.000V), each measurement defines a
+// per-channel command remap  cmd = dacScale*desired + dacOffset  that removes
+// the op-amp offset the trimmer alone leaves behind.
+static void _CalOutputOffset(CalibrationData &newCal) {
+    DACWriteAll(CAL_DAC_LOW_CODE, CAL_DAC_LOW_CODE, CAL_DAC_LOW_CODE,
+                CAL_DAC_LOW_CODE);
+    delay(50);
+
+    for (int ch = 0; ch < NUM_OUTPUTS; ch++) {
+        char title[22];
+        snprintf(title, sizeof(title), "2/6  OUT%d OFFSET", ch + 1);
+        char prompt[22];
+        snprintf(prompt, sizeof(prompt), "Measure OUT%d, dial:", ch + 1);
+        int measuredMV = _CalEnterMV(title, prompt, CAL_DAC_LOW_MV);
+
+        // Two (desired counts, command code) points:
+        //   low : (measured→counts, CAL_DAC_LOW_CODE)   high: (MAXDAC, MAXDAC)
+        // Invert the line to  cmd = dacScale*desired + dacOffset.
+        float measuredCounts = (float)measuredMV * (float)MAXDAC / 5000.0f;
+        float denom = (float)MAXDAC - measuredCounts;
+        if (fabsf(denom) < 1.0f) {
+            // Degenerate (measured ≈ 5V) — cannot fit; keep this channel identity.
+            newCal.dacScale[ch] = 1.0f;
+            newCal.dacOffset[ch] = 0.0f;
+        } else {
+            float scale = (float)(MAXDAC - CAL_DAC_LOW_CODE) / denom;
+            float offset = (float)MAXDAC - scale * (float)MAXDAC;
+            newCal.dacScale[ch] = scale;
+            newCal.dacOffset[ch] = offset;
+        }
+        Serial.printf("  OUT%d: measured=%dmV -> dacScale=%.4f dacOffset=%.2f\n",
+                      ch + 1, measuredMV, newCal.dacScale[ch], newCal.dacOffset[ch]);
+    }
+
     DACWriteAll(0, 0, 0, 0);
     delay(50);
-    Serial.println("  Output trim done (MAXDAC trimmed to 5.00V).");
 }
 
 // ── CV capture step: wait for stable reference, then average ─────────────────
@@ -129,7 +234,7 @@ static void _CalOutputTrim() {
 // Returns : averaged raw ADC reading captured on click
 static uint16_t _CalCaptureCV(int ch, int refMV, int step) {
     char header[20];
-    snprintf(header, sizeof(header), "%d/5  CV%d INPUT %dV", step, ch + 1,
+    snprintf(header, sizeof(header), "%d/6  CV%d INPUT %dV", step, ch + 1,
              refMV / 1000);
 
     // Loop: update display with live reading until encoder click
@@ -174,29 +279,39 @@ void RunCalibration() {
     _CalHeader("CALIBRATION");
     display.setTextSize(1);
     display.setCursor(0, 13);
-    display.println("5-step wizard:");
+    display.println("6-step wizard:");
     display.println("1) Trim outputs to 5V");
-    display.println("2-5) Apply 1V & 3V to");
+    display.println("2) Measure outs @1V");
+    display.println("3-6) Apply 1V & 3V to");
     display.println("     each CV input.");
-    display.println("");
     display.print("Click enc. to start");
     _CalFlush();
     _CalWaitClick();
 
+    CalibrationData newCal;
+    newCal.magic = CAL_MAGIC;
+    newCal.valid = true;
+
+    // Output steps write RAW codes so the user trims/measures true hardware; the
+    // stored correction must not fold back into the calibration measurements.
+    SetDACCalBypass(true);
+
     // ── Step 1: output trim (hardware trimmer → 5.00V at MAXDAC) ───────────────
     _CalOutputTrim();
 
-    // ── Steps 2–5: per-channel, per-reference capture ─────────────────────────
-    CalibrationData newCal;
-    newCal.valid = true;
+    // ── Step 2: output low-point offset capture (fills newCal.dac*) ────────────
+    _CalOutputOffset(newCal);
 
+    SetDACCalBypass(false); // restore normal (corrected) DAC writes
+
+    // ── Steps 3–6: per-channel CV input, per-reference capture ─────────────────
     // For each channel capture readings at the two reference voltages,
     // then derive linear coefficients: mv = scale * raw + offset
     const int refs[2] = {CAL_REF1_MV, CAL_REF2_MV};
     for (int ch = 0; ch < NUM_CV_INS; ch++) {
         uint16_t rawRef[2];
         for (int r = 0; r < 2; r++) {
-            int step = 2 + ch * 2 + r; // steps 2, 3, 4, 5
+            int step = 3 + ch * 2 + r; // steps 3, 4, 5, 6
             rawRef[r] = _CalCaptureCV(ch, refs[r], step);
         }
         // Linear fit: two points (rawRef[0], CAL_REF1_MV) and (rawRef[1], CAL_REF2_MV)

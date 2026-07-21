@@ -10,6 +10,7 @@
 #include <Adafruit_MCP4728.h>
 #include <Arduino.h>
 #include <Wire.h>
+#include <math.h> // lroundf (output calibration remap)
 
 #include "calibrationData.hpp" // CalibrationData (full definition)
 #include "pinouts.hpp"
@@ -86,6 +87,24 @@ bool InitDAC() {
 // Calibration helpers ────────────────────────────────────────────────
 extern CalibrationData cal;
 
+// Output (DAC) calibration ───────────────────────────────────────────
+// Per-channel two-point correction remaps a desired output value (counts,
+// 0..MAXDAC == 0..5V) to the code actually commanded so the jack voltage
+// matches the ideal mapping.  Bypassed during the calibration wizard so the
+// user trims and measures true, uncorrected hardware.
+static bool _dacCalBypass = false;
+static inline void SetDACCalBypass(bool bypass) { _dacCalBypass = bypass; }
+
+// Apply the stored per-channel output correction. Returns `desired` unchanged
+// (clamped) when calibration is invalid or bypassed, so an uncalibrated module
+// behaves exactly as before.
+static inline uint16_t _CalibrateDACValue(int channel, uint32_t desired) {
+    if (_dacCalBypass || !cal.valid)
+        return (uint16_t)constrain((int)desired, 0, MAXDAC);
+    float cmd = cal.dacScale[channel] * (float)desired + cal.dacOffset[channel];
+    return (uint16_t)constrain((int)lroundf(cmd), 0, MAXDAC);
+}
+
 // Write all 4 DAC channels.
 // Uses MCP4728 Multi-Write command in a single I2C transaction (one
 // START/STOP), which is ~3x faster than four separate setChannelValue() calls.
@@ -97,8 +116,13 @@ void DACWriteAll(uint16_t ch0, uint16_t ch1, uint16_t ch2, uint16_t ch3) {
     _dacShadow[1] = ch1;
     _dacShadow[2] = ch2;
     _dacShadow[3] = ch3;
-    // hw order A,B,C,D maps to sw[0,2,1,3]
-    const uint16_t hwVals[4] = {ch0, ch2, ch1, ch3};
+    // Apply per-channel output calibration (desired counts → command code),
+    // then map into hardware channel order A,B,C,D = sw[0,2,1,3].
+    const uint16_t c0 = _CalibrateDACValue(0, ch0);
+    const uint16_t c1 = _CalibrateDACValue(1, ch1);
+    const uint16_t c2 = _CalibrateDACValue(2, ch2);
+    const uint16_t c3 = _CalibrateDACValue(3, ch3);
+    const uint16_t hwVals[4] = {c0, c2, c1, c3};
     Wire1.beginTransmission(MCP4728_ADDR);
     for (int i = 0; i < 4; i++) {
         Wire1.write(
@@ -117,6 +141,7 @@ void DACWrite(int channel, uint32_t value) {
     if (channel < 0 || channel > 3)
         return;
     _dacShadow[channel] = (uint16_t)value;
-    dac4.setChannelValue(_chanMap[channel], _dacShadow[channel], MCP4728_VREF_VDD,
+    uint16_t cmd = _CalibrateDACValue(channel, value);
+    dac4.setChannelValue(_chanMap[channel], cmd, MCP4728_VREF_VDD,
                          MCP4728_GAIN_1X);
 }
