@@ -9,6 +9,12 @@
 // in the main.cpp translation unit.
 // ============================================================
 
+// Custom fonts for the main screen's BPM/PLAY only. Menus keep the classic
+// 5x7 font — their row/column layout is built on its fixed 6x8 cell metrics,
+// and the proportional font reads cluttered at menu density.
+#include "fonts/helvB12.h"
+#include "fonts/helvB24.h"
+
 // ── Globals owned by main.cpp ────────────────────────────────
 extern DisplayManager displayMgr;
 extern bool displayRefresh;
@@ -50,10 +56,26 @@ void HandleDisplay() {
 
         // ── Group 0: Main screen (BPM + play/stop + output boxes) ─────────
         if (grp == 0) {
-            String s = String(BPM) + "BPM";
-            display.setTextSize(3);
-            display.setCursor((SCREEN_WIDTH - (s.length() * 18)) / 2, 0);
+            // Big BPM digits with a smaller baseline-aligned "BPM" suffix, so the
+            // block stays narrow enough to clear the selection arrow at x=2..6.
+            String s = String(BPM);
+            int16_t bpmX, bpmY, sufX, sufY;
+            uint16_t bpmW, bpmH, sufW, sufH;
+            display.setFont(&helvB24);
+            // Custom fonts position by baseline; baseline 25 puts the cap top at y=0.
+            display.getTextBounds(s, 0, 25, &bpmX, &bpmY, &bpmW, &bpmH);
+            display.setFont(&helvB12);
+            display.getTextBounds("BPM", 0, 25, &sufX, &sufY, &sufW, &sufH);
+            int bpmX0 = (SCREEN_WIDTH - ((int)bpmW + 3 + (int)sufW)) / 2;
+            if (bpmX0 < 9)
+                bpmX0 = 9; // never under the selection arrow
+            display.setFont(&helvB24);
+            display.setCursor(bpmX0 - bpmX, 25);
             display.print(s);
+            display.setFont(&helvB12);
+            display.setCursor(bpmX0 + (int)bpmW + 3 - sufX, 25);
+            display.print("BPM");
+            display.setFont(nullptr);
             if (usingExternalClock) {
                 display.setTextSize(1);
                 if (extClockBlinkState) {
@@ -64,7 +86,9 @@ void HandleDisplay() {
                     display.print("E");
                     display.setTextColor(WHITE);
                 } else {
-                    // Phase B: outline box, filled "E"
+                    // Phase B: outline box, filled "E" (clear interior first — the
+                    // large BPM text can extend under the box)
+                    display.fillRect(118, 23, 10, 11, BLACK);
                     display.drawRect(118, 23, 10, 11, WHITE);
                     display.setCursor(121, 25);
                     display.print("E");
@@ -76,18 +100,25 @@ void HandleDisplay() {
                 display.fillTriangle(2, 6, 2, 14, 6, 10, 1);
             }
             if (menuMode >= 0 && menuMode <= 2) {
-                display.setTextSize(2);
-                display.setCursor(44, 27);
+                const char *runLbl = masterState ? "PLAY" : "STOP";
+                display.setFont(&helvB12);
+                int16_t runX, runY;
+                uint16_t runW, runH;
+                // Baseline 40 centers the ~13px caps on the 26..42 icon row.
+                display.getTextBounds(runLbl, 44, 40, &runX, &runY, &runW, &runH);
                 if (menuItem == 2) {
-                    display.drawLine(43, 42, 88, 42, 1);
+                    display.drawLine(43, 42, runX + runW + 1, 42, 1);
                 }
                 if (!masterState) {
-                    display.fillRoundRect(23, 26, 17, 17, 2, 1);
-                    display.print("STOP");
+                    display.fillRoundRect(22, 28, 13, 13, 2, 1);
                 } else {
-                    display.fillTriangle(23, 26, 23, 42, 39, 34, 1);
-                    display.print("PLAY");
+                    // Same 13px box as the pause square (y 28..40); tip centered
+                    // on y=34 so the top/bottom slopes are symmetric.
+                    display.fillTriangle(22, 28, 22, 40, 34, 34, 1);
                 }
+                display.setCursor(44, 40);
+                display.print(runLbl);
+                display.setFont(nullptr);
             }
             display.setTextSize(1);
             for (int i = 0; i < NUM_OUTPUTS; i++) {
@@ -98,21 +129,21 @@ void HandleDisplay() {
                     display.print(i + 1);
                 } else if (outputs[i].GetBlinkState()) {
                     // Blink phase A: filled box + inverted number
-                    display.fillRect((i * 30) + 14, 46, 9, 9, WHITE);
+                    display.fillRect((i * 30) + 13, 45, 11, 11, WHITE);
                     display.setCursor((i * 30) + 16, 47);
                     display.setTextColor(BLACK);
                     display.print(i + 1);
                     display.setTextColor(WHITE);
                 } else {
                     // Blink phase B: outline box + white number
-                    display.drawRect((i * 30) + 14, 46, 9, 9, WHITE);
+                    display.drawRect((i * 30) + 13, 45, 11, 11, WHITE);
                     display.setCursor((i * 30) + 16, 47);
                     display.setTextColor(WHITE);
                     display.print(i + 1);
                 }
                 display.setTextColor(WHITE);
                 String d = outputs[i].GetDividerDescription();
-                display.setCursor((i * 30) + 13 + (6 - (d.length() * 3)), 56);
+                display.setCursor((i * 30) + 13 + (6 - (d.length() * 3)), 57);
                 display.print(d);
             }
             RedrawDisplay();
