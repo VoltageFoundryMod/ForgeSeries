@@ -12,8 +12,9 @@ between plugins.
 ## What's in here
 
 | Path | Purpose |
-|------|---------|
+| ---- | ------- |
 | `shim/` | Arduino / Wire / EEPROM / Adafruit shims so firmware `lib/` compiles under Rack. Includes the `HostBridge` that routes firmware I/O (GPIO, ADC, DAC, framebuffer) to the hosting module. |
+| `shim/Fonts/` | `GFXfont` headers usable via `display.setFont(&helvB24)` (see below). |
 | `include/forgevcv/IEngine.hpp` | Abstract engine contract. Each firmware wraps its bridge in an `IEngine`. |
 | `include/forgevcv/ForgeModule.hpp` | `rack::Module` base: owns the engine, holds the framebuffer, the CV-range and encoder-sensitivity host settings, the UI→audio encoder queue, the control-rate engine step, and shared patch JSON. |
 | `include/forgevcv/widgets.hpp` | Shared UI: `FramebufferDisplay` (emulated OLED), `EncoderKnob` (drag/click), `BpmSlider`. |
@@ -50,6 +51,32 @@ In your plugin:
 3. **Widget** — place `forgevcv::FramebufferDisplay` and `EncoderKnob`, pointing
    their `module` at your module instance. Add your own ports, panel, keyboard
    shortcuts, and context menu.
+
+## Custom fonts
+
+The GFX shim implements the full Adafruit custom-font API (`setFont`,
+`getTextBounds`, per-glyph metrics), pixel-identical to the hardware library.
+`shim/Fonts/` bundles ready-to-use `GFXfont` headers:
+
+- `helvB08/10/12/14/18/24` — hand-hinted X11 Helvetica Bold bitmaps (the
+  "Pam's" look; recommended pairing: `helvB24` big + `helvB12` labels)
+- `profont12/22` — monospaced terminal font, digits stay column-aligned
+- `pixellari16`, `haxrcorp4089_16`, `helvetipixel16` — 16 px pixel fonts
+  (use at ×1/×2)
+- `FreeSans*`, `Org_01` — stock Adafruit fonts, unmodified
+
+```cpp
+#include <Fonts/helvB24.h>
+display.setFont(&helvB24);
+display.setCursor(x, y + 25); // custom fonts: cursor y = baseline, not top
+display.print("120BPM");
+display.setFont(nullptr);     // back to classic 5x7
+```
+
+The shim include path already covers `Fonts/`, so the include works unchanged
+in Rack. For the physical module, copy the same header into the firmware repo
+(the real Adafruit_GFX resolves `Fonts/...` from its own library folder for the
+stock fonts, and compiles bundled headers like `helvB24.h` the same way).
 
 ## Versioning
 
