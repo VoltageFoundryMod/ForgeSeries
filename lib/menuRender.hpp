@@ -37,11 +37,26 @@ static const bool KB_NOTE_BLACK[12] = {false, true, false, true, false, false,
 static const int KB_KEY_W = 11;
 static const int KB_KEY_H = 13;
 static const int KB_KEY_R = 2;
-static const int KB_INFO_X = 98;  // left edge of the per-channel text column
-static const int KB_CURSOR_Y = 28; // shared cursor band between the keyboards
+static const int KB_INFO_X = 98; // left edge of the per-channel text column
+
+// ── Vertical budget (64 rows) ────────────────────────────────
+// Channel 1 accidentals   0..12
+// Channel 1 naturals     15..27
+// Cursor band            28..35   <- the two keyboards' only separation
+// Channel 2 accidentals  36..48
+// Channel 2 naturals     51..63
+//
+// The cursor lives alone in the band and must keep clear air on both sides:
+// an arrow whose apex touches a key reads as though it is overlapping it. The
+// band is 8 rows, the arrow is 4, leaving a 2px gap above and below. Channel 2
+// starts at 36 rather than 34 to buy those rows from the bottom of the screen,
+// so its naturals now end exactly on the last row — there is no slack left. Any
+// future change to KB_KEY_H or the row spacing has to re-derive this table.
+static const int KB_CURSOR_Y = 30; // top of the arrow
+static const int KB_CURSOR_H = 4;  // arrow height; 2px clear above and below
 
 // Top Y of each channel's accidental row; naturals sit 15px below.
-static inline int KB_ChannelY(int ch) { return ch == 0 ? 0 : 34; }
+static inline int KB_ChannelY(int ch) { return ch == 0 ? 0 : 36; }
 
 static inline int KB_KeyY(int ch, int note) {
     return KB_ChannelY(ch) + (KB_NOTE_BLACK[note] ? 0 : 15);
@@ -102,13 +117,18 @@ static void KB_DrawInfo(int ch) {
 }
 
 // Selection cursor in the band between the two keyboards: it points up at the
-// channel-1 key above it, and down at the channel-2 key below it.
+// channel-1 key above it, and down at the channel-2 key below it. Direction is
+// what identifies the channel, so the arrow is drawn wider than it is tall —
+// squat enough to leave clearance, broad enough for the direction to read at a
+// glance.
 static void KB_DrawCursor(int ch, int note) {
     int cx = KB_NOTE_X[note] + KB_KEY_W / 2;
+    int top = KB_CURSOR_Y;
+    int bottom = KB_CURSOR_Y + KB_CURSOR_H - 1;
     if (ch == 0) {
-        display.fillTriangle(cx, KB_CURSOR_Y, cx - 3, KB_CURSOR_Y + 5, cx + 3, KB_CURSOR_Y + 5, WHITE);
+        display.fillTriangle(cx, top, cx - 3, bottom, cx + 3, bottom, WHITE);
     } else {
-        display.fillTriangle(cx, KB_CURSOR_Y + 5, cx - 3, KB_CURSOR_Y, cx + 3, KB_CURSOR_Y, WHITE);
+        display.fillTriangle(cx, bottom, cx - 3, top, cx + 3, top, WHITE);
     }
 }
 
