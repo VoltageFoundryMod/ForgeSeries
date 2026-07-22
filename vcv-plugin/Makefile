@@ -10,9 +10,18 @@ CXXFLAGS +=
 # Static libraries are fine, but they should be added to this plugin's build system.
 LDFLAGS +=
 
-# The firmware lib/ and shim require C++17 (Rack defaults to c++11).
-# EXTRA_CXXFLAGS is appended after Rack's -std, so this wins.
-EXTRA_CXXFLAGS += -std=c++17
+# The shared ForgeSeries VCV layer (shim + forgevcv/ headers + forgevcv.mk).
+# Override FORGEVCV to point at a different checkout/submodule path. The fragment
+# adds C++17, the forgevcv include path, and exports FORGEVCV_SHIM.
+FORGEVCV ?= ../../ForgeSeries-VCVLib
+
+# Check if the ForgeSeries VCV layer is present, and if not, print a warning and exit.
+ifeq ($(wildcard $(FORGEVCV)/forgevcv.mk),)
+$(error "ForgeSeries VCV layer not found in $(FORGEVCV)")
+$(error "Please clone the ForgeSeries-VCVLib repository and/or set FORGEVCV to point at it.")
+endif
+
+include $(FORGEVCV)/forgevcv.mk
 
 # Add .cpp files to the build
 SOURCES += $(wildcard src/*.cpp)
@@ -21,7 +30,7 @@ SOURCES += $(wildcard src/engine/*.cpp)
 # The firmware engine translation unit is the ONLY file that sees the Arduino
 # shim and the hardware lib/. Scope those include paths to it so they never
 # leak into the rack-facing sources (which use rack.hpp types of the same names).
-build/src/engine/fw_engine.cpp.o: EXTRA_CXXFLAGS += -Isrc/shim -I../lib
+build/src/engine/fw_engine.cpp.o: EXTRA_CXXFLAGS += -I$(FORGEVCV_SHIM) -I../lib
 
 # Add files to the ZIP package when running `make dist`
 # The compiled plugin and "plugin.json" are automatically added.

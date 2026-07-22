@@ -8,9 +8,13 @@ set -euo pipefail
 cd "$(dirname "$0")/.."   # -> vcv-plugin/
 mkdir -p build
 
+# The shim and forgevcv headers live in the shared library (a sibling repo /
+# submodule). Override FORGEVCV to point elsewhere.
+FORGEVCV="${FORGEVCV:-../../ForgeSeries-VCVLib}"
+
 CXX="${CXX:-g++}"
 "$CXX" -std=c++17 -g -O0 \
-    -Isrc -Isrc/shim -I../lib \
+    -Isrc -I"$FORGEVCV/shim" -I"$FORGEVCV/include" -I../lib \
     src/engine/fw_engine.cpp \
     test/isolation_test.cpp \
     -o build/isolation_test

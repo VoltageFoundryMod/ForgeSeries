@@ -5,6 +5,8 @@
 #include <cstdint>
 #include <string>
 
+#include "forgevcv/IEngine.hpp"
+
 namespace cfengine {
 
 struct Engine; // opaque
@@ -66,5 +68,26 @@ bool outputIsEnvelope(Engine *, int out);
 // Output enable (per-output on/off).
 bool outputEnabled(Engine *, int out);
 void setOutputEnabled(Engine *, int out, bool on);
+
+// ── forgevcv adapter ─────────────────────────────────────────────────────────
+// Wraps an Engine as a forgevcv::IEngine so the reusable ForgeModule base can
+// drive it through the six core lifecycle calls, while raw() still exposes the
+// Engine* for the curated param bridge above (used by the context menu).
+class VcvEngine : public forgevcv::IEngine {
+    Engine *e_;
+
+  public:
+    VcvEngine();
+    ~VcvEngine() override;
+    Engine *raw() const { return e_; }
+
+    void process(float dt, const float *cv, int nCv,
+                 bool clockHigh, float *out, int nOut) override;
+    void encoderTurn(int detents) override;
+    void encoderButton(bool pressed) override;
+    void getFramebuffer(uint8_t out[1024]) override;
+    std::string serialize() override;
+    void deserialize(const std::string &) override;
+};
 
 } // namespace cfengine

@@ -521,4 +521,20 @@ void setOutputEnabled(Engine *e, int out, bool on) {
     REQUEST_DISPLAY_REFRESH();
 }
 
+// ── forgevcv::IEngine adapter ─────────────────────────────────────────────────
+// Thin forwards to the free-function bridge above. The firmware is fixed at
+// 2 CV inputs / 4 outputs, so the nCv/nOut counts are informational here.
+VcvEngine::VcvEngine() : e_(createEngine()) {}
+VcvEngine::~VcvEngine() { destroyEngine(e_); }
+
+void VcvEngine::process(float dt, const float *cv, int /*nCv*/,
+                        bool clockHigh, float *out, int /*nOut*/) {
+    cfengine::process(e_, dt, cv, clockHigh, out);
+}
+void VcvEngine::encoderTurn(int detents) { cfengine::encoderTurn(e_, detents); }
+void VcvEngine::encoderButton(bool pressed) { cfengine::encoderButton(e_, pressed); }
+void VcvEngine::getFramebuffer(uint8_t out[1024]) { cfengine::getFramebuffer(e_, out); }
+std::string VcvEngine::serialize() { return cfengine::serialize(e_); }
+void VcvEngine::deserialize(const std::string &blob) { cfengine::deserialize(e_, blob); }
+
 } // namespace cfengine
