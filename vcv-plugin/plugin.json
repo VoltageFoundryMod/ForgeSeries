@@ -1,0 +1,29 @@
+{
+  "slug": "NoteForge",
+  "name": "NoteForge",
+  "version": "2.0.0",
+  "license": "VCV Rack EULA",
+  "brand": "Voltage Foundry Modular",
+  "author": "Carlos Eduardo de Paula",
+  "authorEmail": "me@carlosedp.com",
+  "authorUrl": "",
+  "pluginUrl": "https://github.com/VoltageFoundryMod/ForgeSeries-DQ",
+  "manualUrl": "https://github.com/VoltageFoundryMod/ForgeSeries-DQ/blob/main/Readme.md",
+  "sourceUrl": "https://github.com/VoltageFoundryMod/ForgeSeries-DQ",
+  "donateUrl": "https://patreon.com/carlosedp",
+  "changelogUrl": "",
+  "modules": [
+    {
+      "slug": "NoteForge",
+      "name": "Note Forge",
+      "description": "Dual CV Quantizer with per-channel scales and envelopes",
+      "tags": [
+        "Quantizer",
+        "Polyphonic",
+        "Digital",
+        "Hardware clone",
+        "Dual"
+      ]
+    }
+  ]
+}
