@@ -29,13 +29,13 @@
 // GROUP MAP
 // ──────────
 //   0  KEYBOARD (home)  items  1–24  — 12 note toggles per channel
-//   1  SCALES           items 25–30
-//   2  CH1 PITCH        items 31–34
-//   3  CH2 PITCH        items 35–38
-//   4  CH1 GATE         items 39–43
-//   5  CH2 GATE         items 44–48
-//   6  ROUTING          items 49–52
-//   7  SETTINGS         items 53–57
+//   1  SCALES           items 25–28
+//   2  CH1 PITCH        items 29–32
+//   3  CH2 PITCH        items 33–36
+//   4  CH1 GATE         items 37–41
+//   5  CH2 GATE         items 42–46
+//   6  ROUTING          items 47–50
+//   7  SETTINGS         items 51–55
 //
 // Group 0 has a fully custom renderer (the two keyboards) in menuRender.hpp.
 // Every other group is a plain list handled by the generic MD_RenderGroup(),
@@ -78,9 +78,13 @@ static inline int Dir(int delta) { return delta > 0 ? 1 : -1; }
 template <int CH>
 static String getScaleName() { return String(scaleNames[channels[CH].GetScaleIndex()]); }
 
+// Scale and root apply to the channel's note mask as soon as they are changed,
+// so scrolling the list is audible rather than a blind selection you then have
+// to confirm. The cost is that hand-edited notes are replaced the moment the
+// scale or root is touched, which is the behaviour the encoder implies anyway.
 template <int CH>
 static void setScale(int d) {
-    channels[CH].SetScaleIndex(channels[CH].GetScaleIndex() + Dir(d));
+    channels[CH].SelectScale(channels[CH].GetScaleIndex() + Dir(d));
     MarkUnsaved();
 }
 
@@ -89,15 +93,8 @@ static String getRootName() { return String(noteNames[channels[CH].GetRootIndex(
 
 template <int CH>
 static void setRoot(int d) {
-    channels[CH].SetRootIndex(channels[CH].GetRootIndex() + Dir(d));
+    channels[CH].SelectRoot(channels[CH].GetRootIndex() + Dir(d));
     MarkUnsaved();
-}
-
-template <int CH>
-static void loadScaleIntoChannel() {
-    channels[CH].LoadSelectedScale();
-    MarkUnsaved();
-    ShowTemporaryMessage("LOADED", 700);
 }
 
 // ── Pitch ────────────────────────────────────────────────────
@@ -304,49 +301,47 @@ const MenuItem MENU_ITEMS[] = {
     // ── Group 1: scales ────────────────────────────────────────────────────
     {"CH1 SCALE:", getScaleName<0>, nullptr, 76, 0, 1, ROW_SINGLE, MENU_EDIT, setScale<0>, nullptr}, // 25
     {"CH1 ROOT:", getRootName<0>, nullptr, 76, 0, 1, ROW_SINGLE, MENU_EDIT, setRoot<0>, nullptr},    // 26
-    {"LOAD INTO CH1", nullptr, nullptr, 0, 0, 1, ROW_ACTION, MENU_ACTION, nullptr, loadScaleIntoChannel<0>}, // 27
-    {"CH2 SCALE:", getScaleName<1>, nullptr, 76, 0, 1, ROW_SINGLE, MENU_EDIT, setScale<1>, nullptr}, // 28
-    {"CH2 ROOT:", getRootName<1>, nullptr, 76, 0, 1, ROW_SINGLE, MENU_EDIT, setRoot<1>, nullptr},    // 29
-    {"LOAD INTO CH2", nullptr, nullptr, 0, 0, 1, ROW_ACTION, MENU_ACTION, nullptr, loadScaleIntoChannel<1>}, // 30
+    {"CH2 SCALE:", getScaleName<1>, nullptr, 76, 0, 1, ROW_SINGLE, MENU_EDIT, setScale<1>, nullptr}, // 27
+    {"CH2 ROOT:", getRootName<1>, nullptr, 76, 0, 1, ROW_SINGLE, MENU_EDIT, setRoot<1>, nullptr},    // 28
 
     // ── Group 2: channel 1 pitch ────────────────────
-    {"MODE:", getPitchMode<0>, nullptr, 76, 0, 2, ROW_SINGLE, MENU_EDIT, setPitchMode<0>, nullptr}, // 31
-    {"OCTAVE:", getOctave<0>, nullptr, 76, 0, 2, ROW_SINGLE, MENU_EDIT, setOctave<0>, nullptr},     // 32
-    {"SETTLE:", getSettle<0>, nullptr, 76, 0, 2, ROW_SINGLE, MENU_EDIT, setSettle<0>, nullptr},     // 33
-    {"GLIDE:", getGlide<0>, nullptr, 76, 0, 2, ROW_SINGLE, MENU_EDIT, setGlide<0>, nullptr},        // 34
+    {"MODE:", getPitchMode<0>, nullptr, 76, 0, 2, ROW_SINGLE, MENU_EDIT, setPitchMode<0>, nullptr}, // 29
+    {"OCTAVE:", getOctave<0>, nullptr, 76, 0, 2, ROW_SINGLE, MENU_EDIT, setOctave<0>, nullptr},     // 30
+    {"SETTLE:", getSettle<0>, nullptr, 76, 0, 2, ROW_SINGLE, MENU_EDIT, setSettle<0>, nullptr},     // 31
+    {"GLIDE:", getGlide<0>, nullptr, 76, 0, 2, ROW_SINGLE, MENU_EDIT, setGlide<0>, nullptr},        // 32
 
     // ── Group 3: channel 2 pitch ────────────────────
-    {"MODE:", getPitchMode<1>, nullptr, 76, 0, 3, ROW_SINGLE, MENU_EDIT, setPitchMode<1>, nullptr}, // 35
-    {"OCTAVE:", getOctave<1>, nullptr, 76, 0, 3, ROW_SINGLE, MENU_EDIT, setOctave<1>, nullptr},     // 36
-    {"SETTLE:", getSettle<1>, nullptr, 76, 0, 3, ROW_SINGLE, MENU_EDIT, setSettle<1>, nullptr},     // 37
-    {"GLIDE:", getGlide<1>, nullptr, 76, 0, 3, ROW_SINGLE, MENU_EDIT, setGlide<1>, nullptr},        // 38
+    {"MODE:", getPitchMode<1>, nullptr, 76, 0, 3, ROW_SINGLE, MENU_EDIT, setPitchMode<1>, nullptr}, // 33
+    {"OCTAVE:", getOctave<1>, nullptr, 76, 0, 3, ROW_SINGLE, MENU_EDIT, setOctave<1>, nullptr},     // 34
+    {"SETTLE:", getSettle<1>, nullptr, 76, 0, 3, ROW_SINGLE, MENU_EDIT, setSettle<1>, nullptr},     // 35
+    {"GLIDE:", getGlide<1>, nullptr, 76, 0, 3, ROW_SINGLE, MENU_EDIT, setGlide<1>, nullptr},        // 36
 
     // ── Group 4: channel 1 gate/envelope ─────────────
-    {"MODE:", getGateMode<0>, nullptr, 76, 0, 4, ROW_SINGLE, MENU_EDIT, setGateMode<0>, nullptr},    // 39
-    {"ATTACK:", getAttack<0>, nullptr, 76, 0, 4, ROW_SINGLE, MENU_EDIT, setAttack<0>, nullptr},      // 40
-    {"DECAY:", getDecay<0>, nullptr, 76, 0, 4, ROW_SINGLE, MENU_EDIT, setDecay<0>, nullptr},         // 41
-    {"SYNC:", getSyncMode<0>, nullptr, 76, 0, 4, ROW_SINGLE, MENU_EDIT, setSyncMode<0>, nullptr},    // 42
-    {"LEVEL:", getGateLevel<0>, nullptr, 76, 0, 4, ROW_SINGLE, MENU_EDIT, setGateLevel<0>, nullptr}, // 43
+    {"MODE:", getGateMode<0>, nullptr, 76, 0, 4, ROW_SINGLE, MENU_EDIT, setGateMode<0>, nullptr},    // 37
+    {"ATTACK:", getAttack<0>, nullptr, 76, 0, 4, ROW_SINGLE, MENU_EDIT, setAttack<0>, nullptr},      // 38
+    {"DECAY:", getDecay<0>, nullptr, 76, 0, 4, ROW_SINGLE, MENU_EDIT, setDecay<0>, nullptr},         // 39
+    {"SYNC:", getSyncMode<0>, nullptr, 76, 0, 4, ROW_SINGLE, MENU_EDIT, setSyncMode<0>, nullptr},    // 40
+    {"LEVEL:", getGateLevel<0>, nullptr, 76, 0, 4, ROW_SINGLE, MENU_EDIT, setGateLevel<0>, nullptr}, // 41
 
     // ── Group 5: channel 2 gate/envelope ─────────────
-    {"MODE:", getGateMode<1>, nullptr, 76, 0, 5, ROW_SINGLE, MENU_EDIT, setGateMode<1>, nullptr},    // 44
-    {"ATTACK:", getAttack<1>, nullptr, 76, 0, 5, ROW_SINGLE, MENU_EDIT, setAttack<1>, nullptr},      // 45
-    {"DECAY:", getDecay<1>, nullptr, 76, 0, 5, ROW_SINGLE, MENU_EDIT, setDecay<1>, nullptr},         // 46
-    {"SYNC:", getSyncMode<1>, nullptr, 76, 0, 5, ROW_SINGLE, MENU_EDIT, setSyncMode<1>, nullptr},    // 47
-    {"LEVEL:", getGateLevel<1>, nullptr, 76, 0, 5, ROW_SINGLE, MENU_EDIT, setGateLevel<1>, nullptr}, // 48
+    {"MODE:", getGateMode<1>, nullptr, 76, 0, 5, ROW_SINGLE, MENU_EDIT, setGateMode<1>, nullptr},    // 42
+    {"ATTACK:", getAttack<1>, nullptr, 76, 0, 5, ROW_SINGLE, MENU_EDIT, setAttack<1>, nullptr},      // 43
+    {"DECAY:", getDecay<1>, nullptr, 76, 0, 5, ROW_SINGLE, MENU_EDIT, setDecay<1>, nullptr},         // 44
+    {"SYNC:", getSyncMode<1>, nullptr, 76, 0, 5, ROW_SINGLE, MENU_EDIT, setSyncMode<1>, nullptr},    // 45
+    {"LEVEL:", getGateLevel<1>, nullptr, 76, 0, 5, ROW_SINGLE, MENU_EDIT, setGateLevel<1>, nullptr}, // 46
 
     // ── Group 6: input routing / transposition ───────
-    {"IN2 ROLE:", getIn2Role, nullptr, 76, 0, 6, ROW_SINGLE, MENU_EDIT, setIn2Role, nullptr},               // 49
-    {"TR RANGE:", getTransposeRange, nullptr, 76, 0, 6, ROW_SINGLE, MENU_EDIT, setTransposeRange, nullptr}, // 50
-    {"CH1 TRANSP:", getTransposeEnabled<0>, nullptr, 88, 0, 6, ROW_SINGLE, MENU_TOGGLE, nullptr, toggleTransposeEnabled<0>}, // 51
-    {"CH2 TRANSP:", getTransposeEnabled<1>, nullptr, 88, 0, 6, ROW_SINGLE, MENU_TOGGLE, nullptr, toggleTransposeEnabled<1>}, // 52
+    {"IN2 ROLE:", getIn2Role, nullptr, 76, 0, 6, ROW_SINGLE, MENU_EDIT, setIn2Role, nullptr},               // 47
+    {"TR RANGE:", getTransposeRange, nullptr, 76, 0, 6, ROW_SINGLE, MENU_EDIT, setTransposeRange, nullptr}, // 48
+    {"CH1 TRANSP:", getTransposeEnabled<0>, nullptr, 88, 0, 6, ROW_SINGLE, MENU_TOGGLE, nullptr, toggleTransposeEnabled<0>}, // 49
+    {"CH2 TRANSP:", getTransposeEnabled<1>, nullptr, 88, 0, 6, ROW_SINGLE, MENU_TOGGLE, nullptr, toggleTransposeEnabled<1>}, // 50
 
     // ── Group 7: settings ──────────────────────────
-    {"SCR TIMEOUT:", getTimeout, nullptr, 88, 0, 7, ROW_SINGLE, MENU_EDIT, setTimeout, nullptr},    // 53
-    {"PRESET SLOT:", getSaveSlot, nullptr, 88, 0, 7, ROW_SINGLE, MENU_EDIT, setSaveSlot, nullptr},  // 54
-    {"SAVE", nullptr, nullptr, 0, 0, 7, ROW_ACTION, MENU_ACTION, nullptr, doSave},                  // 55
-    {"LOAD", nullptr, nullptr, 0, 0, 7, ROW_ACTION, MENU_ACTION, nullptr, doLoad},                  // 56
-    {"LOAD DEFAULTS", nullptr, nullptr, 0, 0, 7, ROW_ACTION, MENU_ACTION, nullptr, doLoadDefaults}, // 57
+    {"SCR TIMEOUT:", getTimeout, nullptr, 88, 0, 7, ROW_SINGLE, MENU_EDIT, setTimeout, nullptr},    // 51
+    {"PRESET SLOT:", getSaveSlot, nullptr, 88, 0, 7, ROW_SINGLE, MENU_EDIT, setSaveSlot, nullptr},  // 52
+    {"SAVE", nullptr, nullptr, 0, 0, 7, ROW_ACTION, MENU_ACTION, nullptr, doSave},                  // 53
+    {"LOAD", nullptr, nullptr, 0, 0, 7, ROW_ACTION, MENU_ACTION, nullptr, doLoad},                  // 54
+    {"LOAD DEFAULTS", nullptr, nullptr, 0, 0, 7, ROW_ACTION, MENU_ACTION, nullptr, doLoadDefaults}, // 55
 };
 
 const int MENU_ITEM_COUNT = sizeof(MENU_ITEMS) / sizeof(MENU_ITEMS[0]);

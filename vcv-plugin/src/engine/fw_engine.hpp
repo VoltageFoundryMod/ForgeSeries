@@ -43,12 +43,11 @@ void deserialize(Engine *, const std::string &);
 int scaleCount();
 std::string scaleName(int index);
 int channelScale(Engine *, int ch);
+// Setting the scale or the root rebuilds that channel's note mask immediately.
 void setChannelScale(Engine *, int ch, int scale);
 std::string noteName(int note);
 int channelRoot(Engine *, int ch);
 void setChannelRoot(Engine *, int ch, int root);
-// Apply the selected scale + root to the channel's note mask.
-void loadScaleIntoChannel(Engine *, int ch);
 
 // The live 12-note mask — the actual source of truth for quantization.
 bool noteEnabled(Engine *, int ch, int note);

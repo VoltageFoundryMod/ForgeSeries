@@ -386,3 +386,54 @@ TEST(Channel, TransposeClampsAtTheEndsOfTheRange) {
     hold(ch, 5.0f, t, 3);
     EXPECT_LE(ch.GetSoundingSemitone(), QUANT_MAX_SEMITONE);
 }
+
+// ── Scale selection ─────────────────────────────────────────────────────────
+
+TEST(Channel, SelectScaleAppliesImmediately) {
+    QuantizerChannel ch; // chromatic by default
+    ASSERT_TRUE(ch.GetActiveNote(1));
+
+    ch.SelectScale(1); // major
+    EXPECT_EQ(1, ch.GetScaleIndex());
+    EXPECT_FALSE(ch.GetActiveNote(1)) << "C# should be gone from C major";
+    EXPECT_TRUE(ch.GetActiveNote(4));  // E
+}
+
+TEST(Channel, SelectRootAppliesImmediately) {
+    QuantizerChannel ch;
+    ch.SelectScale(1); // C major
+    ch.SelectRoot(2);  // D major
+    EXPECT_EQ(2, ch.GetRootIndex());
+    EXPECT_TRUE(ch.GetActiveNote(6));  // F#
+    EXPECT_FALSE(ch.GetActiveNote(5)); // F natural is gone
+}
+
+TEST(Channel, SelectScaleReplacesHandEditedNotes) {
+    // The flip side of applying immediately: touching the scale discards manual
+    // edits. Pinned here so the trade-off is a decision, not a surprise.
+    QuantizerChannel ch;
+    ch.SelectScale(1); // C major
+    ch.SetActiveNote(1, true);
+    ASSERT_TRUE(ch.GetActiveNote(1));
+
+    ch.SelectScale(1); // same scale, re-applied
+    EXPECT_FALSE(ch.GetActiveNote(1));
+}
+
+TEST(Channel, PlainSettersDoNotTouchTheMask) {
+    // Preset restore relies on this: the stored mask is the source of truth and
+    // must survive having the stored scale/root written alongside it. If these
+    // setters rebuilt the mask, loading a preset would silently discard any
+    // hand-edited notes it contains.
+    QuantizerChannel ch;
+    bool custom[12] = {1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1};
+    ch.SetActiveNotes(custom);
+    ch.SetScaleIndex(1); // major
+    ch.SetRootIndex(5);  // F
+
+    EXPECT_EQ(1, ch.GetScaleIndex());
+    EXPECT_EQ(5, ch.GetRootIndex());
+    for (int i = 0; i < 12; i++) {
+        EXPECT_EQ(custom[i], ch.GetActiveNote(i)) << "mask changed at note " << i;
+    }
+}

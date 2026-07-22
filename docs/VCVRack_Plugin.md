@@ -73,9 +73,10 @@ with the patch.
 **Per channel** (Channel 1 / Channel 2, showing the live note at the right)
 
 - **Notes** — the 12-note mask; this is the real source of truth for quantization.
-- **Scale** / **Root** / **Apply scale to notes** — the scale helper. Picking a
-  scale does nothing until you apply it, exactly as on the hardware, so you never
-  lose a hand-edited mask by browsing.
+- **Scale** / **Root** — written straight into the note mask when chosen, exactly
+  as on the hardware. Hand-edit individual **Notes** afterwards if you want
+  something that is not a named scale; changing the scale or root again rebuilds
+  the mask and replaces those edits.
 - **Pitch mode** — `TRACK` follows the input; `S&H` latches the note on a TRIG
   edge and holds it, so nothing the input does between triggers is heard.
 - **Octave** — −3…+3, applied after quantization.

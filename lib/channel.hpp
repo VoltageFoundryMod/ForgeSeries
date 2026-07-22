@@ -122,10 +122,29 @@ class QuantizerChannel {
     }
 
     // ── Parameters ───────────────────────────────────────────────────────────
+    // SetScaleIndex/SetRootIndex only record the selection; SelectScale/SelectRoot
+    // also rebuild the note mask from it.
+    //
+    // The split matters for preset loading. A preset stores the mask *and* the
+    // scale/root that were last chosen, and the mask is the source of truth
+    // because it may have been hand-edited afterwards. If the plain setters
+    // rebuilt the mask, restoring a preset would overwrite the saved mask with a
+    // freshly generated scale and quietly discard those edits. UpdateParameters()
+    // therefore uses the plain setters; anything driven by the user uses the
+    // Select* pair.
     int GetScaleIndex() const { return _scaleIndex; }
     void SetScaleIndex(int i) { _scaleIndex = ((i % numScales) + numScales) % numScales; }
     int GetRootIndex() const { return _rootIndex; }
     void SetRootIndex(int i) { _rootIndex = ((i % 12) + 12) % 12; }
+
+    void SelectScale(int i) {
+        SetScaleIndex(i);
+        LoadSelectedScale();
+    }
+    void SelectRoot(int i) {
+        SetRootIndex(i);
+        LoadSelectedScale();
+    }
 
     int GetOctave() const { return _octave; }
     void SetOctave(int o) { _octave = constrain(o, CHANNEL_OCTAVE_MIN, CHANNEL_OCTAVE_MAX); }

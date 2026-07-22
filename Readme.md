@@ -35,15 +35,15 @@ actual firmware running inside Rack with the OLED emulated pixel for pixel. See
 
 ## Interface
 
-| Jack   | Direction | Meaning                                 |
-| ------ | --------- | --------------------------------------- |
-| TRIG   | in        | Trigger input (0–5 V)                   |
-| IN 1   | in        | Pitch CV for channel 1 (0–5 V)          |
+| Jack   | Direction | Meaning                                             |
+| ------ | --------- | --------------------------------------------------- |
+| TRIG   | in        | Trigger input (0–5 V)                               |
+| IN 1   | in        | Pitch CV for channel 1 (0–5 V)                      |
 | IN 2   | in        | Pitch CV for channel 2, or transposition CV (0–5 V) |
-| OUT 1  | out       | Quantized CV, channel 1 (12-bit, 0–5 V) |
-| OUT 2  | out       | Quantized CV, channel 2 (12-bit, 0–5 V) |
-| GATE 1 | out       | Gate / envelope, channel 1 (0–5 V)      |
-| GATE 2 | out       | Gate / envelope, channel 2 (0–5 V)      |
+| OUT 1  | out       | Quantized CV, channel 1 (12-bit, 0–5 V)             |
+| OUT 2  | out       | Quantized CV, channel 2 (12-bit, 0–5 V)             |
+| GATE 1 | out       | Gate / envelope, channel 1 (0–5 V)                  |
+| GATE 2 | out       | Gate / envelope, channel 2 (0–5 V)                  |
 
 ## Getting Started
 
@@ -51,7 +51,7 @@ actual firmware running inside Rack with the OLED emulated pixel for pixel. See
 2. The display shows a splash screen, then the module name and version.
 3. Settings load from preset slot 0. On a fresh module that means channel 1
    chromatic and channel 2 in C major.
-4. Patch a pitch CV into IN 1 and take the quantized result from CV 1.
+4. Patch a pitch CV into IN 1 and take the quantized result from OUT 1.
 
 ## Using the Module
 
@@ -61,7 +61,7 @@ The home screen shows one piano keyboard per channel:
 
 - **Filled key** — the note is in the channel's scale.
 - **Outlined key** — the note is excluded; incoming CV never lands on it.
-- **Ringed key** — the note the channel is playing right now.
+- **Dotted key** — the note the channel is playing right now.
 
 The column on the right of each keyboard shows the selected scale, the root and
 octave offset, and the live note. The live note is drawn inverted while that
@@ -76,15 +76,15 @@ turning past the last key to reach the menu pages.
 
 Turning the encoder past the keyboards steps through:
 
-| Page      | Contents                                                          |
-| --------- | ----------------------------------------------------------------- |
-| SCALES    | Scale and root per channel, and `LOAD INTO CH1` / `LOAD INTO CH2` |
-| CH1 PITCH | Mode, octave, settle and glide for channel 1                      |
-| CH2 PITCH | The same for channel 2                                            |
-| CH1 GATE  | Mode, attack, decay, sync and level for channel 1                 |
-| CH2 GATE  | The same for channel 2                                            |
-| ROUTING   | IN 2 role, transpose range, and per-channel transpose enables     |
-| SETTINGS  | Screen timeout, preset slot, save, load, load defaults            |
+| Page      | Contents                                                      |
+| --------- | ------------------------------------------------------------- |
+| SCALES    | Scale and root per channel                                    |
+| CH1 PITCH | Mode, octave, settle and glide for channel 1                  |
+| CH2 PITCH | The same for channel 2                                        |
+| CH1 GATE  | Mode, attack, decay, sync and level for channel 1             |
+| CH2 GATE  | The same for channel 2                                        |
+| ROUTING   | IN 2 role, transpose range, and per-channel transpose enables |
+| SETTINGS  | Screen timeout, preset slot, save, load, load defaults        |
 
 A **hollow arrow** means the row is selected; **click** to start editing and the
 arrow fills in. Turn to change the value, click again to confirm. Spinning the
@@ -96,12 +96,16 @@ disable it on the SETTINGS page).
 
 ### Choosing a scale
 
-Selecting a scale and root on the SCALES page does **not** change anything by
-itself. Choose the scale, choose the root, then click `LOAD INTO CH1` (or CH2) to
-write it into that channel's note mask. This is deliberate: it means you can
-browse scales without destroying a mask you edited by hand, and it means the
-keys you toggle on the keyboard screen are always the truth about what the
-quantizer plays.
+Changing **SCALE** or **ROOT** on the SCALES page writes straight into that
+channel's note mask — there is nothing to confirm. Scrolling through the scales
+with a CV patched is therefore audible: you hear each one as you land on it, and
+the keyboard screen redraws to match.
+
+The note mask stays the source of truth for what the quantizer plays, so you are
+free to toggle individual keys on the keyboard screen afterwards and build
+something that is not a named scale at all. The trade-off is that touching SCALE
+or ROOT again rebuilds the mask and replaces those manual edits — so hand-edit
+_after_ picking the scale, not before.
 
 If you switch every note off, the channel falls back to chromatic rather than
 freezing — the sounding note is marked with a small dot so it is obvious what
@@ -157,7 +161,7 @@ raise it if your source is noisy or slewed.
 
 ### Sample & hold
 
-Each channel's pitch **MODE** decides *when* the output is allowed to move:
+Each channel's pitch **MODE** decides _when_ the output is allowed to move:
 
 - **TRACK** — follow the input continuously, subject to the settle window.
 - **S&H** — latch the quantized note on a rising edge at TRIG and hold it until
@@ -169,7 +173,7 @@ version of what SETTLE does statistically, and it is what you want when the
 pitch comes from something that moves continuously — an LFO, a slew limiter, a
 hand on a joystick.
 
-SETTLE keeps working in this mode, as the *sample delay*. A sequencer puts out
+SETTLE keeps working in this mode, as the _sample delay_. A sequencer puts out
 its pitch and its gate at the same instant, so at the moment of the trigger the
 pitch CV may still be in transit; SETTLE is how long the module waits after the
 edge before believing what it reads. The default 5 ms is a good starting point.
@@ -236,13 +240,11 @@ updates**, so you only need to re-run it if the hardware changes.
 
 ## Firmware Update
 
-1. Download the latest `CURRENT.UF2` from the
-   [Releases page](https://github.com/VoltageFoundryMod/ForgeSeries-DQ/releases).
-2. Connect the module to your computer with a USB-C cable. The CPU is socketed,
-   so this can be done with the board removed from the module.
-3. Double-tap the reset button (or short the `RESET` pads twice) to enter the UF2
-   bootloader. A USB drive appears.
-4. Copy `CURRENT.UF2` onto it. The module reboots into the new firmware.
+1. Download the latest firmware from the Releases section of the [GitHub repository](https://github.com/VoltageFoundryMod/ForgeSeries/releases). The firmware file is named `CURRENT.UF2`.
+2. Connect the module to your computer using a USB-C cable while holding the small BOOT (B) button. The CPU can be removed from the module as it's socketed to the main board if desired. Firmware loading can be done with the CPU removed.
+3. A new drive will show on your computer named RPI-RP2. Copy and overwrite the `CURRENT.UF2` file to the module USB drive. After copy is finished, the module will reboot and the new firmware will be loaded.
+
+<img src="./images/XIAORP2040.png" alt="XIAO RP2040 MCU" style="width:20%"/>
 
 ## Troubleshooting
 
@@ -268,10 +270,9 @@ blinks the on-board LED if the display itself failed to start.
 
 ## Powering
 
-The module can be powered from either 12 V or 5 V if your supply provides it. An
-on-board jumper selects the source: `SEL`–`REG` takes power from the Eurorack
-12 V rail, `SEL`–`BOARD` takes 5 V (requires a 16-pin cable). It can also be
-powered from the USB-C jack on the XIAO.
+The module uses only 5V internally. This can be provided directly by a Eurorack supply with a 5V rail, or taken from the 12V line and converted to 5V on-board. The source is selected with an on-board jumper: closing the center pin to **INT REG** takes power from the Eurorack 12V supply, while closing the center pin to **EURO** takes power from the 5V rail (requires a 16-pin cable). It can also be powered from the USB-C jack on the microcontroller board.
+
+**Never connect both the Eurorack power and the USB-C power at the same time**. The module might be damaged or even damage your computer if both are connected. The module is designed to be powered from either source, not both.
 
 ## Specifications
 

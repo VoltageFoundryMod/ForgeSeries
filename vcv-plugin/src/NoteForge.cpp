@@ -198,7 +198,7 @@ struct NoteForgeWidget : ModuleWidget {
                 }
             }));
 
-            // ── Scale helper: pick scale + root, then apply to the mask ───────
+            // ── Scale: applied to the note mask as soon as it is chosen ──────
             std::vector<std::string> scales;
             for (int s = 0; s < nfengine::scaleCount(); s++)
                 scales.push_back(nfengine::scaleName(s));
@@ -214,9 +214,6 @@ struct NoteForgeWidget : ModuleWidget {
                 "Root", roots,
                 [=]() { return (size_t)nfengine::channelRoot(e, ch); },
                 [=](size_t r) { nfengine::setChannelRoot(e, ch, (int)r); }));
-
-            menu->addChild(createMenuItem("Apply scale to notes", "",
-                                          [=]() { nfengine::loadScaleIntoChannel(e, ch); }));
 
             menu->addChild(new MenuSeparator);
 

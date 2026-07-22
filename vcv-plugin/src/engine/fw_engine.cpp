@@ -413,7 +413,7 @@ int channelScale(Engine *e, int ch) {
 }
 void setChannelScale(Engine *e, int ch, int scale) {
     EngineScope scope(e);
-    channels[clampChannel(ch)].SetScaleIndex(scale);
+    channels[clampChannel(ch)].SelectScale(scale);
     unsavedChanges = true;
     REQUEST_DISPLAY_REFRESH();
 }
@@ -429,14 +429,7 @@ int channelRoot(Engine *e, int ch) {
 }
 void setChannelRoot(Engine *e, int ch, int root) {
     EngineScope scope(e);
-    channels[clampChannel(ch)].SetRootIndex(root);
-    unsavedChanges = true;
-    REQUEST_DISPLAY_REFRESH();
-}
-
-void loadScaleIntoChannel(Engine *e, int ch) {
-    EngineScope scope(e);
-    channels[clampChannel(ch)].LoadSelectedScale();
+    channels[clampChannel(ch)].SelectRoot(root);
     unsavedChanges = true;
     REQUEST_DISPLAY_REFRESH();
 }
