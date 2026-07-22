@@ -15,11 +15,11 @@
       "problemMatcher": []
     },
     {
-      "label": "Convert ELF to UF2 Firmware for SAMD21",
+      "label": "Upload Firmware to XIAO RP2040",
       "type": "shell",
-      "command": "./scripts/convertFirmwareUF2.sh",
+      "command": "./scripts/uploadFirmware.sh",
       "args": [
-        "${workspaceFolder}/.pio/build/seeed_xiao/firmware.bin",
+        "${workspaceFolder}/.pio/build/xiao_rp2040/firmware.uf2"
       ],
       "group": {
         "kind": "build",
@@ -29,18 +29,75 @@
       "dependsOn": "Build PlatformIO Project"
     },
     {
-      "label": "Upload Firmware to Seeeduino XIAO",
+      "label": "Firmware: Native Tests",
       "type": "shell",
-      "command": "./scripts/uploadFirmware.sh",
+      "command": "pio",
       "args": [
-        "${workspaceFolder}/.pio/build/seeed_xiao/firmware.uf2"
+        "test",
+        "-e",
+        "native"
       ],
-      "group": {
-        "kind": "build",
-        "isDefault": false
+      "options": {
+        "env": {
+          "PATH": "/c/msys64/mingw64/bin:${env:PATH}"
+        }
       },
-      "problemMatcher": [],
-      "dependsOn": "Convert ELF to UF2 Firmware for SAMD21"
+      "group": "test",
+      "problemMatcher": [
+        "$gcc"
+      ]
+    },
+    {
+      "label": "VCV Plugin: Build and Install",
+      "type": "shell",
+      "command": "make",
+      "args": [
+        "install"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/vcv-plugin",
+        "env": {
+          "PATH": "/c/msys64/usr/bin:/c/msys64/mingw64/bin:${env:PATH}",
+          "MSYSTEM": "MINGW64"
+        }
+      },
+      "group": "build",
+      "problemMatcher": [
+        "$gcc"
+      ]
+    },
+    {
+      "label": "VCV Plugin: Clean",
+      "type": "shell",
+      "command": "make",
+      "args": [
+        "clean"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/vcv-plugin",
+        "env": {
+          "PATH": "/c/msys64/usr/bin:/c/msys64/mingw64/bin:${env:PATH}",
+          "MSYSTEM": "MINGW64"
+        }
+      },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "VCV Plugin: Isolation Test",
+      "type": "shell",
+      "command": "test/build_isolation_test.sh",
+      "options": {
+        "cwd": "${workspaceFolder}/vcv-plugin",
+        "env": {
+          "PATH": "/c/msys64/usr/bin:/c/msys64/mingw64/bin:${env:PATH}",
+          "MSYSTEM": "MINGW64"
+        }
+      },
+      "group": "test",
+      "problemMatcher": [
+        "$gcc"
+      ]
     }
   ]
 }
