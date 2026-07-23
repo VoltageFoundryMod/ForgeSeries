@@ -6,12 +6,37 @@
 // with host-driven entry points. It exposes ONLY a POD/opaque API (fw_engine.hpp)
 // so it never shares Arduino/rack types with the rest of the plugin.
 
+// Every system header the shim and lib/ reach transitively must be included
+// out here, BEFORE the anonymous namespace below opens — otherwise std:: lands
+// inside it with internal linkage.
+#include <algorithm>
+#include <atomic>
+#include <cmath>
+#include <cstdarg>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <math.h>
+#include <mutex>
+#include <string>
+#include <utility> // std::swap
+#include <vector>
+
+// ── Translation-unit privacy ─────────────────────────────────────────────────
+// Several Forge modules link into a single VCV Rack plugin (see the
+// ForgeSeries-VCV meta-repo), and every module's firmware defines the same
+// global names — micros(), Serial, display, InitIO(), MENU_ITEMS, cal, ... —
+// each backed by its own divergent lib/. So the whole firmware, from the shim
+// down to the entry layer, lives in an anonymous namespace: internal linkage
+// means sibling modules neither collide at link time nor silently share one
+// COMDAT copy of a same-named class. The public cfengine:: API below stays
+// outside it, and is the only thing this TU exports.
+namespace {
+
 #include "../shim/Arduino.h"
 #include "../shim/Wire.h"
 #include "../shim/EEPROM.h"
-
-#include <mutex>
-#include <utility> // std::swap
 
 // ── Shim symbol definitions ──────────────────────────────────────────────────
 HostBridge *g_host = nullptr;
@@ -152,6 +177,8 @@ void ShowTemporaryMessage(const char *msg, uint32_t durationMs) {
 void RunCalibration() {
     ShowTemporaryMessage("N/A", 1200);
 }
+
+} // namespace — end of the private firmware translation unit
 
 // ── Touch points used by the engine entry layer (below) ───────────────────────
 #include "fw_engine.hpp"
