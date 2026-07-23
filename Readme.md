@@ -1,6 +1,6 @@
 # ClockForge 2: Crafting Time, One Pulse at a Time
 
-<img src="./images/Logo-CLK.webp" alt="Logo" style="width:50%"/>
+<img src="./images/ClockForge_Logo.png" alt="Logo" style="width:50%"/>
 
 ## Overview
 
@@ -41,6 +41,8 @@ The module has a user-friendly interface with an encoder for navigation and para
 The right side of the screen shows a navigation line to indicate the current position of the cursor in the menu. The navigation is not shown in the main (BPM) screen.
 
 Whenever a parameter is changed, a small circle will be shown in the top-left corner of the screen. This indicates that the current settings were modified and not saved. The module always loads the preset saved in slot 0 on boot.
+
+The current hardware design supports input signals from 0 to 5V, and the outputs are also 0-5V. The VCV Rack plugin module can be set to accept CV signals in the range of 0 to 5V like the hardware, -5 to +5V or 0 to 10V for more flexibility. The hardware might support other input/output ranges in the future but for now, voltages higher than 5V will be clipped and voltages lower than 0V will be ignored.
 
 ---
 
@@ -488,11 +490,10 @@ The wizard has 5 steps: one output trim followed by four CV input captures (1 V 
 ## Firmware Update
 
 1. Download the latest firmware from the Releases section of the [GitHub repository](https://github.com/VoltageFoundryMod/ForgeSeries/releases). The firmware file is named `CURRENT.UF2`.
-2. Connect the module to your computer using a USB-C cable. The CPU can be removed from the module as it's socketed to the main board. Firmware loading can be done with the CPU removed.
-3. Use tweezers or a jumper wire to quickly short TWICE the two pads labeled `RESET` on the back of the module CPU. The orange LED will flicker and light up.
-4. Copy and overwrite the `CURRENT.UF2` file to the module USB drive named "Seeed XIAO" that will appear. After copy is finished, the module will reboot and the new firmware will be loaded.
+2. Connect the module to your computer using a USB-C cable while holding the small BOOT (B) button. The CPU can be removed from the module as it's socketed to the main board if desired. Firmware loading can be done with the CPU removed.
+3. A new drive will show on your computer named RPI-RP2. Copy and overwrite the `CURRENT.UF2` file to the module USB drive. After copy is finished, the module will reboot and the new firmware will be loaded.
 
-![Module bootloader mode](../images/XIAO-reset.gif)
+<img src="./images/XIAORP2040.png" alt="XIAO RP2040 MCU" style="width:20%"/>
 
 ## Troubleshooting
 
@@ -503,6 +504,8 @@ The wizard has 5 steps: one output trim followed by four CV input captures (1 V 
 ## Powering
 
 The module uses only 5V internally. This can be provided directly by a Eurorack supply with a 5V rail, or taken from the 12V line and converted to 5V on-board. The source is selected with an on-board jumper: closing the center pin to **INT REG** takes power from the Eurorack 12V supply, while closing the center pin to **EURO** takes power from the 5V rail (requires a 16-pin cable). It can also be powered from the USB-C jack on the microcontroller board.
+
+**Never connect both the Eurorack power and the USB-C power at the same time**. The module might be damaged or even damage your computer if both are connected. The module is designed to be powered from either source, not both.
 
 ## Specifications
 
