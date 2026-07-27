@@ -136,6 +136,16 @@ struct ForgeView : forgevcv::ForgeModule {
         if (json_t *j = json_object_get(root, "xyPersist"))
             fvengine::setXyPersist(fv, (int)json_integer_value(j));
     }
+
+    // The base's onReset drives `engine`, which this module leaves null (it holds
+    // its own fvengine handle instead), so the scope reset is dispatched here.
+    // There is deliberately no onRandomize: randomizing a measurement instrument
+    // would just hide the signal you patched it in to look at.
+    void onReset(const ResetEvent &e) override {
+        forgevcv::ForgeModule::onReset(e); // params + cvRange/encoderSensitivity
+        if (fv)
+            fvengine::reset(fv);
+    }
 };
 
 struct ForgeViewWidget : ModuleWidget {

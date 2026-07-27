@@ -199,6 +199,14 @@ void encoderButton(Engine *e, bool pressed) {
     e->lastButton = pressed;
 }
 
+// Rack's "Initialize" action. ScopeInit() is the firmware's own power-on path,
+// so this lands on exactly the state a freshly-added module has — no separate
+// list of defaults to keep in sync with scope.hpp.
+void reset(Engine *e) {
+    EngineScope scope(e);
+    ScopeInit();
+}
+
 // ── Curated state bridge ─────────────────────────────────────────────────────
 int modeCount() { return SCOPE_MODE_COUNT; }
 std::string modeName(int index) {

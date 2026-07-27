@@ -25,6 +25,11 @@ void encoderTurn(Engine *, int detents);
 // Encoder push-button level; the engine detects the press/release edge.
 void encoderButton(Engine *, bool pressed);
 
+// Rack's "Initialize" action — restores the scope's power-on defaults. There is
+// no randomize() counterpart: a randomly configured oscilloscope is not a useful
+// starting point the way a randomized sequencer or clock is.
+void reset(Engine *);
+
 // ── Curated state bridge (Rack context menu + patch persistence) ─────────────
 int modeCount();
 std::string modeName(int index); // 0-based
