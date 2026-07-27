@@ -1,656 +1,416 @@
 #include <Arduino.h>
-#include <Wire.h>
-#include <Encoder.h>
-// Use flash memory as eeprom
-#include <FlashAsEEPROM.h>
-#include <Adafruit_SSD1306.h>
-#include <Adafruit_GFX.h>
 
+// Core 0 sets this flag after preparing a display buffer; Core 1 clears it after
+// display.display().
+// Wire  (GPIO6/7) = display only, used exclusively by Core 1 at runtime.
+// Wire1 (GPIO0/1) = DAC only,     used exclusively by Core 0 at runtime.
+// Separate hardware I2C blocks + separate cores = zero conflict, no mutex needed.
+static volatile bool _displayFrameReady = false;
+static volatile bool _displayLocked = false; // Core 0 sets to pause Core 1 GFX
+
+// Configuration
 #define OLED_ADDRESS 0x3C
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 
-// rotary encoder setting
-#define ENCODER_OPTIMIZE_INTERRUPTS // counter measure of noise
+// Macro to request display refresh from user interactions
+// (marks dirty + resets the screen-timeout timer)
+#define REQUEST_DISPLAY_REFRESH()     \
+    do {                              \
+        displayRefresh = 1;           \
+        displayMgr.MarkInteraction(); \
+    } while (0)
 
-#define CLK_IN_PIN 7     // Clock input pin
-#define CV_1_IN_PIN 8    // channel 1 analog in
-#define CV_2_IN_PIN 9    // channel 2 analog in
-#define ENC_PIN_1 3      // rotary encoder left pin
-#define ENC_PIN_2 6      // rotary encoder right pin
-#define ENC_CLICK_PIN 10 // pin for encoder switch
-#define GATE_OUT_PIN_1 1
-#define GATE_OUT_PIN_2 2
-#define DAC_INTERNAL_PIN A0 // DAC output pin (internal)
-// Second DAC output goes to MCP4725 via I2C
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <Wire.h>
 
-// Declare function prototypes
-void OLED_display();
-void intDAC(int);
-void MCP(int);
-void PWM1(int);
-void PWM2(int);
-void lottery();
-void load();
-void save();
+// Load local libraries
+#include "boardIO.hpp"
+#include "clock.hpp"
+#include "cvInputs.hpp"
+#include "displayManager.hpp"
+#include "encoder.hpp"
+#include "params.hpp"
+#include "physics.hpp"
+#include "pinouts.hpp"
+#include "sequencer.hpp"
+#include "storage.hpp" // includes presetManager.hpp transitively
+#include "utils.hpp"
 
-////////////////////////////////////////////
-// ADC calibration. Change these according to your resistor values to make readings more accurate
-float AD_CH1_calb = 0.98; // reduce resistance error
-float AD_CH2_calb = 0.98; // reduce resistance error
-/////////////////////////////////////////
+#include "menuDefinitions.hpp" // MenuItem struct
+#include "menuHandlers.hpp"    // MENU_ITEMS[] + setter/action implementations
+#include "menuDisplay.hpp"     // MD_* display primitives
+#include "menuRender.hpp"      // MenuHeader, HandleDisplay
 
-// OLED display initialization
+#include "calibration.hpp" // RunCalibration() — output trim + CV capture
+#include "splash.hpp"
+#include "version.hpp"
+
+// OLED display object
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
-// Rotary encoder initialization
-Encoder myEnc(ENC_PIN_1, ENC_PIN_2); // rotary encoder library setting
-float oldPosition = -999;            // rotary encoder library setting
-float newPosition = -999;            // rotary encoder library setting
+// Display manager (non-blocking display updates)
+DisplayManager displayMgr(display);
 
-// Amount of menu items
-int menuItems = 5;
-// i is the current position of the encoder
-int menu_index = 1;
+// Rotary encoder object
+Encoder encoder(ENC_PIN_1, ENC_PIN_2);
+float oldPosition = 0; // last acted-on raw encoder count
+float newPosition = 0; // current raw encoder count
 
-bool SW = 0;
-bool old_SW = 0;
-bool CLK_in = 0;
-bool old_CLK_in = 0;
-byte mode = 0; // 0=looping, 1=length, 2=width, 3=refrain
+// ── The instrument ───────────────────────────────────────────────────────────
+// physicsWorld is the simulation; channels[] turn its peg hits into notes;
+// containerParams/worldParams are what the *user* set, kept separate so CV
+// modulation can sit on top without overwriting it (see params.hpp).
+PhysicsWorld physicsWorld;
+GravityChannel channels[NUM_CHANNELS];
+ContainerParams containerParams[2];
+WorldParams worldParams;
+Clock clockEngine;
+ModBus modBus;
 
-float AD_CH1, old_AD_CH1, AD_CH2, old_AD_CH2;
+// ---- Global variables ----
+int menuItem = 1;                    // 1-based; item 1 is the physics home screen
+bool switchState = 1;
+bool oldSwitchState = 1;
+int menuMode = 0;                    // 0 = navigating, else the item being edited
+bool displayRefresh = 1;             // Display refresh flag
+bool unsavedChanges = false;         // Unsaved changes flag
+int menuScreenTimeout = 2;           // Index into screenTimeoutOptions[]
+unsigned long lastEncoderUpdate = 0; // Last encoder update time
 
-int CV_in1, CV_in2;
-float CV_out1, CV_out2, old_CV_out1, old_CV_out2;
-long gate_timer1, gate_timer2;
+// Calibration data (loaded from EEPROM at boot; updated by RunCalibration())
+CalibrationData cal;
 
-// display
-bool disp_refresh = 1; // 0=not refresh display , 1= refresh display , countermeasure of display refresh busy
+// Function prototypes
+void HandleIO();
+void HandleEncoderPosition();
+void HandleOutputs();
+void ShowTemporaryMessage(const char *msg, uint32_t durationMs);
 
-byte stgAgate[2][16] = {
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
+// ----------------------------------------------
 
-byte stgBgate[2][16] = {
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
-
-int stgAcv[2][16] = {
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
-
-int stgBcv[2][16] = {
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
-
-byte i = 0;
-byte j = 0;
-byte k = 0;
-
-byte gate_set = 1;
-byte gate_count = 0;
-byte old_gate_count = 0;
-
-byte chance_set = 3;    // The reading value of the main knob. Pass a number to chance.
-byte chance = 1;        // Determined based on chance_set and length. Determines the number of variations in the lottery.
-byte lottery_stepA = 2; // Lottery for stgA.
-byte lottery_stepB = 2; // Lottery for stgB.
-byte lottery_done = 2;  // Limits the lottery to only once.
-
-const int LDAC = 9; // Latch operation output pin.
-
-int sub_knob = 0;       // サブツマミの読み取りAD値
-int old_sub_knob = 0;   // SW切り替え直後、切り替え前のAD値を反映させないため、古いADを記憶
-byte refrain_set = 1;   // リフレインの設定回数。AD値から導出。
-byte refrain_count = 0; // リフレインした回数をカウント。指定値に達すると0に戻る。
-byte length_set = 4;    // レングスの数値
-int width_max = 1023;
-int width_min = 0;
-
-int loopingValue = 0; // メインツマミの読み取りAD値
-int lengthValue = 0;
-int widthValue = 0;
-int refrainValue = 0;
-
-byte repeat_set = 0;   // リピートの設定回数。AD値から導出。
-byte repeat_count = 0; // リピートした回数をカウント。指定値に達すると0に戻る
-
-byte mode_set = 0; // 0=length,1=width,2=refrain
-
-void setup()
-{
-  analogWriteResolution(10);
-  analogReadResolution(12);
-  pinMode(CLK_IN_PIN, INPUT);           // CLK in
-  pinMode(CV_1_IN_PIN, INPUT);          // CV IN1
-  pinMode(CV_2_IN_PIN, INPUT);          // CV IN2
-  pinMode(GATE_OUT_PIN_1, OUTPUT);      // CH1 Gate out
-  pinMode(GATE_OUT_PIN_2, OUTPUT);      // CH2 Gate out
-  pinMode(ENC_CLICK_PIN, INPUT_PULLUP); // push sw
-  // OLED initialize
-  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
-  display.clearDisplay();
-
-  // I2C connect
-  Wire.begin();
-
-  // Load the EEPROM data
-  load();
-
-  // ADC settings. These increase ADC reading stability but at the cost of cycle time. Takes around 0.7ms for one reading with these
-  REG_ADC_AVGCTRL |= ADC_AVGCTRL_SAMPLENUM_1;
-  ADC->AVGCTRL.reg = ADC_AVGCTRL_SAMPLENUM_128 | ADC_AVGCTRL_ADJRES(4);
-
-  for (i = 0; i < 2; i = i + 1)
-  {
-    for (j = 0; j < 16; j = j + 1)
-    {
-      stgAgate[i][j] = random(2);
-      stgBgate[i][j] = random(2);
-      stgAcv[i][j] = random(4096);
-      stgBcv[i][j] = random(4096);
-    }
-  }
-}
-
-void loop()
-{
-
-  //-------------Reading the state of external input-----------------
-  old_SW = SW;
-  old_CLK_in = CLK_in;
-  old_CV_out1 = CV_out1;
-  old_CV_out2 = CV_out2;
-  old_AD_CH1 = AD_CH1;
-  old_AD_CH2 = AD_CH2;
-
-  gate_set = digitalRead(CLK_IN_PIN); // Read the state of gate_input
-
-  newPosition = myEnc.read();
-  // If the encoder is decremented
-  if ((newPosition - 3) / 4 > oldPosition / 4)
-  { // 4 is resolution of encoder
-    oldPosition = newPosition;
-    disp_refresh = 1;
-    switch (mode)
-    {
-    case 0: // Option select
-      menu_index = menu_index - 1;
-      if (menu_index < 0)
-      {
-        menu_index = menuItems;
-      }
-      break;
-    case 1: // Looping
-      loopingValue = loopingValue - pow(2, log2(loopingValue) - 1);
-      break;
-    case 2: // Length
-      lengthValue = lengthValue - pow(2, log2(lengthValue) - 1);
-      break;
-    case 3: // Width
-      widthValue = widthValue - pow(2, log2(widthValue) - 1);
-      break;
-    case 4: // Refrain
-      refrainValue = refrainValue - pow(2, log2(refrainValue) - 1);
-      break;
-    }
-  }
-  // If the encoder is incremented
-  else if ((newPosition + 3) / 4 < oldPosition / 4)
-  { // 4 is resolution of encoder
-    oldPosition = newPosition;
-    disp_refresh = 1;
-    switch (mode)
-    {
-    case 0:
-      menu_index = menu_index + 1;
-      if (menuItems < menu_index)
-      {
-        menu_index = 0;
-      }
-      break;
-    case 1: // Looping
-      loopingValue = loopingValue + pow(2, log2(loopingValue) - 1);
-      break;
-    case 2: // Length
-      lengthValue = lengthValue + pow(2, log2(lengthValue) - 1);
-      break;
-    case 3: // Width
-      widthValue = widthValue + pow(2, log2(widthValue) - 1);
-      break;
-    case 4: // Refrain
-      refrainValue = refrainValue + pow(2, log2(refrainValue) - 1);
-      break;
-    }
-  }
-  menu_index = constrain(menu_index, 0, menuItems);
-  loopingValue = constrain(loopingValue, 1, 1024);
-  lengthValue = constrain(lengthValue, 1, 1024);
-  widthValue = constrain(widthValue, 1, 1024);
-  refrainValue = constrain(refrainValue, 1, 1024);
-
-  //-----------------PUSH SW------------------------------------
-  SW = digitalRead(ENC_CLICK_PIN);
-  if (SW == 1 && old_SW != 1)
-  {
-    disp_refresh = 1;
-    if (menu_index == 1 && mode == 0)
-    {
-      mode = 1; // Switch to looping selection mode
-    }
-    else if (menu_index == 2 && mode == 0)
-    {
-      mode = 2; // Switch to length selection mode
-    }
-    else if (menu_index == 3 && mode == 0)
-    {
-      mode = 3; // Switch to width selection mode
-    }
-    else if (menu_index == 4 && mode == 0)
-    {
-      mode = 4; // Switch to refrain selection mode
-    }
-    // Revert from modes to menu selection
-    else if (menu_index == 1 && mode != 1)
-    {
-      mode = 0; // Switch to option select mode
-    }
-    else if (menu_index == 2 && mode == 2)
-    {
-      mode = 0; // Switch to option select mode
-    }
-    else if (menu_index == 3 && mode == 3)
-    {
-      mode = 0; // Switch to option select mode
-    }
-    else if (menu_index == 4 && mode == 4)
-    {
-      mode = 0; // Switch to option select mode
-    }
-    else if (menu_index == 5 && mode == 0)
-    {
-      save(); // Save the current settings to EEPROM
-    }
-  }
-  //-------------------------------Analog read and qnt setting--------------------------
-  // Still not used but could control internal parameters
-  AD_CH1 = analogRead(CV_1_IN_PIN) / AD_CH1_calb;
-  AD_CH2 = analogRead(CV_2_IN_PIN) / AD_CH2_calb;
-
-  //-------------refrainの設定----------------------
-
-  if (mode_set == 2)
-  {
-    if (refrainValue < 25)
-    {
-      refrain_set = 1; // do not repeat
-    }
-    else if (refrainValue < 313 && refrainValue >= 26)
-    {
-      refrain_set = 2; // Repeat 1 time
-    }
-
-    else if (refrainValue < 624 && refrainValue >= 314)
-    {
-      refrain_set = 3; // Repeat 2 times
-    }
-
-    else if (refrainValue < 873 && refrainValue >= 625)
-    {
-      refrain_set = 4; // Repeat 3 times
-    }
-
-    else if (refrainValue >= 874)
-    {
-      refrain_set = 8; // Repeat 7 times
-    }
-  }
-
-  //----------------length設定---------------------
-
-  if (mode_set == 0)
-  {
-    if (lengthValue < 25)
-    {
-      length_set = 4;
-    }
-    else if (lengthValue < 313 && lengthValue >= 26)
-    {
-      length_set = 6;
-    }
-
-    else if (lengthValue < 624 && lengthValue >= 314)
-    {
-      length_set = 8;
-    }
-
-    else if (lengthValue < 873 && lengthValue >= 625)
-    {
-      length_set = 12;
-    }
-
-    else if (lengthValue >= 874)
-    {
-      length_set = 16;
-    }
-  }
-
-  //-------------width setting----------------------
-
-  if (mode_set == 1)
-  {
-    width_max = 612 + widthValue * 4 / 10;
-    width_min = 412 - widthValue * 4 / 10;
-  }
-
-  //-------------repeat setting----------------------
-  if (loopingValue < 5)
-  {
-    repeat_set = 0; // do not repeat
-    chance = 0;
-  }
-  else if (loopingValue < 111 && loopingValue >= 6)
-  {
-    repeat_set = 0; // do not repeat
-    chance = 1;
-  }
-  else if (loopingValue < 214 && loopingValue >= 112)
-  {
-    repeat_set = 0; // do not repeat
-    chance = 2;
-  }
-  else if (loopingValue < 376 && loopingValue >= 215)
-  {
-    repeat_set = 0; // do not repeat
-    if (length_set == 4 || length_set == 6)
-    {
-      chance = 3;
-    }
-    else
-    {
-      chance = 4;
-    }
-  }
-
-  else if (loopingValue < 555 && loopingValue >= 377)
-  {
-    repeat_set = 0; // do not repeat
-    chance = length_set;
-  }
-  else if (loopingValue < 700 && loopingValue >= 556)
-  {
-    repeat_set = 1; // repeat
-    if (length_set == 4 || length_set == 6)
-    {
-      chance = 3;
-    }
-    else
-    {
-      chance = 4;
-    }
-  }
-  else if (loopingValue < 861 && loopingValue >= 701)
-  {
-    repeat_set = 1; // repeat
-    chance = 2;
-  }
-  else if (loopingValue < 970 && loopingValue >= 862)
-  {
-    repeat_set = 1; // repeat
-    chance = 1;
-  }
-  else if (loopingValue < 1024 && loopingValue >= 971)
-  {
-    repeat_set = 1; // repeat
-    chance = 0;
-  }
-  //-----------------Start of lottery process-----------------
-
-  if (refrain_count == 0 && gate_count == 1 && lottery_done == 0 && repeat_count == 0)
-  {
-    lottery(); // Start lottery process
-    lottery_done = 1;
-  }
-
-  //-----------------stg sequence output-----------------
-
-  switch (repeat_count)
-  {
-
-  case 0:
-    switch (gate_set)
-    {
-
-    case 0:                              // When gate_input is LOW
-      digitalWrite(GATE_OUT_PIN_1, LOW); // Set gate_output to LOW
-      old_gate_count = gate_count;
-      break;
-
-    case 1: // When gate_input is HIGH
-      if (old_gate_count == gate_count)
-      {
-        gate_count++;
-
-        if (gate_count > length_set)
-        {
-          gate_count = 1;
-          refrain_count++;
-
-          if (refrain_count >= refrain_set)
-          { // Transition from stgA to stgB
-            repeat_count++;
-            refrain_count = 0;
-            lottery_done = 0;
-          }
-        }
-        // WriteRegister(map(stgAcv[0][gate_count - 1], 0, 1023, width_min, width_max));
-        intDAC(map(stgAcv[0][gate_count - 1], 0, 4095, width_min, width_max));
-
-        digitalWrite(GATE_OUT_PIN_1, stgAgate[0][gate_count - 1]); // Output CV before gate
-        // analogWrite(6, stgAcv[0][gate_count] / 4); // Replace this LED output with something on screen
-        break;
-      }
-      break;
-    }
-
-  case 1:
-    if (repeat_set == 0)
-    {
-      repeat_count = 0;
-    }
-    else
-    {
-      switch (gate_set)
-      {
-
-      case 0:                              // When gate_input is LOW
-        digitalWrite(GATE_OUT_PIN_1, LOW); // Set gate_output to LOW
-        old_gate_count = gate_count;
-        break;
-
-      case 1: // When gate_input is HIGH
-        if (old_gate_count == gate_count)
-        {
-          gate_count++;
-
-          if (gate_count > length_set)
-          {
-            gate_count = 1;
-            refrain_count++;
-
-            if (refrain_count >= refrain_set)
-            { // Transition from stgB to stgA
-              repeat_count++;
-              refrain_count = 0;
-              if (repeat_count >= 2)
-              {
-                repeat_count = 0;
-                lottery_done = 0;
-              }
+// Handle encoder button click
+void HandleEncoderClick() {
+    oldSwitchState = switchState;
+    switchState = digitalRead(ENCODER_SW);
+    if (switchState == 1 && oldSwitchState == 0) {
+        lastEncoderUpdate = millis();
+        REQUEST_DISPLAY_REFRESH();
+        if (menuMode == 0) {
+            // Data-driven: look up the clicked item and execute or enter edit mode.
+            if (menuItem >= 1 && menuItem <= MENU_ITEM_COUNT) {
+                const MenuItem &mi = MENU_ITEMS[menuItem - 1];
+                if (mi.type == MENU_ACTION || mi.type == MENU_TOGGLE) {
+                    if (mi.action)
+                        mi.action();
+                } else { // MENU_EDIT
+                    menuMode = menuItem;
+                }
             }
-          }
-          // WriteRegister(map(stgBcv[0][gate_count - 1], 0, 1023, width_min, width_max));
-
-          intDAC(map(stgBcv[0][gate_count - 1], 0, 1023, width_min, width_max));
-
-          digitalWrite(GATE_OUT_PIN_1, stgBgate[0][gate_count - 1]); // Output CV before gate
-          // analogWrite(6, stgBcv[0][gate_count] / 4); // Replace this LED output with something on screen
-          break;
+        } else {
+            menuMode = 0; // commit and leave edit mode
         }
+    }
+}
+
+// Calculate the speed of the encoder rotation.
+// Resets to 1.0 when direction reverses so the first detent after a turn-around
+// is always a single step.
+float speedFactor = 1.0;
+unsigned long lastEncoderTime = 0;
+int lastEncoderDir = 0; // +1 or -1
+void UpdateSpeedFactor(int dir) {
+    unsigned long currentEncoderTime = millis();
+    unsigned long timeDiff = currentEncoderTime - lastEncoderTime;
+    lastEncoderTime = currentEncoderTime;
+
+    if (lastEncoderDir != 0 && dir != lastEncoderDir) {
+        speedFactor = 1.0;
+        lastEncoderDir = dir;
+        return;
+    }
+    lastEncoderDir = dir;
+
+    if (timeDiff < 30) {
+        speedFactor = 8.0; // Very fast spin
+    } else if (timeDiff < 60) {
+        speedFactor = 4.0; // Fast spin
+    } else if (timeDiff < 120) {
+        speedFactor = 2.0; // Moderate spin
+    } else {
+        speedFactor = 1.0; // Normal
+    }
+}
+
+void HandleEncoderPosition() {
+    newPosition = encoder.read();
+
+    if ((newPosition - 3) / 4 > oldPosition / 4) { // turned counter-clockwise
+        UpdateSpeedFactor(-1);
+        oldPosition = newPosition;
+        REQUEST_DISPLAY_REFRESH();
+        lastEncoderUpdate = millis();
+        if (menuMode == 0) {
+            menuItem = (menuItem - 1 < 1) ? MENU_ITEM_COUNT : menuItem - 1;
+        } else if (menuMode >= 1 && menuMode <= MENU_ITEM_COUNT) {
+            if (MENU_ITEMS[menuMode - 1].setter)
+                MENU_ITEMS[menuMode - 1].setter(-(int)speedFactor);
+        }
+    } else if ((newPosition + 3) / 4 < oldPosition / 4) { // turned clockwise
+        UpdateSpeedFactor(+1);
+        oldPosition = newPosition;
+        REQUEST_DISPLAY_REFRESH();
+        lastEncoderUpdate = millis();
+        if (menuMode == 0) {
+            menuItem = (menuItem + 1 > MENU_ITEM_COUNT) ? 1 : menuItem + 1;
+        } else if (menuMode >= 1 && menuMode <= MENU_ITEM_COUNT) {
+            if (MENU_ITEMS[menuMode - 1].setter)
+                MENU_ITEMS[menuMode - 1].setter(+(int)speedFactor);
+        }
+    }
+}
+
+// Show a brief full-screen message (e.g. "SAVED", "KICK") then return.
+// On RP2040: signals Core 1 to flush via Wire — Core 0 never touches the Wire bus.
+// Keeps the simulation running throughout so the balls do not freeze mid-flight.
+void ShowTemporaryMessage(const char *msg, uint32_t durationMs) {
+    _displayLocked = true;
+    delay(10); // Let Core 1 finish any in-flight HandleDisplay() call
+
+    display.clearDisplay();
+    display.setTextSize(2);
+    int x = (SCREEN_WIDTH - (int)(strlen(msg)) * 12) / 2;
+    display.setCursor(x < 0 ? 0 : x, SCREEN_HEIGHT / 2 - 8);
+    display.print(msg);
+    _displayFrameReady = true; // Core 1 flushes over Wire
+
+    uint32_t _msgStart = millis();
+    while (millis() - _msgStart < durationMs) {
+        HandleCVInputs();
+        HandleOutputs();
+    }
+
+    _displayLocked = false;
+    REQUEST_DISPLAY_REFRESH();
+}
+
+// Redraw the display.
+// RP2040: Core 0 prepares the buffer (no I2C) and signals Core 1 to flush via Wire.
+void RedrawDisplay() {
+    displayMgr.PrepareFrame(); // DrawOverlays + CommitFrame, no display.display()
+    displayRefresh = 0;
+    _displayFrameReady = true; // Signal Core 1 to call display.display() over Wire
+}
+
+// Act on an IN 1 edge according to the jack's configured role.
+static void HandleTriggerRole(unsigned long edgeUs) {
+    switch (in1Role) {
+    case In1Clock:
+        clockEngine.ExternalEdge(edgeUs);
         break;
-      }
+    case In1Reset:
+        physicsWorld.Reset();
+        break;
+    case In1Kick:
+        physicsWorld.Kick(180.0f);
+        break;
+    case In1Spawn:
+        // Wraps back to the minimum rather than saturating: a spawn input that
+        // silently stops doing anything after eight pulses reads as broken.
+        for (int i = 0; i < 2; i++) {
+            int n = containerParams[i].balls + 1;
+            containerParams[i].balls =
+                (uint8_t)(n > PHYS_MAX_BALLS ? PHYS_MIN_BALLS : n);
+        }
+        MarkUnsaved();
+        REQUEST_DISPLAY_REFRESH();
+        break;
+    default:
+        break;
     }
-  }
-
-  // display out
-  if (disp_refresh == 1)
-  {
-    OLED_display(); // refresh display
-    disp_refresh = 0;
-  }
 }
 
-void OLED_display()
-{
-  int maxBarLength = 70;
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(WHITE);
+// Advance the whole instrument and push all four DAC outputs.
+// Jack map: 1 = CV A, 2 = CV B, 3 = GATE A, 4 = GATE B.
+void HandleOutputs() {
+    unsigned long now = micros();
 
-  // Draw menu options
-  // Looping selection (mode 1)
-  display.setCursor(10, 0);
-  display.print("LOOP:");
-  // Draw a rectangle to show the current value of the main knob (loopingValue)
-  int mappedValue = map(loopingValue, 0, 1024, 0, maxBarLength);
-  display.fillRect(50, 0, mappedValue, 6, WHITE);
-  // Draw the difference to the maximum value as an empty rectangle
-  display.drawRect(50 + mappedValue, 0, mappedValue, 6, WHITE);
-  // Length selection (mode 2)
-  display.setCursor(10, 10);
-  display.print("LENGTH:");
-  mappedValue = map(lengthValue, 0, 1024, 0, maxBarLength);
-  display.fillRect(50, 10, mappedValue, 6, WHITE);
-  display.drawRect(50 + mappedValue, 10, mappedValue, 6, WHITE);
-  // Width selection (mode 3)
-  display.setCursor(10, 20);
-  display.print("WIDTH:");
-  mappedValue = map(widthValue, 0, 1024, 0, maxBarLength);
-  display.fillRect(50, 20, mappedValue, 6, WHITE);
-  display.drawRect(50 + mappedValue, 20, mappedValue, 6, WHITE);
-  // Refrain selection (mode 4)
-  display.setCursor(10, 30);
-  display.print("REFRAIN:");
-  mappedValue = map(refrainValue, 0, 1024, 0, maxBarLength);
-  display.fillRect(50, 30, mappedValue, 6, WHITE);
-  display.drawRect(50 + mappedValue, 30, mappedValue, 6, WHITE);
-  // Save settings
-  display.setCursor(10, 40);
-  display.print("SAVE");
+    unsigned long edgeUs = now;
+    if (ConsumeTrigger(&edgeUs)) {
+        HandleTriggerRole(edgeUs);
+    }
+    HandleTriggerLevel();
 
-  // Draw the current selection triangles
-  if (mode == 0)
-  { // On menu selection
-    if (menu_index == 0)
+    clockEngine.Update(now);
+
+    // Base parameters + this loop's CV modulation → the live simulation.
+    BuildModBus(modBus);
+    ApplyParams(physicsWorld, clockEngine, containerParams, worldParams, modBus);
+
+    physicsWorld.Advance(now);
+
+    // Consumed once and handed to both channels: two calls would give the
+    // boundary to channel A and nothing to channel B.
+    bool boundary = clockEngine.ConsumeBoundary();
+
+    for (int i = 0; i < NUM_CHANNELS; i++) {
+        channels[i].SetGateHigh(trigLevel);
+        channels[i].Process(physicsWorld.Get(i), now, clockEngine, boundary);
+    }
+
+    DACWriteAll(channels[0].GetCVOutput(), channels[1].GetCVOutput(),
+                channels[0].GetGateOutput(), channels[1].GetGateOutput());
+}
+
+void setup() {
+    Serial.begin(115200);
+    // USB-CDC on RP2040: wait up to 3 s for a host to open the port so early
+    // Serial.println() messages are not silently dropped. Times out
+    // unconditionally so the module boots normally without a connected PC.
     {
-      display.drawTriangle(0, 0, 5, 3, 0, 6, WHITE);
+        uint32_t _t = millis();
+        while (!Serial && (millis() - _t) < 3000) { /* wait */
+        }
+        if (Serial)
+            delay(100); // Let TX path stabilize after CDC connects
     }
-    else if (menu_index == 1)
-    {
-      display.drawTriangle(0, 10, 5, 13, 0, 16, WHITE);
+    Serial.println("\n\n--- Starting GravityForge ---");
+    Serial.println("Initializing core 0...");
+
+    Serial.println("Initializing encoder and I2C...");
+    delay(500);      // Give USB-CDC time to enumerate
+    encoder.begin(); // Deferred pin init for RP2040 (safe here, after runtime ready)
+    InitWire();      // Configure SDA/SCL for both buses
+
+    Serial.println("Initializing storage...");
+    EEPROMInit();
+
+    Serial.println("Initializing I/O...");
+    InitIO();
+
+    Serial.println("Initializing display...");
+    // Initialize OLED display — comes BEFORE the DAC so errors can be shown on screen
+    if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
+        Serial.println(F("SSD1306 allocation failed"));
+        // Can't show on display — blink LED instead as distress signal
+        pinMode(LED_BUILTIN, OUTPUT);
+        while (1) {
+            digitalWrite(LED_BUILTIN, HIGH);
+            delay(200);
+            digitalWrite(LED_BUILTIN, LOW);
+            delay(200);
+        }
     }
-    else if (menu_index == 2)
-    {
-      display.drawTriangle(0, 20, 5, 23, 0, 26, WHITE);
+    display.clearDisplay();
+    display.setTextWrap(false);
+    display.cp437(true); // Use full 256 char 'Code Page 437' font
+
+    Serial.println("Initializing DAC...");
+    if (!InitDAC()) {
+        display.clearDisplay();
+        display.setTextSize(1);
+        display.setTextColor(WHITE);
+        display.setCursor(0, 10);
+        display.println("MCP4728 DAC");
+        display.println("not found!");
+        display.println("");
+        display.println("Check I2C wiring");
+        display.printf("Addr: 0x%02X", MCP4728_ADDR);
+        display.display();
+        Serial.println("I2C bus scan:");
+        for (uint8_t addr = 1; addr < 127; addr++) {
+            Wire.beginTransmission(addr);
+            if (Wire.endTransmission() == 0) {
+                Serial.printf("  Found device at 0x%02X\n", addr);
+            }
+        }
+        while (1)
+            ; // Halt — the DAC is required for all outputs
     }
-    else if (menu_index == 3)
-    {
-      display.drawTriangle(0, 30, 5, 33, 0, 36, WHITE);
+
+    Serial.println("Initialization complete. Showing splash screen...");
+    display.clearDisplay();
+    display.drawBitmap(30, 0, VFM_Splash, 68, 64, 1);
+    display.display();
+    delay(2000);
+    display.clearDisplay();
+    display.setTextSize(2);
+    display.setTextColor(WHITE);
+    display.setCursor(2, 20);
+    display.print("Gravity");
+    display.setCursor(2, 38);
+    display.print("Forge");
+    display.setTextSize(1);
+    display.setCursor(80, 54);
+    display.print("V" VERSION);
+    display.display();
+    delay(1500);
+
+    Serial.println("Loading settings from flash memory slot 0...");
+    cal = LoadCalibration();
+    if (!cal.valid) {
+        Serial.println("No calibration data found. Using ideal defaults.");
+    } else {
+        Serial.println("Calibration data loaded.");
     }
-    else if (menu_index == 4)
-    {
-      display.drawTriangle(0, 40, 5, 43, 0, 46, WHITE);
+    LoadSaveParams p = Load(0);
+    UpdateParameters(p);
+
+    // Seed the simulation from the loaded parameters before the first step, so
+    // ball counts and peg rings are right on the very first frame.
+    ApplyParams(physicsWorld, clockEngine, containerParams, worldParams, modBus);
+    physicsWorld.Reset();
+
+    // ── Calibration mode: hold the encoder button during boot ──────────────
+    // Checked AFTER the display is up (so instructions can be shown) but BEFORE
+    // the trigger interrupt is attached (so RunCalibration() can block freely).
+    if (digitalRead(ENCODER_SW) == LOW) {
+        Serial.println("Encoder held at boot — entering calibration mode.");
+        RunCalibration(); // blocks; reboots at the end
+        // never returns
     }
 
-    display.drawTriangle(0, 0, 5, 3, 0, 6, WHITE);
-  }
-  else if (mode == 1)
-  {
-    display.fillTriangle(0, 10, 5, 13, 0, 16, WHITE);
-  }
-  else if (mode == 2)
-  {
-    display.fillTriangle(0, 20, 5, 23, 0, 26, WHITE);
-  }
-  else if (mode == 3)
-  {
-    display.fillTriangle(0, 30, 5, 33, 0, 36, WHITE);
-  }
-  else if (mode == 4)
-  {
-    display.fillTriangle(0, 40, 5, 43, 0, 46, WHITE);
-  }
+    attachInterrupt(digitalPinToInterrupt(CLK_IN_PIN), TriggerReceived, RISING);
 
-  display.display();
+    // Force an immediate display refresh — clears the version screen.
+    REQUEST_DISPLAY_REFRESH();
 }
 
-void lottery()
-{
+// Handle IO without the display
+void HandleIO() {
+    HandleEncoderClick();
+    HandleEncoderPosition();
+}
 
-  if (chance != 0)
-  {
-    for (k = 0; k <= chance; k = k + 1)
-    {
-      lottery_stepA = random(length_set);
-      stgAgate[0][lottery_stepA] = 1 - stgAgate[0][lottery_stepA];
-      stgAcv[0][lottery_stepA] = random(4096);
+void loop() {
+    HandleCVInputs();
+    HandleOutputs();
+    HandleEncoderClick();
+    HandleEncoderPosition();
 
-      lottery_stepB = random(length_set);
-      stgBgate[0][lottery_stepB] = 1 - stgBgate[0][lottery_stepB];
-      stgBcv[0][lottery_stepB] = random(4096);
+    if (displayRefresh)
+        displayMgr.MarkDirty();
+
+    // RP2040: HandleDisplay() (GFX rendering) runs on Core 1 to keep this tight.
+}
+
+// Core 1: owns Wire (GPIO6/7, I2C1) — handles ALL display work.
+// GFX buffer rendering (HandleDisplay) + display.display() both live here so
+// Core 0's loop is never stalled by display work. Core 0 only does:
+//   CV reads + physics + DACWriteAll (Wire1) + encoder.
+void setup1() {
+    Serial.println("Initialized core 1: display GFX + flush engine (Wire) running.");
+}
+
+void loop1() {
+    // Render the GFX buffer (CPU-only, no I2C) into display RAM.
+    // Skip while Core 0 holds the buffer (e.g. showing a temporary message).
+    if (!_displayLocked) {
+        HandleDisplay();
     }
-  }
-}
-
-void intDAC(int intDAC_OUT)
-{
-  analogWrite(DAC_INTERNAL_PIN, intDAC_OUT / 4); // "/4" -> 12bit to 10bit
-}
-
-void MCP(int MCP_OUT)
-{
-  Wire.beginTransmission(0x60);
-  Wire.write((MCP_OUT >> 8) & 0x0F);
-  Wire.write(MCP_OUT);
-  Wire.endTransmission();
-}
-
-void PWM1(int duty1)
-{
-  pwm(GATE_OUT_PIN_1, 46000, duty1);
-}
-void PWM2(int duty2)
-{
-  pwm(GATE_OUT_PIN_2, 46000, duty2);
-}
-
-void save()
-{
-  EEPROM.write(0, length_set);  // Save data for next session
-  EEPROM.write(1, refrain_set); // Save data for next session
-  EEPROM.write(2, width_max);   // Save data for next session
-  EEPROM.write(3, width_min);   // Save data for next session
-}
-
-void load()
-{
-  if (EEPROM.isValid())
-  {
-    // Load the EEPROM data
-    length_set = EEPROM.read(0);  // Read data from previous session
-    refrain_set = EEPROM.read(1); // Read data from previous session
-    width_max = EEPROM.read(2);   // Read data from previous session
-    width_min = EEPROM.read(3);   // Read data from previous session
-  }
+    if (_displayFrameReady) {
+        _displayFrameReady = false;
+        display.display(); // Wire (GPIO6/7, I2C1), Core 1 only
+    }
 }
