@@ -69,6 +69,10 @@ All four outputs go through the MCP4728 quad 12-bit DAC:
 - **Core 0** (`loop()`): main logic — ADC reads, quantization, envelopes, encoder, DAC writes via Wire1
 - **Core 1** (`loop1()`): display only — GFX rendering + `display.display()` via Wire (SSD1306)
 - Coordination: `_displayFrameReady` (Core 0 sets, Core 1 clears) and `_displayLocked` (Core 0 pauses Core 1 GFX)
+- Boot gate: the Arduino core launches Core 1 **before** Core 0's `setup()` runs,
+  so `setup1()` spins on `_core1Enabled` until `setup()` has done `InitWire()`,
+  `display.begin()` and the splash. Without it Core 1 flushes over Wire mid-init
+  (mirrored panel) and wipes the splash/version screens
 - Wire (GPIO 6/7, I2C1) → SSD1306 display **only** (Core 1 exclusive at runtime)
 - Wire1 (GPIO 0/1, I2C0) → MCP4728 DAC **only** (Core 0 exclusive at runtime)
 - No mutex needed — separate hardware I2C blocks on separate cores
