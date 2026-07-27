@@ -19,6 +19,7 @@
 #include <cstring>
 #include <math.h>
 #include <mutex>
+#include <random>
 #include <string>
 #include <utility> // std::swap
 #include <vector>
@@ -448,7 +449,93 @@ void getFramebuffer(Engine *e, uint8_t out[1024]) {
 
 std::string serialize(Engine *e) {
     EngineScope scope(e);
+    // Commit the live state to slot 0 before handing the blob to Rack. The
+    // firmware only writes EEPROM on an explicit SAVE, so without this the blob
+    // still holds whatever was last saved — on a fresh instance, nothing at all,
+    // which is why a patch used to reload at factory defaults. Slot 0 is the slot
+    // the firmware auto-loads at boot and the one deserialize() reads back, so
+    // this makes a Rack patch round-trip the live state. Slots 1..NUM_SLOTS-1
+    // (the user's own presets) and the calibration block are untouched.
+    Save(CollectParams(), 0);
     return std::string((const char *)EEPROM.data.data(), EEPROM.data.size());
+}
+
+// ── Initialize / Randomize ────────────────────────────────────────────────────
+// Back Rack's module actions. Both run entirely against the live firmware state
+// under one EngineScope, so they must NOT call the public bridge helpers below
+// (those take the same non-recursive lock).
+
+void reset(Engine *e) {
+    EngineScope scope(e);
+    // Factory defaults, exactly what a fresh instance boots into. The stored
+    // preset slots and the calibration block are deliberately left alone:
+    // Initialize resets the patch you are playing, not your saved presets.
+    UpdateParameters(LoadDefaultParams());
+    lastInternalBPM = BPM;
+    UpdateBPM(BPM);
+    SetMasterState(true); // a fresh module is running
+    menuItem = 2;         // back to the top of the menu, like a power cycle
+    menuMode = 0;
+    unsavedChanges = true; // live state now differs from whatever slot 0 holds
+    REQUEST_DISPLAY_REFRESH();
+}
+
+void randomize(Engine *e) {
+    EngineScope scope(e);
+    static std::mt19937 rng(std::random_device{}());
+    auto ri = [&](int lo, int hi) { // inclusive
+        return (int)std::uniform_int_distribution<int>(lo, hi)(rng);
+    };
+
+    for (int i = 0; i < NUM_OUTPUTS; i++) {
+        // Waveform first: SetWaveformType moves an envelope output onto the
+        // locked "Env" divider slot, and SetDivider is a no-op once it has. Only
+        // the plain pulse/LFO shapes are offered — rolling an envelope type would
+        // silently take the output's divider away with it.
+        outputs[i].SetWaveformType(static_cast<WaveformType>(
+            ri(0, (int)ExpEnvelope - 1)));
+
+        // Dividers cluster around x1 (index 9). The extremes of the table are
+        // /128 and x64, and a random pick across the whole range mostly produces
+        // outputs that fire once a minute or once a millisecond.
+        outputs[i].SetDivider(ri(5, 14));
+        outputs[i].SetDutyCycle(ri(10, 75));
+        outputs[i].SetOutputState(true); // never randomize an output into silence
+        outputs[i].SetInvert(false);
+        outputs[i].SetLevel(100);
+        outputs[i].SetOffset(0);
+        outputs[i].SetPhase(ri(0, 1) ? ri(1, 75) : 0);
+
+        // Swing and probability: leave them off most of the time, so when they
+        // do land the result still reads as a clock rather than as a stutter.
+        outputs[i].SetSwingAmount(ri(0, 2) == 0 ? ri(1, 6) : 0);
+        outputs[i].SetSwingEvery(ri(1, 4));
+        outputs[i].SetPulseProbability(ri(0, 2) == 0 ? ri(60, 99) : 100);
+
+        // Euclidean patterns are the interesting half of this module, so give
+        // them a real chance — but always with at least one trigger in the
+        // pattern, and never more triggers than steps.
+        if (ri(0, 1)) {
+            EuclideanParams eu = outputs[i].GetEuclideanParams();
+            eu.enabled = true;
+            eu.steps = ri(4, 16);
+            eu.triggers = ri(1, eu.steps);
+            eu.rotation = ri(0, eu.steps - 1);
+            outputs[i].SetEuclideanParams(eu);
+        } else {
+            EuclideanParams eu = outputs[i].GetEuclideanParams();
+            eu.enabled = false;
+            outputs[i].SetEuclideanParams(eu);
+        }
+    }
+
+    // Tempo, the external clock divider, the CV matrix and the cross/loop
+    // routing are patch-level sync decisions, not sound design — Rack leaves
+    // ports alone on randomize and so do we.
+
+    UpdateBPM(BPM);
+    unsavedChanges = true;
+    REQUEST_DISPLAY_REFRESH();
 }
 
 void deserialize(Engine *e, const std::string &blob) {
@@ -563,5 +650,7 @@ void VcvEngine::encoderButton(bool pressed) { cfengine::encoderButton(e_, presse
 void VcvEngine::getFramebuffer(uint8_t out[1024]) { cfengine::getFramebuffer(e_, out); }
 std::string VcvEngine::serialize() { return cfengine::serialize(e_); }
 void VcvEngine::deserialize(const std::string &blob) { cfengine::deserialize(e_, blob); }
+void VcvEngine::reset() { cfengine::reset(e_); }
+void VcvEngine::randomize() { cfengine::randomize(e_); }
 
 } // namespace cfengine

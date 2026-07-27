@@ -29,8 +29,17 @@ void encoderButton(Engine *, bool pressed);
 void getFramebuffer(Engine *, uint8_t out[1024]);
 
 // Persistence: the firmware EEPROM blob (presets + calibration) as raw bytes.
+// serialize() commits the live state to slot 0 first, so the blob it returns
+// always contains what the user is actually hearing.
 std::string serialize(Engine *);
 void deserialize(Engine *, const std::string &);
+
+// Rack's Initialize / Randomize module actions. reset() restores the factory
+// defaults (stored preset slots and calibration are left alone); randomize()
+// rolls the per-output waveform, divider, duty, phase, swing, probability and
+// euclidean pattern, but not the tempo, the CV matrix or the cross/loop routing.
+void reset(Engine *);
+void randomize(Engine *);
 
 // Current BPM (for tooltips / future param display).
 int bpm(Engine *);
@@ -88,6 +97,8 @@ class VcvEngine : public forgevcv::IEngine {
     void getFramebuffer(uint8_t out[1024]) override;
     std::string serialize() override;
     void deserialize(const std::string &) override;
+    void reset() override;
+    void randomize() override;
 };
 
 } // namespace cfengine
