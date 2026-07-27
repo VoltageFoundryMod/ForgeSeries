@@ -19,6 +19,7 @@
 #include <cstring>
 #include <math.h>
 #include <mutex>
+#include <random>
 #include <string>
 #include <utility> // std::swap
 #include <vector>
@@ -410,6 +411,14 @@ void getFramebuffer(Engine *e, uint8_t out[1024]) {
 
 std::string serialize(Engine *e) {
     EngineScope scope(e);
+    // Commit the live state to slot 0 before handing the blob to Rack. The
+    // firmware only writes EEPROM on an explicit SAVE, so without this the blob
+    // still holds whatever was last saved — on a fresh instance, nothing at all,
+    // which is why a patch used to reload at factory defaults. Slot 0 is the slot
+    // the firmware auto-loads at boot and the one deserialize() reads back, so
+    // this makes a Rack patch round-trip the live state. Slots 1..NUM_SLOTS-1
+    // (the user's own presets) and the calibration block are untouched.
+    Save(CollectParams(), 0);
     return std::string((const char *)EEPROM.data.data(), EEPROM.data.size());
 }
 
@@ -420,6 +429,58 @@ void deserialize(Engine *e, const std::string &blob) {
     cal = LoadCalibration();
     LoadSaveParams p = Load(0);
     UpdateParameters(p);
+    REQUEST_DISPLAY_REFRESH();
+}
+
+// ── Initialize / Randomize ────────────────────────────────────────────────────
+// Back Rack's module actions. Both run entirely against the live firmware state
+// under one EngineScope, so they must NOT call the public bridge helpers below
+// (those take the same non-recursive lock).
+
+void reset(Engine *e) {
+    EngineScope scope(e);
+    // Factory defaults, exactly what a fresh instance boots into. The stored
+    // preset slots and the calibration block are deliberately left alone:
+    // Initialize resets the patch you are playing, not your saved presets.
+    UpdateParameters(LoadDefaultParams());
+    menuItem = 1; // back to the top of the menu, like a power cycle
+    menuMode = 0;
+    MarkUnsaved(); // live state now differs from whatever slot 0 holds
+    REQUEST_DISPLAY_REFRESH();
+}
+
+void randomize(Engine *e) {
+    EngineScope scope(e);
+    static std::mt19937 rng(std::random_device{}());
+    auto ri = [&](int lo, int hi) { // inclusive
+        return (int)std::uniform_int_distribution<int>(lo, hi)(rng);
+    };
+
+    for (int i = 0; i < NUM_CHANNELS; i++) {
+        // Skip scale 0 (Chromatic): quantizing to every semitone is the same as
+        // not quantizing, so it is the one choice that makes randomize look
+        // broken. SelectScale/SelectRoot rebuild the note mask; the plain Set*
+        // accessors would leave the previous mask in place.
+        channels[i].SelectScale(ri(1, numScales - 1));
+        channels[i].SelectRoot(ri(0, 11));
+        channels[i].SetOctave(ri(-2, 2));
+        channels[i].SetGlide(ri(0, 1) ? ri(1, 40) : 0); // usually none, sometimes a slide
+        channels[i].SetPitchMode(ri(0, (int)PitchModeLength - 1));
+
+        // Gate. Decay is capped well below ENVELOPE_MAX_DECAY: a multi-second
+        // envelope never returns to zero between notes and stops reading as a
+        // gate at all.
+        channels[i].envelope.SetMode(ri(0, (int)GateModeLength - 1));
+        channels[i].envelope.SetAttack(ri(0, 80));
+        channels[i].envelope.SetDecay(ri(60, 600));
+        channels[i].envelope.SetLevel(ri(70, 100));
+    }
+
+    // The sync mode, the IN 2 role, the transposition range and the note settle
+    // window are input-routing and timing decisions, not sound design — Rack
+    // leaves ports alone on randomize and so do we.
+
+    MarkUnsaved();
     REQUEST_DISPLAY_REFRESH();
 }
 
@@ -654,5 +715,7 @@ void VcvEngine::encoderButton(bool pressed) { nfengine::encoderButton(e_, presse
 void VcvEngine::getFramebuffer(uint8_t out[1024]) { nfengine::getFramebuffer(e_, out); }
 std::string VcvEngine::serialize() { return nfengine::serialize(e_); }
 void VcvEngine::deserialize(const std::string &blob) { nfengine::deserialize(e_, blob); }
+void VcvEngine::reset() { nfengine::reset(e_); }
+void VcvEngine::randomize() { nfengine::randomize(e_); }
 
 } // namespace nfengine

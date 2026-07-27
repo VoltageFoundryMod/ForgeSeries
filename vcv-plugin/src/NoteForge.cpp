@@ -77,6 +77,14 @@ struct NoteForge : forgevcv::ForgeModule {
         if (json_t *j = json_object_get(root, "cvShiftVolts"))
             cvShiftVolts = (int)json_integer_value(j);
     }
+
+    // The base handles the engine and the two shared host settings; the pitch
+    // shift is this module's own, so Initialize has to clear it here. Randomize
+    // deliberately leaves it alone — it retunes every input by whole octaves.
+    void onReset(const ResetEvent &e) override {
+        forgevcv::ForgeModule::onReset(e);
+        cvShiftVolts = 0;
+    }
 };
 
 // ── Generic slider quantity for the context menu ─────────────────────────────
