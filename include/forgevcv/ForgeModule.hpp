@@ -4,7 +4,8 @@
 // Holds everything a hosted firmware needs that is NOT specific to a particular
 // module's port layout or parameter set: the engine handle, the framebuffer, the
 // two host-side settings (CV input range, encoder sensitivity), the UI->audio
-// encoder event queue, and the control-rate engine step + shared JSON state.
+// encoder event queue, the control-rate engine step + shared JSON state, and the
+// Initialize/Randomize module actions.
 //
 // A firmware's module subclasses this, declares its own Input/Output/Param/Light
 // enums, constructs a concrete IEngine into `engine`, and implements process()
@@ -117,6 +118,30 @@ struct ForgeModule : Module {
         }
         json_object_set_new(root, "cvRange", json_integer(cvRange));
         json_object_set_new(root, "encoderSensitivity", json_integer(encoderSensitivity));
+    }
+
+    // ── Rack module actions ──────────────────────────────────────────────────
+    // Rack's default handlers only reset/randomize `params`, and a hosted
+    // firmware has none — its whole state lives inside the engine. Forward both
+    // events so "Initialize" and "Randomize" do something. Chaining to
+    // Module::on* first keeps any params/bypass handling a subclass may add.
+    //
+    // The two host-side settings are hardware configuration, not patch content:
+    // Initialize restores them (a fresh module's defaults), Randomize does not
+    // touch them — randomizing the input range would silently rescale every
+    // incoming CV.
+    void onReset(const ResetEvent &e) override {
+        Module::onReset(e);
+        cvRange = CV_UNIPOLAR;
+        encoderSensitivity = ENC_MEDIUM;
+        if (engine)
+            engine->reset();
+    }
+
+    void onRandomize(const RandomizeEvent &e) override {
+        Module::onRandomize(e);
+        if (engine)
+            engine->randomize();
     }
 
     // Restore the shared state written by baseToJson.

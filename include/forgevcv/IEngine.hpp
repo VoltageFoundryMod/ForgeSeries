@@ -41,8 +41,23 @@ struct IEngine {
     virtual void getFramebuffer(uint8_t out[1024]) = 0;
 
     // Persistence: the firmware's EEPROM blob (presets + calibration) as bytes.
+    //
+    // IMPORTANT: serialize() must first commit the *live* firmware state into the
+    // blob. Firmwares only touch EEPROM on an explicit SAVE, so an engine that
+    // merely dumps the buffer hands Rack a blob that does not contain anything
+    // the user changed, and the patch reloads at factory defaults.
     virtual std::string serialize() = 0;
     virtual void deserialize(const std::string &) = 0;
+
+    // Rack's "Initialize" (Ctrl+I) and "Randomize" (Ctrl+R) module actions.
+    // Default to no-ops so an engine can adopt them independently; ForgeModule
+    // calls them after Rack has reset/randomized the module's own params.
+    //
+    // reset() restores the firmware's factory defaults. randomize() should touch
+    // only the sound-shaping parameters — leave I/O routing, jack roles and CV
+    // assignments alone, the same way Rack leaves ports alone.
+    virtual void reset() {}
+    virtual void randomize() {}
 };
 
 } // namespace forgevcv

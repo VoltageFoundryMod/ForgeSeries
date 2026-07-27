@@ -16,7 +16,7 @@ between plugins.
 | `shim/` | Arduino / Wire / EEPROM / Adafruit shims so firmware `lib/` compiles under Rack. Includes the `HostBridge` that routes firmware I/O (GPIO, ADC, DAC, framebuffer) to the hosting module. |
 | `shim/Fonts/` | `GFXfont` headers usable via `display.setFont(&helvB24)` (see below). |
 | `include/forgevcv/IEngine.hpp` | Abstract engine contract. Each firmware wraps its bridge in an `IEngine`. |
-| `include/forgevcv/ForgeModule.hpp` | `rack::Module` base: owns the engine, holds the framebuffer, the CV-range and encoder-sensitivity host settings, the UI→audio encoder queue, the control-rate engine step, and shared patch JSON. |
+| `include/forgevcv/ForgeModule.hpp` | `rack::Module` base: owns the engine, holds the framebuffer, the CV-range and encoder-sensitivity host settings, the UI→audio encoder queue, the control-rate engine step, shared patch JSON, and the Initialize/Randomize actions. |
 | `include/forgevcv/widgets.hpp` | Shared UI: `FramebufferDisplay` (emulated OLED), `EncoderKnob` (drag/click), `BpmSlider`. |
 | `forgevcv.mk` | Makefile fragment: adds the include path, C++17, and exports `FORGEVCV_SHIM`. |
 
@@ -43,6 +43,13 @@ In your plugin:
 1. **Engine** — implement `forgevcv::IEngine` in your engine TU, wrapping your
    firmware bridge. Keep any richer, module-specific parameter accessors (tempo,
    waveform, ...) in your own header for the context menu.
+
+   `serialize()` must **commit the live state into the EEPROM blob first**
+   (`Save(CollectParams(), 0)`) — firmwares only write EEPROM on an explicit
+   SAVE, so dumping the raw buffer persists a blob with none of the user's edits
+   in it and the patch reloads at factory defaults. `deserialize()` reads slot 0
+   back. Optionally override `reset()` / `randomize()` to back Rack's Initialize
+   and Randomize; they default to no-ops.
 2. **Module** — subclass `forgevcv::ForgeModule`, declare your `InputId` /
    `OutputId` / ... enums, construct your `IEngine` into `engine`, and implement
    `process()` as: gather CV via `mapCvInput` + clock level → `stepEngine(...)` →
