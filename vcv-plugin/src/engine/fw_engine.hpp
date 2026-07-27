@@ -29,8 +29,17 @@ void encoderButton(Engine *, bool pressed);
 void getFramebuffer(Engine *, uint8_t out[1024]);
 
 // Persistence: the firmware EEPROM blob (presets + calibration) as raw bytes.
+// serialize() commits the live state to slot 0 first, so the blob it returns
+// always contains what the user is actually hearing.
 std::string serialize(Engine *);
 void deserialize(Engine *, const std::string &);
+
+// Rack's Initialize / Randomize module actions. reset() restores the factory
+// defaults (stored preset slots and calibration are left alone); randomize()
+// rolls the physics, note and gate parameters but not the clock, the IN 1 role
+// or the CV matrix.
+void reset(Engine *);
+void randomize(Engine *);
 
 // ── Curated parameter bridge (for the Rack right-click context menu) ──────────
 // Absolute get/set of a curated subset of the firmware's parameters, so the
@@ -177,6 +186,8 @@ class VcvEngine : public forgevcv::IEngine {
     void getFramebuffer(uint8_t out[1024]) override;
     std::string serialize() override;
     void deserialize(const std::string &) override;
+    void reset() override;
+    void randomize() override;
 };
 
 } // namespace gfengine

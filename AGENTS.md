@@ -44,6 +44,7 @@ wall-clock reads.
 | [lib/menuDisplay.hpp](lib/menuDisplay.hpp) | Draw primitives (`MD_Row`, `MD_RenderGroup`, …) |
 | [lib/menuRender.hpp](lib/menuRender.hpp) | `HandleDisplay()` + the physics home screen |
 | [lib/presetManager.hpp](lib/presetManager.hpp) | `LoadSaveParams`, `CollectParams()`, `UpdateParameters()` |
+| [lib/randomize.hpp](lib/randomize.hpp) | `RandomizeParams()` — backs both SETTINGS ▸ RANDOM and the plugin's Randomize |
 | [lib/storage.hpp](lib/storage.hpp) | RP2040 EEPROM emulation backend |
 | [lib/calibration.hpp](lib/calibration.hpp) | Calibration wizard (hold encoder on boot) |
 | [lib/boardIO.hpp](lib/boardIO.hpp) | `InitIO()`, `InitWire()`, `InitDAC()`, `DACWriteAll()` |
@@ -140,6 +141,18 @@ must stay a one-function edit.
 `[0 .. NUM_SLOTS×sizeof(LoadSaveParams))` then `CalibrationData`.
 **Changing `LoadSaveParams` invalidates all saved slots** — bump `VALID_MAGIC`.
 
+In VCV Rack the EEPROM is a byte buffer stored in the patch, and `serialize()`
+**commits the live state to slot 0 before dumping it**. Without that the blob
+holds only what an explicit SAVE last wrote — nothing, on a fresh instance — and
+the patch reloads at factory defaults. Anything that must survive a patch
+save/load therefore has to be in `LoadSaveParams`; a parameter reachable from the
+context menu but missing from `CollectParams()` is silently not persisted.
+
+**Randomize** lives in [lib/randomize.hpp](lib/randomize.hpp) so the hardware's
+SETTINGS ▸ RANDOM action and Rack's Randomize (Ctrl+R) roll the same patch. It
+deliberately leaves tempo, the IN 1 role and the CV matrix alone — those are
+patch wiring, not sound design.
+
 ## Build, Test & Upload
 
 ```bash
@@ -220,7 +233,10 @@ one implementation. Add a per-container parameter once, instantiate it twice.
    page**, a seventh is silently clipped
 3. Add the field to `LoadSaveParams`, `CollectParams()` and `UpdateParameters()`
    in [lib/presetManager.hpp](lib/presetManager.hpp), and bump `VALID_MAGIC`
+   — a parameter missing from `CollectParams()` will not survive a patch reload
 4. Call `MarkUnsaved()` inside the setter
+5. Decide whether `RandomizeParams()` in [lib/randomize.hpp](lib/randomize.hpp)
+   should roll it (sound-shaping: yes; routing or sync: no)
 
 ### Adding a Menu Page
 

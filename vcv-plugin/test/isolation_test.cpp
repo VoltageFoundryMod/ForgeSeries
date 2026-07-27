@@ -185,14 +185,86 @@ int main() {
     CHECK(gravityGet(b, 0) == 220, "B unaffected by A's reset/kick");
 
     // ── Persistence round-trips per instance ────────────────────────────────
-    // Engine A's settings only reach the blob once they are written to slot 0,
-    // which the firmware does on a SAVE. Here we just prove the blob is real and
-    // that loading it into B does not disturb A.
+    // serialize() has to commit the *live* state to slot 0 first. The firmware
+    // only writes EEPROM on an explicit SAVE, so an implementation that just
+    // dumps the buffer returns a blank blob and a Rack patch silently reloads at
+    // factory defaults — which is exactly the bug these next checks guard.
     std::string blob = serialize(a);
     CHECK(!blob.empty(), "serialize() returns a non-empty EEPROM blob");
+    bool blobHasContent = false;
+    for (unsigned char ch : blob) {
+        if (ch != 0xFF) { // 0xFF is erased flash: nothing was ever written
+            blobHasContent = true;
+            break;
+        }
+    }
+    CHECK(blobHasContent, "serialize() commits the live state, not a blank blob");
+
     deserialize(b, blob);
+    CHECK(gravityGet(b, 0) == 700 && bounceGet(b, 0) == 90,
+          "B: physics restored from A's blob");
+    CHECK(ballsGet(b, 0) == 8 && pegsGet(b, 0) == 16,
+          "B: balls + pegs restored from A's blob");
+    CHECK(scaleGet(b, 0) == 8 && rootGet(b, 0) == 3 && spreadGet(b, 0) == 4 &&
+              biasGet(b, 0) == -60,
+          "B: scale + root + spread + bias restored from A's blob");
+    CHECK(proximityGet(b) == 100 && couplingGet(b) == 25,
+          "B: proximity + couple restored from A's blob");
+    CHECK(bpmGet(b) == 200 && quantizeGet(b) == 3,
+          "B: tempo + quantize restored from A's blob");
+    CHECK(in1RoleGet(b) == 2 && cvTargetGet(b, 0) == 3 && cvDepthGet(b, 0) == 77,
+          "B: IN 1 role + CV matrix restored from A's blob");
+
     CHECK(gravityGet(a, 0) == 700, "A: gravity still 700 after B deserialized");
     CHECK(proximityGet(a) == 100, "A: proximity still 100 after B deserialized");
+
+    // ── Initialize / Randomize act on one instance only ─────────────────────
+    // Rack's module actions. reset() is the factory defaults; randomize() must
+    // stay inside the parameters' legal ranges and must leave the clock and the
+    // CV routing alone (those are patch wiring, not sound design).
+    reset(a);
+    CHECK(gravityGet(a, 0) == 220 && ballsGet(a, 0) == 3 && proximityGet(a) == 0,
+          "A: reset() restores the factory defaults");
+    CHECK(gravityGet(b, 0) == 700 && proximityGet(b) == 100,
+          "B: unaffected by A's reset()");
+
+    bool randomInRange = true, randomKeptRouting = true;
+    int bpmBefore = bpmGet(b), roleBefore = in1RoleGet(b), depthBefore = cvDepthGet(b, 0);
+    for (int i = 0; i < 200; ++i) {
+        randomize(b);
+        // Run a little so the physics has to survive whatever was rolled.
+        for (int k = 0; k < 200; ++k) {
+            const float cv[2] = {2.5f, 2.5f};
+            process(b, 8.0f / 44100.0f, cv, false, outB);
+            for (int j = 0; j < 4; ++j) {
+                if (std::isnan(outB[j]) || outB[j] < -0.01f || outB[j] > 5.01f)
+                    randomInRange = false;
+            }
+        }
+        for (int c = 0; c < 2; ++c) {
+            if (gravityGet(b, c) < gravityMin() || gravityGet(b, c) > gravityMax() ||
+                ballsGet(b, c) < ballsMin() || ballsGet(b, c) > ballsMax() ||
+                pegsGet(b, c) < pegsMin() || pegsGet(b, c) > pegsMax() ||
+                scaleGet(b, c) < 0 || scaleGet(b, c) >= scaleCount() ||
+                spreadGet(b, c) < spreadMin() || spreadGet(b, c) > spreadMax() ||
+                biasGet(b, c) < biasMin() || biasGet(b, c) > biasMax())
+                randomInRange = false;
+            // A container whose whole peg ring is muted is silent — the
+            // randomizer tops the mask back up specifically to prevent that.
+            int live = 0;
+            for (int p = 0; p < pegsGet(b, c); ++p)
+                live += pegEnabledGet(b, c, p) ? 1 : 0;
+            if (live == 0)
+                randomInRange = false;
+        }
+        if (bpmGet(b) != bpmBefore || in1RoleGet(b) != roleBefore ||
+            cvDepthGet(b, 0) != depthBefore)
+            randomKeptRouting = false;
+    }
+    CHECK(randomInRange, "randomize() stays in range and keeps every container audible");
+    CHECK(randomKeptRouting, "randomize() leaves the clock and CV routing alone");
+    CHECK(gravityGet(a, 0) == 220 && ballsGet(a, 0) == 3,
+          "A: unaffected by B's randomize()");
 
     destroyEngine(a);
     destroyEngine(b);

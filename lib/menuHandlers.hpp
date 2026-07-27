@@ -38,7 +38,7 @@
 //   7  A GATE     — mode, attack, decay, level, accent
 //   8  B GATE
 //   9  CV         — IN 2 / IN 3 target + depth
-//  10  SETTINGS   — preset slot, save, load, screen timeout
+//  10  SETTINGS   — preset slot, save, load, randomize, screen timeout
 //
 // PAGE LENGTH LIMIT: six rows. MD_START_Y=12 with MD_ROW_H=9 puts row 6 at
 // y=57, whose glyphs end on row 63 — exactly the bottom of the screen. A
@@ -321,6 +321,16 @@ static void actLoad() {
     ShowTemporaryMessage("LOADED", 700);
 }
 
+// Roll a new patch. Shares its implementation with the VCV plugin's Randomize,
+// so the panel and the host produce the same kind of result — see
+// lib/randomize.hpp for what it does and does not touch. It does not write a
+// slot, so the previous patch is one LOAD away as long as you had saved it.
+static void actRandom() {
+    RandomizeParams((uint32_t)micros());
+    MarkUnsaved();
+    ShowTemporaryMessage("RANDOM", 700);
+}
+
 static const char *const screenTimeoutNames[] = {"OFF", "2s", "5s", "10s", "20s"};
 static String getTimeout() { return String(screenTimeoutNames[constrain(menuScreenTimeout, 0, 4)]); }
 static void setTimeout(int d) {
@@ -404,6 +414,7 @@ const MenuItem MENU_ITEMS[] = {
     {"SLOT", getSlot, nullptr, 82, 0, 10, ROW_SINGLE, MENU_EDIT, setSlot, nullptr},
     {"SAVE", nullptr, nullptr, 0, 0, 10, ROW_ACTION, MENU_ACTION, nullptr, actSave},
     {"LOAD", nullptr, nullptr, 0, 0, 10, ROW_ACTION, MENU_ACTION, nullptr, actLoad},
+    {"RANDOM", nullptr, nullptr, 0, 0, 10, ROW_ACTION, MENU_ACTION, nullptr, actRandom},
     {"TIMEOUT", getTimeout, nullptr, 82, 0, 10, ROW_SINGLE, MENU_EDIT, setTimeout, nullptr},
 };
 

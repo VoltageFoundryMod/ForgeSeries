@@ -34,6 +34,7 @@ static volatile bool _displayLocked = false; // Core 0 sets to pause Core 1 GFX
 #include "params.hpp"
 #include "physics.hpp"
 #include "pinouts.hpp"
+#include "randomize.hpp" // RandomizeParams() — shared with the VCV plugin
 #include "sequencer.hpp"
 #include "storage.hpp" // includes presetManager.hpp transitively
 #include "utils.hpp"

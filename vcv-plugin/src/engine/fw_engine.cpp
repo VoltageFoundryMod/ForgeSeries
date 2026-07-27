@@ -85,6 +85,7 @@ void attachInterrupt(int, void (*isr)(), int) { _trigIsr = isr; }
 #include "physics.hpp"
 #include "pinouts.hpp"
 #include "presetManager.hpp"
+#include "randomize.hpp" // RandomizeParams() — shared with the hardware menu
 #include "sequencer.hpp"
 #include "splash.hpp"
 #include "storage.hpp"
@@ -461,6 +462,14 @@ void getFramebuffer(Engine *e, uint8_t out[1024]) {
 
 std::string serialize(Engine *e) {
     EngineScope scope(e);
+    // Commit the live state to slot 0 before handing the blob to Rack. The
+    // firmware only writes EEPROM on an explicit SAVE, so without this the blob
+    // still holds whatever was last saved — on a fresh instance, nothing at all,
+    // which is why a patch used to reload at factory defaults. Slot 0 is the slot
+    // the firmware auto-loads at boot and the one deserialize() reads back, so
+    // this makes a Rack patch round-trip the live state. Slots 1..NUM_SLOTS-1
+    // (the user's own presets) and the calibration block are untouched.
+    Save(CollectParams(), 0);
     return std::string((const char *)EEPROM.data.data(), EEPROM.data.size());
 }
 
@@ -472,6 +481,37 @@ void deserialize(Engine *e, const std::string &blob) {
     LoadSaveParams p = Load(0);
     UpdateParameters(p);
     ApplyParams(physicsWorld, clockEngine, containerParams, worldParams, modBus);
+    REQUEST_DISPLAY_REFRESH();
+}
+
+// ── Initialize / Randomize ────────────────────────────────────────────────────
+// Back Rack's module actions. Both run entirely against the live firmware state
+// under one EngineScope, so they must NOT call the public bridge helpers below
+// (those take the same non-recursive lock).
+
+void reset(Engine *e) {
+    EngineScope scope(e);
+    // Factory defaults, exactly what a fresh instance boots into. The stored
+    // preset slots and the calibration block are deliberately left alone:
+    // Initialize resets the patch you are playing, not your saved presets.
+    UpdateParameters(LoadDefaultParams());
+    ApplyParams(physicsWorld, clockEngine, containerParams, worldParams, modBus);
+    physicsWorld.Reset();
+    menuItem = 1; // back to the top of the menu, like a power cycle
+    menuMode = 0;
+    MarkUnsaved(); // live state now differs from whatever slot 0 holds
+    REQUEST_DISPLAY_REFRESH();
+}
+
+void randomize(Engine *e) {
+    EngineScope scope(e);
+    // Same implementation the hardware's SETTINGS > RANDOM action runs, so the
+    // panel and the host roll the same kind of patch. lib/randomize.hpp documents
+    // the ranges and what is deliberately left alone (tempo, IN 1 role, CV matrix).
+    // Engine time is the entropy source here — it is per-instance and always
+    // moving, so two modules randomized in the same frame do not agree.
+    RandomizeParams((uint32_t)micros());
+    MarkUnsaved();
     REQUEST_DISPLAY_REFRESH();
 }
 
@@ -881,5 +921,7 @@ void VcvEngine::encoderButton(bool pressed) { gfengine::encoderButton(e_, presse
 void VcvEngine::getFramebuffer(uint8_t out[1024]) { gfengine::getFramebuffer(e_, out); }
 std::string VcvEngine::serialize() { return gfengine::serialize(e_); }
 void VcvEngine::deserialize(const std::string &blob) { gfengine::deserialize(e_, blob); }
+void VcvEngine::reset() { gfengine::reset(e_); }
+void VcvEngine::randomize() { gfengine::randomize(e_); }
 
 } // namespace gfengine
