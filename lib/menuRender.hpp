@@ -199,6 +199,57 @@ static const char *const groupTitles[] = {
     "SETTINGS",  // 11
 };
 
+// ── Live parameter strip ──────────────────────────────────────
+// The readout that rides on the physics view while a livePreview parameter is
+// being turned (see the live-view section of menuHandlers.hpp).
+//
+// It occupies rows 53..63 — the band between the bottom of the containers
+// (centre y=32 plus PHYS_R=20) and the bottom of the screen. That band normally
+// carries the A:/B: note footer, and the footer is what gives way: while you are
+// turning GRAVITY the value in your hand matters more than the note that just
+// fired, and the strip is only up for as long as you keep turning.
+//
+// Blacked out and framed rather than printed straight onto the physics: a ball
+// passing behind bare text makes the digits unreadable at exactly the moment you
+// are trying to read them.
+#define LIVE_STRIP_Y 53
+#define LIVE_STRIP_H 11
+
+static void HOME_DrawLiveStrip(int item) {
+    const MenuItem &mi = MENU_ITEMS[item - 1];
+
+    // Both containers have a GRAVITY, so the bare label is ambiguous once the
+    // page it came from is off screen. The group title already carries the side
+    // ("A PHYSICS"), so borrow its first letter.
+    String s;
+    if (mi.group < (uint8_t)(sizeof(groupTitles) / sizeof(groupTitles[0]))) {
+        const char *gt = groupTitles[mi.group];
+        if ((gt[0] == 'A' || gt[0] == 'B') && gt[1] == ' ') {
+            s = String(gt[0]) + " ";
+        }
+    }
+    s += mi.label;
+    if (mi.valueFn) {
+        s += " " + mi.valueFn();
+    }
+
+    int w = (int)s.length() * 6;
+    int x = (SCREEN_WIDTH - w) / 2;
+    if (x < 3) {
+        x = 3;
+    }
+
+    // Blank the whole band, not just the box: the A:/B: note labels start at
+    // x=2 and run past where a long readout's frame lands, so clearing only the
+    // box footprint leaves half a glyph poking out either side of it.
+    display.fillRect(0, LIVE_STRIP_Y, SCREEN_WIDTH, LIVE_STRIP_H, BLACK);
+    display.drawRect(x - 3, LIVE_STRIP_Y, w + 6, LIVE_STRIP_H, WHITE);
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.setCursor(x, LIVE_STRIP_Y + 2);
+    display.print(s);
+}
+
 void HandleDisplay() {
     displayMgr.SetUnsavedChanges(unsavedChanges);
 
@@ -207,8 +258,28 @@ void HandleDisplay() {
     }
     bool onHome = (MENU_ITEMS[menuItem - 1].group == MENU_GROUP_HOME);
 
-    // Drop back to the physics view after the configured idle period.
-    if (displayMgr.ShouldTimeout(onHome, menuMode)) {
+    // The hold running out is a timer, not a user action, so nothing else is
+    // going to mark the screen dirty. Catch the expiry edge here and force one
+    // redraw, or the last physics frame — strip and all — stays frozen on the
+    // panel until you happen to touch the encoder again.
+    if (liveViewUntil != 0 && !LiveViewActive()) {
+        LiveViewClear(); // fires exactly once: the deadline is now 0
+        displayRefresh = 1;
+        displayMgr.MarkDirty(); // dirty, not an interaction — see below
+    }
+
+    // Which item the strip reports: the one in edit mode, or the selected one
+    // when a flagged MENU_TOGGLE (DIR) armed the view from a click and so left
+    // menuMode at 0.
+    int liveItem = (menuMode >= 1 && menuMode <= MENU_ITEM_COUNT) ? menuMode : menuItem;
+    bool liveView = !onHome && LiveViewActive() && MenuItemIsLive(liveItem);
+
+    // Drop back to the physics view after the configured idle period. The live
+    // view already *is* the physics view, so it counts as home here: without
+    // that, a flagged toggle — which never sets menuMode — would trip the
+    // timeout mid-preview and strand you on the home screen rather than
+    // returning to the page you clicked from.
+    if (displayMgr.ShouldTimeout(onHome || liveView, menuMode)) {
         menuItem = 1;
         menuMode = 0;
         onHome = true;
@@ -224,7 +295,10 @@ void HandleDisplay() {
     // its first frame forever. MarkDirty() rather than MarkInteraction(): this
     // is not user input, and resetting the interaction timer here would stop the
     // menu ever timing back out to this screen's own idle return.
-    if (onHome) {
+    //
+    // The live view is the same animation and needs the same treatment, or the
+    // balls freeze between detents and the preview shows nothing worth seeing.
+    if (onHome || liveView) {
         displayRefresh = 1;
         displayMgr.MarkDirty();
     }
@@ -235,10 +309,16 @@ void HandleDisplay() {
 
     displayMgr.BeginFrame();
     uint8_t grp = MENU_ITEMS[menuItem - 1].group;
-    displayMgr.DrawMenuIndicator(menuItem, MENU_ITEM_COUNT, grp == MENU_GROUP_HOME);
+    bool physicsView = (grp == MENU_GROUP_HOME) || liveView;
+    // No scroll bar over the live view: it is the physics screen for the moment,
+    // and the strip already says where in the menu you are.
+    displayMgr.DrawMenuIndicator(menuItem, MENU_ITEM_COUNT, physicsView);
 
-    if (grp == MENU_GROUP_HOME) {
+    if (physicsView) {
         HOME_DrawPage();
+        if (liveView) {
+            HOME_DrawLiveStrip(liveItem);
+        }
         RedrawDisplay();
         return;
     }

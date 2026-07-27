@@ -30,6 +30,15 @@ struct MenuItem {
     MenuItemType type;
     void (*setter)(int delta); // MENU_EDIT: called with ±(int)speedFactor on rotate
     void (*action)();          // MENU_ACTION / MENU_TOGGLE: called on click
+
+    // Adjusting this item visibly changes the simulation, so hand the screen to
+    // the physics view while it is being turned — see the live-view section of
+    // menuHandlers.hpp.
+    //
+    // Defaulted rather than plain, so the ~45 rows that do not want it can leave
+    // the field off: the VCV plugin builds with -Wextra, and a bare `bool` here
+    // makes every one of those rows a -Wmissing-field-initializers warning.
+    bool livePreview = false;
 };
 
 // Defined in menuHandlers.hpp (included once, from main.cpp).

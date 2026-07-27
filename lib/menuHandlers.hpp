@@ -64,6 +64,48 @@ extern int menuMode;
 extern int menuScreenTimeout;
 extern void ShowTemporaryMessage(const char *msg, uint32_t durationMs);
 
+// ── Live physics view ────────────────────────────────────────
+// Parameters flagged livePreview are ones you judge by ear and eye, not by their
+// number: you cannot tell what GRAVITY 140 means without watching the balls fall.
+// While one is being turned the physics view takes the screen and the parameter
+// rides along in a strip at the bottom, so the value and its effect are visible
+// at the same time.
+//
+// Armed on the first detent rather than on the click that enters edit mode —
+// until you actually turn something the rest of the page is still worth seeing.
+// It then holds for LIVE_VIEW_HOLD_MS past the last detent, so a slow adjustment
+// does not flicker back and forth between the two screens between turns.
+static const unsigned long LIVE_VIEW_HOLD_MS = 4000;
+static unsigned long liveViewUntil = 0; // millis() deadline; 0 = show the menu page
+
+static inline void LiveViewArm() { liveViewUntil = millis() + LIVE_VIEW_HOLD_MS; }
+static inline void LiveViewClear() { liveViewUntil = 0; }
+static inline bool LiveViewActive() {
+    // Signed difference, not `millis() < liveViewUntil`: the deadline is computed
+    // by addition and so straddles the 49-day wrap twice per boot-life.
+    return liveViewUntil != 0 && (long)(millis() - liveViewUntil) < 0;
+}
+
+// True if the given 1-based menu item hands the screen to the physics view.
+static inline bool MenuItemIsLive(int item) {
+    return item >= 1 && item <= MENU_ITEM_COUNT && MENU_ITEMS[item - 1].livePreview;
+}
+
+// Apply an encoder turn to the item in edit mode. The one place that arms the
+// live view for MENU_EDIT items, called by both the panel firmware and the VCV
+// port so the two cannot drift apart.
+static inline void MenuApplyEdit(int item, int delta) {
+    if (item < 1 || item > MENU_ITEM_COUNT) {
+        return;
+    }
+    if (MENU_ITEMS[item - 1].setter) {
+        MENU_ITEMS[item - 1].setter(delta);
+    }
+    if (MENU_ITEMS[item - 1].livePreview) {
+        LiveViewArm();
+    }
+}
+
 // ── Shared helpers ───────────────────────────────────────────
 static inline void MarkUnsaved() {
     unsavedChanges = true;
@@ -397,7 +439,13 @@ static void setTimeout(int d) {
 
 // ─────────────────────────────────────────────────────────────
 // MENU_ITEMS[]
-// { label, valueFn, valueFn2, col1x, col2x, group, rowStyle, type, setter, action }
+// { label, valueFn, valueFn2, col1x, col2x, group, rowStyle, type, setter, action,
+//   livePreview }
+//
+// The trailing `true` marks the parameters that are judged by watching the
+// simulation rather than by reading a number — turning one hands the screen to
+// the physics view for as long as you keep adjusting. Everything else leaves the
+// field off and gets false.
 // ─────────────────────────────────────────────────────────────
 const MenuItem MENU_ITEMS[] = {
     // ── 0 HOME ──
@@ -410,31 +458,31 @@ const MenuItem MENU_ITEMS[] = {
     {"IN 1", getIn1Role, nullptr, 76, 0, 1, ROW_SINGLE, MENU_EDIT, setIn1Role, nullptr},
 
     // ── 2 COUPLING ──
-    {"PROXIMITY", getProximity, nullptr, 82, 0, 2, ROW_SINGLE, MENU_EDIT, setProximity, nullptr},
-    {"COUPLE", getCoupling, nullptr, 82, 0, 2, ROW_SINGLE, MENU_EDIT, setCoupling, nullptr},
+    {"PROXIMITY", getProximity, nullptr, 82, 0, 2, ROW_SINGLE, MENU_EDIT, setProximity, nullptr, true},
+    {"COUPLE", getCoupling, nullptr, 82, 0, 2, ROW_SINGLE, MENU_EDIT, setCoupling, nullptr, true},
     {"RESET BALLS", nullptr, nullptr, 0, 0, 2, ROW_ACTION, MENU_ACTION, nullptr, actReset},
     {"KICK", nullptr, nullptr, 0, 0, 2, ROW_ACTION, MENU_ACTION, nullptr, actKick},
 
     // ── 3 A PHYSICS ──
-    {"GRAVITY", getGravity<0>, nullptr, 76, 0, 3, ROW_SINGLE, MENU_EDIT, setGravity<0>, nullptr},
-    {"BOUNCE", getBounce<0>, nullptr, 76, 0, 3, ROW_SINGLE, MENU_EDIT, setBounce<0>, nullptr},
-    {"GRIP", getGrip<0>, nullptr, 76, 0, 3, ROW_SINGLE, MENU_EDIT, setGrip<0>, nullptr},
-    {"SPIN", getSpin<0>, nullptr, 76, 0, 3, ROW_SINGLE, MENU_EDIT, setSpin<0>, nullptr},
-    {"DIR", getReverse<0>, nullptr, 76, 0, 3, ROW_SINGLE, MENU_TOGGLE, nullptr, actReverse<0>},
-    {"BALLS", getBalls<0>, nullptr, 76, 0, 3, ROW_SINGLE, MENU_EDIT, setBalls<0>, nullptr},
+    {"GRAVITY", getGravity<0>, nullptr, 76, 0, 3, ROW_SINGLE, MENU_EDIT, setGravity<0>, nullptr, true},
+    {"BOUNCE", getBounce<0>, nullptr, 76, 0, 3, ROW_SINGLE, MENU_EDIT, setBounce<0>, nullptr, true},
+    {"GRIP", getGrip<0>, nullptr, 76, 0, 3, ROW_SINGLE, MENU_EDIT, setGrip<0>, nullptr, true},
+    {"SPIN", getSpin<0>, nullptr, 76, 0, 3, ROW_SINGLE, MENU_EDIT, setSpin<0>, nullptr, true},
+    {"DIR", getReverse<0>, nullptr, 76, 0, 3, ROW_SINGLE, MENU_TOGGLE, nullptr, actReverse<0>, true},
+    {"BALLS", getBalls<0>, nullptr, 76, 0, 3, ROW_SINGLE, MENU_EDIT, setBalls<0>, nullptr, true},
 
     // ── 4 B PHYSICS ──
-    {"GRAVITY", getGravity<1>, nullptr, 76, 0, 4, ROW_SINGLE, MENU_EDIT, setGravity<1>, nullptr},
-    {"BOUNCE", getBounce<1>, nullptr, 76, 0, 4, ROW_SINGLE, MENU_EDIT, setBounce<1>, nullptr},
-    {"GRIP", getGrip<1>, nullptr, 76, 0, 4, ROW_SINGLE, MENU_EDIT, setGrip<1>, nullptr},
-    {"SPIN", getSpin<1>, nullptr, 76, 0, 4, ROW_SINGLE, MENU_EDIT, setSpin<1>, nullptr},
-    {"DIR", getReverse<1>, nullptr, 76, 0, 4, ROW_SINGLE, MENU_TOGGLE, nullptr, actReverse<1>},
-    {"BALLS", getBalls<1>, nullptr, 76, 0, 4, ROW_SINGLE, MENU_EDIT, setBalls<1>, nullptr},
+    {"GRAVITY", getGravity<1>, nullptr, 76, 0, 4, ROW_SINGLE, MENU_EDIT, setGravity<1>, nullptr, true},
+    {"BOUNCE", getBounce<1>, nullptr, 76, 0, 4, ROW_SINGLE, MENU_EDIT, setBounce<1>, nullptr, true},
+    {"GRIP", getGrip<1>, nullptr, 76, 0, 4, ROW_SINGLE, MENU_EDIT, setGrip<1>, nullptr, true},
+    {"SPIN", getSpin<1>, nullptr, 76, 0, 4, ROW_SINGLE, MENU_EDIT, setSpin<1>, nullptr, true},
+    {"DIR", getReverse<1>, nullptr, 76, 0, 4, ROW_SINGLE, MENU_TOGGLE, nullptr, actReverse<1>, true},
+    {"BALLS", getBalls<1>, nullptr, 76, 0, 4, ROW_SINGLE, MENU_EDIT, setBalls<1>, nullptr, true},
 
     // ── 5 LOOP ── (exactly six rows — the page limit)
-    {"BEATS", getLoopBeats, nullptr, 82, 0, 5, ROW_SINGLE, MENU_EDIT, setLoopBeats, nullptr},
-    {"WAKE", getLoopWake, nullptr, 82, 0, 5, ROW_SINGLE, MENU_EDIT, setLoopWake, nullptr},
-    {"NAP", getLoopNap, nullptr, 82, 0, 5, ROW_SINGLE, MENU_EDIT, setLoopNap, nullptr},
+    {"BEATS", getLoopBeats, nullptr, 82, 0, 5, ROW_SINGLE, MENU_EDIT, setLoopBeats, nullptr, true},
+    {"WAKE", getLoopWake, nullptr, 82, 0, 5, ROW_SINGLE, MENU_EDIT, setLoopWake, nullptr, true},
+    {"NAP", getLoopNap, nullptr, 82, 0, 5, ROW_SINGLE, MENU_EDIT, setLoopNap, nullptr, true},
     {"A SHIFT", getLoopShift<0>, nullptr, 82, 0, 5, ROW_SINGLE, MENU_EDIT, setLoopShift<0>, nullptr},
     {"B SHIFT", getLoopShift<1>, nullptr, 82, 0, 5, ROW_SINGLE, MENU_EDIT, setLoopShift<1>, nullptr},
     {"NEW PHRASE", nullptr, nullptr, 0, 0, 5, ROW_ACTION, MENU_ACTION, nullptr, actNewPhrase},
@@ -444,14 +492,14 @@ const MenuItem MENU_ITEMS[] = {
     {"ROOT", getRootName<0>, nullptr, 76, 0, 6, ROW_SINGLE, MENU_EDIT, setRoot<0>, nullptr},
     {"SPREAD", getSpread<0>, nullptr, 76, 0, 6, ROW_SINGLE, MENU_EDIT, setSpread<0>, nullptr},
     {"BIAS", getBias<0>, nullptr, 76, 0, 6, ROW_SINGLE, MENU_EDIT, setBias<0>, nullptr},
-    {"PEGS", getPegs<0>, nullptr, 76, 0, 6, ROW_SINGLE, MENU_EDIT, setPegs<0>, nullptr},
+    {"PEGS", getPegs<0>, nullptr, 76, 0, 6, ROW_SINGLE, MENU_EDIT, setPegs<0>, nullptr, true},
 
     // ── 7 B NOTES ──
     {"SCALE", getScaleName<1>, nullptr, 76, 0, 7, ROW_SINGLE, MENU_EDIT, setScale<1>, nullptr},
     {"ROOT", getRootName<1>, nullptr, 76, 0, 7, ROW_SINGLE, MENU_EDIT, setRoot<1>, nullptr},
     {"SPREAD", getSpread<1>, nullptr, 76, 0, 7, ROW_SINGLE, MENU_EDIT, setSpread<1>, nullptr},
     {"BIAS", getBias<1>, nullptr, 76, 0, 7, ROW_SINGLE, MENU_EDIT, setBias<1>, nullptr},
-    {"PEGS", getPegs<1>, nullptr, 76, 0, 7, ROW_SINGLE, MENU_EDIT, setPegs<1>, nullptr},
+    {"PEGS", getPegs<1>, nullptr, 76, 0, 7, ROW_SINGLE, MENU_EDIT, setPegs<1>, nullptr, true},
 
     // ── 8 A GATE ──
     {"MODE", getGateMode<0>, nullptr, 76, 0, 8, ROW_SINGLE, MENU_EDIT, setGateMode<0>, nullptr},

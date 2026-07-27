@@ -113,12 +113,20 @@ void HandleEncoderClick() {
                 if (mi.type == MENU_ACTION || mi.type == MENU_TOGGLE) {
                     if (mi.action)
                         mi.action();
+                    // A flagged toggle (DIR) has no edit mode to turn in, so the
+                    // click itself has to be what shows the result.
+                    if (mi.livePreview)
+                        LiveViewArm();
+                    else
+                        LiveViewClear();
                 } else { // MENU_EDIT
                     menuMode = menuItem;
+                    LiveViewClear(); // the first detent is what opens the physics view
                 }
             }
         } else {
-            menuMode = 0; // commit and leave edit mode
+            menuMode = 0;      // commit and leave edit mode
+            LiveViewClear();   // …and land back on the page, not on the animation
         }
     }
 }
@@ -162,9 +170,9 @@ void HandleEncoderPosition() {
         lastEncoderUpdate = millis();
         if (menuMode == 0) {
             menuItem = (menuItem - 1 < 1) ? MENU_ITEM_COUNT : menuItem - 1;
+            LiveViewClear(); // navigating away drops any toggle-armed preview
         } else if (menuMode >= 1 && menuMode <= MENU_ITEM_COUNT) {
-            if (MENU_ITEMS[menuMode - 1].setter)
-                MENU_ITEMS[menuMode - 1].setter(-(int)speedFactor);
+            MenuApplyEdit(menuMode, -(int)speedFactor);
         }
     } else if ((newPosition + 3) / 4 < oldPosition / 4) { // turned clockwise
         UpdateSpeedFactor(+1);
@@ -173,9 +181,9 @@ void HandleEncoderPosition() {
         lastEncoderUpdate = millis();
         if (menuMode == 0) {
             menuItem = (menuItem + 1 > MENU_ITEM_COUNT) ? 1 : menuItem + 1;
+            LiveViewClear(); // navigating away drops any toggle-armed preview
         } else if (menuMode >= 1 && menuMode <= MENU_ITEM_COUNT) {
-            if (MENU_ITEMS[menuMode - 1].setter)
-                MENU_ITEMS[menuMode - 1].setter(+(int)speedFactor);
+            MenuApplyEdit(menuMode, +(int)speedFactor);
         }
     }
 }

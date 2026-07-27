@@ -67,6 +67,9 @@ CF_SCALAR(int,  menuMode)
 CF_SCALAR(bool, displayRefresh)
 CF_SCALAR(bool, unsavedChanges)
 CF_SCALAR(int,  menuScreenTimeout)
+// The live physics view's hold-off deadline (../lib/menuHandlers.hpp). Shared,
+// two Rack instances would yank each other's screen between menu and animation.
+CF_SCALAR(unsigned long, liveViewUntil)
 
 // ── Objects (default-constructible, swappable) ───────────────────────────────
 CF_OBJECT(CalibrationData, cal)

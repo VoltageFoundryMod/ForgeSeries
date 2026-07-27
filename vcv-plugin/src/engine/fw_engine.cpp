@@ -345,12 +345,18 @@ static void doEncoderClick() {
             if (mi.type == MENU_ACTION || mi.type == MENU_TOGGLE) {
                 if (mi.action)
                     mi.action();
+                if (mi.livePreview)
+                    LiveViewArm();
+                else
+                    LiveViewClear();
             } else { // MENU_EDIT
                 menuMode = menuItem;
+                LiveViewClear();
             }
         }
     } else {
         menuMode = 0;
+        LiveViewClear();
     }
 }
 
@@ -422,9 +428,9 @@ void encoderTurn(Engine *e, int detents) {
                 menuItem = MENU_ITEM_COUNT;
             else if (menuItem > MENU_ITEM_COUNT)
                 menuItem = 1;
+            LiveViewClear();
         } else if (menuMode >= 1 && menuMode <= MENU_ITEM_COUNT) {
-            if (MENU_ITEMS[menuMode - 1].setter)
-                MENU_ITEMS[menuMode - 1].setter(dir);
+            MenuApplyEdit(menuMode, dir);
         }
     }
 }
