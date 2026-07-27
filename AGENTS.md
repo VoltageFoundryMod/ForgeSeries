@@ -87,6 +87,10 @@ All four outputs go through the MCP4728. Deliberately identical to NoteForge:
 - **Core 1** (`loop1()`): display only — GFX rendering + `display.display()` via Wire
 - Coordination: `_displayFrameReady` (Core 0 sets, Core 1 clears) and
   `_displayLocked` (Core 0 pauses Core 1 GFX)
+- Boot gate: the Arduino core launches Core 1 **before** Core 0's `setup()` runs,
+  so `setup1()` spins on `_core1Enabled` until `setup()` has done `InitWire()`,
+  `display.begin()` and the splash. Without it Core 1 flushes over Wire mid-init
+  (mirrored panel) and wipes the splash/version screens
 - No mutex needed — separate hardware I2C blocks on separate cores
 
 ## Key Subsystems
@@ -127,6 +131,24 @@ control reads as if it does nothing, which is exactly how it was first reported.
 Assert coupling by *magnitude*, never by mere non-zero divergence; a chaotic
 system diverges from any perturbation, so a "> 0.01 px" test passes even when the
 effect is imperceptible.
+
+**Loop mode is snapshot + step count.** `PhysicsWorld` captures both containers
+(balls, rotation, `PhysRandom`) and rewinds every N beats, so a deterministic sim
+becomes a repeating phrase. Two things it rests on, and neither is optional:
+
+- The rewind happens on an exact **step** boundary inside `Advance()`, never on
+  elapsed wall time. One step of drift is a different phrase within a few
+  repeats.
+- The sim runs on `_simUs` — its own clock, exactly 1 ms per step — because the
+  peg refractory windows are measured against it. On wall time the same ball
+  state can clear a 12 ms window on one pass and miss it on the next, which is
+  invisible free-running and fatal to a loop.
+
+Hit timestamps travel through the snapshot as **ages**, not absolute times, or
+each repeat would clear a refractory window it did not clear the first time.
+Parameters are deliberately *not* snapshotted: the point is to keep playing the
+controls over a locked phrase. `Reset()` re-arms, which is what gives Randomize a
+fresh phrase for free.
 
 **Quantize is last-wins.** With the grid on, a newer peg hit replaces a pending
 one rather than stacking. Stacking would release a burst of retriggers at the

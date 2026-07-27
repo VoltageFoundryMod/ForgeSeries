@@ -8,6 +8,14 @@
 static volatile bool _displayFrameReady = false;
 static volatile bool _displayLocked = false; // Core 0 sets to pause Core 1 GFX
 
+// The Arduino core launches Core 1 *before* it calls setup() on Core 0, so
+// without a gate loop1() renders and flushes over Wire while Core 0 is still
+// running InitWire() and display.begin(). That race corrupts the SSD1306 init
+// command stream (a dropped COMSCANDEC/SEGREMAP leaves the panel mirrored) and
+// wipes the splash/version screens the moment they are drawn. Core 1 idles
+// until Core 0 raises this flag.
+static volatile bool _core1Enabled = false;
+
 // Configuration
 #define OLED_ADDRESS 0x3C
 #define SCREEN_WIDTH 128
@@ -257,6 +265,9 @@ void HandleOutputs() {
 
     for (int i = 0; i < NUM_CHANNELS; i++) {
         channels[i].SetGateHigh(trigLevel);
+        // LOOP ▸ NAP silences the voice while the simulation keeps running, so
+        // the phrase stays in phase across the rest.
+        channels[i].SetMuted(physicsWorld.LoopMuted(i));
         channels[i].Process(physicsWorld.Get(i), now, clockEngine, boundary);
     }
 
@@ -368,6 +379,11 @@ void setup() {
     // the trigger interrupt is attached (so RunCalibration() can block freely).
     if (digitalRead(ENCODER_SW) == LOW) {
         Serial.println("Encoder held at boot — entering calibration mode.");
+        // RunCalibration() draws its own screens and relies on Core 1 to flush
+        // them (_CalFlush() only raises _displayFrameReady). Release Core 1 as a
+        // pure flush engine: locked so it never renders the menu over the wizard.
+        _displayLocked = true;
+        _core1Enabled = true;
         RunCalibration(); // blocks; reboots at the end
         // never returns
     }
@@ -376,6 +392,8 @@ void setup() {
 
     // Force an immediate display refresh — clears the version screen.
     REQUEST_DISPLAY_REFRESH();
+
+    _core1Enabled = true; // release Core 1's render/flush loop
 }
 
 // Handle IO without the display
@@ -401,6 +419,10 @@ void loop() {
 // Core 0's loop is never stalled by display work. Core 0 only does:
 //   CV reads + physics + DACWriteAll (Wire1) + encoder.
 void setup1() {
+    // Wait for Core 0's setup() to finish InitWire() + display.begin() + splash
+    // before touching the display object or the Wire bus (see _core1Enabled).
+    while (!_core1Enabled)
+        delay(1);
     Serial.println("Initialized core 1: display GFX + flush engine (Wire) running.");
 }
 

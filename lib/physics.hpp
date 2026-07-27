@@ -28,6 +28,10 @@
 // rather than read from a wall clock. That is what makes this unit-testable on
 // the host and what makes the VCV Rack port behave identically under
 // faster-than-realtime rendering.
+//
+// Determinism is also what LOOP MODE (below) is built on: the same state stepped
+// the same number of times has to produce the same notes, or a repeating phrase
+// slowly stops repeating.
 
 #ifdef UNIT_TEST
 #include "ArduinoFake.h"
@@ -111,6 +115,11 @@ class PhysRandom {
 
   public:
     void Seed(uint32_t s) { _s = s ? s : 0x2545F491u; }
+    // Raw state, so a loop snapshot can rewind the draw sequence. Without this a
+    // restored phrase would re-place and re-kick its balls differently on every
+    // repeat, which is the one thing a loop must not do.
+    uint32_t State() const { return _s; }
+    void SetState(uint32_t s) { _s = s ? s : 0x2545F491u; }
     uint32_t Next() {
         _s ^= _s << 13;
         _s ^= _s >> 17;
@@ -136,6 +145,41 @@ struct Contact {
     float x, y;   // contact point, world/screen space
     float nx, ny; // outward wall normal at the contact
     float energy; // normal impact speed — how hard the hit was
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Loop snapshot — everything that has to be rewound to replay a phrase.
+//
+// Deliberately NOT included: ball count, peg count, peg mask, gravity, spin and
+// the rest of the tunables. Those are *parameters*, pushed in from
+// ApplyParams() every pass; restoring them would make the loop fight the menu
+// and freeze CV modulation, when what the loop is for is repeating the motion
+// while you keep playing the controls over the top.
+//
+// Hit times are stored as AGES rather than absolute timestamps. The refractory
+// guards ask "how long since this ball last spoke", so a restored absolute
+// timestamp would sit further and further in the past on every repeat and the
+// first bounce of each loop would clear a window it did not clear the first time
+// — the phrase would gain a note it never had.
+//
+// ~220 bytes per container.
+// ─────────────────────────────────────────────────────────────────────────────
+struct BallSnapshot {
+    float x, y, vx, vy;
+    int8_t lastPeg;
+    unsigned long hitAgeUs;
+};
+
+struct ContainerSnapshot {
+    BallSnapshot balls[PHYS_MAX_BALLS];
+    float rotation;
+    float activity;
+    uint32_t rngState;
+    int8_t couplePeg;
+    unsigned long coupleAgeUs;
+    bool hitPending;
+    int16_t hitPeg;
+    float hitEnergy;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -273,6 +317,48 @@ class Container {
         for (int i = 0; i < PHYS_MAX_BALLS; i++) {
             PlaceBall(i);
         }
+    }
+
+    // ── Loop snapshot ────────────────────────────────────────────────────────
+    // Capture / rewind the whole simulated state of this container. See
+    // ContainerSnapshot for what is deliberately left out and why the hit times
+    // travel as ages rather than timestamps.
+    void SaveSnapshot(ContainerSnapshot &s, unsigned long nowUs) const {
+        for (int i = 0; i < PHYS_MAX_BALLS; i++) {
+            s.balls[i].x = _balls[i].x;
+            s.balls[i].y = _balls[i].y;
+            s.balls[i].vx = _balls[i].vx;
+            s.balls[i].vy = _balls[i].vy;
+            s.balls[i].lastPeg = _balls[i].lastPeg;
+            s.balls[i].hitAgeUs = nowUs - _balls[i].lastHitUs; // unsigned: wraps
+        }
+        s.rotation = _rotation;
+        s.activity = _activity;
+        s.rngState = _rng.State();
+        s.couplePeg = _couplePeg;
+        s.coupleAgeUs = nowUs - _coupleHitUs;
+        s.hitPending = _hitPending;
+        s.hitPeg = (int16_t)_hitPeg;
+        s.hitEnergy = _hitEnergy;
+    }
+
+    void RestoreSnapshot(const ContainerSnapshot &s, unsigned long nowUs) {
+        for (int i = 0; i < PHYS_MAX_BALLS; i++) {
+            _balls[i].x = s.balls[i].x;
+            _balls[i].y = s.balls[i].y;
+            _balls[i].vx = s.balls[i].vx;
+            _balls[i].vy = s.balls[i].vy;
+            _balls[i].lastPeg = s.balls[i].lastPeg;
+            _balls[i].lastHitUs = nowUs - s.balls[i].hitAgeUs;
+        }
+        _rotation = s.rotation;
+        _activity = s.activity;
+        _rng.SetState(s.rngState);
+        _couplePeg = s.couplePeg;
+        _coupleHitUs = nowUs - s.coupleAgeUs;
+        _hitPending = s.hitPending;
+        _hitPeg = s.hitPeg;
+        _hitEnergy = s.hitEnergy;
     }
 
     // Impulse every ball — the KICK gesture. Deliberately randomised per ball so
@@ -533,10 +619,22 @@ class PhysicsWorld {
     float _coupling = 0.6f;  // 0..1, how much of the overlap actually transmits
     unsigned long _accumUs = 0;
     unsigned long _nowUs = 0;
+    // The simulation's OWN clock: exactly PHYS_STEP_US per step, never the wall
+    // time. The peg refractory guards are measured against this, so whether a
+    // bounce speaks depends only on how many steps have run — not on how the
+    // caller happened to batch its Advance() calls this millisecond.
+    //
+    // With wall time the same ball state could clear a 12 ms window on one pass
+    // and miss it on the next, which is invisible in free-running use and fatal
+    // to LOOP MODE: the phrase would gain or drop a note every few repeats.
+    unsigned long _simUs = 0;
     uint32_t _resetSeed = 0x9E3779B9u;
 
   public:
     PhysicsWorld() { Reset(); }
+
+    // Simulated time, in microseconds since boot. Advances in exact 1 ms steps.
+    unsigned long SimUs() const { return _simUs; }
 
     Container &Get(int i) { return _c[constrain(i, 0, 1)]; }
     const Container &Get(int i) const { return _c[constrain(i, 0, 1)]; }
@@ -585,6 +683,9 @@ class PhysicsWorld {
         _c[0].Reset(_resetSeed);
         _c[1].Reset(_resetSeed ^ 0xA5A5A5A5u);
         UpdateCentres();
+        // A reset is a new patch, so the phrase it was repeating is gone —
+        // capture the new one instead of restoring balls that no longer exist.
+        ArmLoop();
     }
 
     void Kick(float strength) {
@@ -611,11 +712,78 @@ class PhysicsWorld {
         while (_accumUs >= PHYS_STEP_US && steps < PHYS_MAX_STEPS_PER_CALL) {
             _accumUs -= PHYS_STEP_US;
             steps++;
-            StepOnce(_nowUs);
+            // The loop boundary is decided BEFORE the step, on an exact step
+            // count. Deciding it from elapsed wall time would land the rewind a
+            // step early or late, and one step of divergence in a chaotic
+            // system is a different phrase within a few repeats.
+            LoopTick();
+            StepOnce(_simUs);
+            _simUs += PHYS_STEP_US;
         }
         if (steps >= PHYS_MAX_STEPS_PER_CALL) {
             _accumUs = 0; // give up on the backlog rather than chase it forever
         }
+    }
+
+    // ── Loop / phrase mode ───────────────────────────────────────────────────
+    //
+    // The simulation is deterministic, so a phrase is just a snapshot plus a
+    // step count: capture the state, run N steps, put the state back, and the
+    // next N steps produce the same notes. That is the whole feature — it turns
+    // the module's endless stream into something you can keep.
+    //
+    // Two things it deliberately does NOT rewind:
+    //   • the parameters (see ContainerSnapshot) — you can keep playing gravity,
+    //     proximity and the peg mask over the top of a locked phrase, and CV
+    //     modulation still lands;
+    //   • the note mapping in sequencer.hpp — changing SCALE re-registers the
+    //     phrase without changing its rhythm.
+    //
+    // NAP/WAKE mutes whole loops per container and SHIFT offsets that cycle, so
+    // A and B can answer each other: wake 1 / nap 1 with B shifted by 1 is
+    // call-and-response, and it costs one menu row rather than a new subsystem.
+    //
+    //  beats       — LOOP BEATS as the user set it; 0 = off. A change here
+    //                re-arms (captures a new phrase). A tempo change does not,
+    //                or an external clock's ±1 BPM jitter would re-arm every
+    //                pass and the loop would never repeat at all.
+    //  periodSteps — that many beats in 1 ms steps, recomputed every pass from
+    //                the live tempo but only latched at a loop boundary.
+    void SetLoop(int beats, unsigned long periodSteps, int wake, int nap,
+                 int shiftA, int shiftB) {
+        if (beats != _loopBeats) {
+            _loopBeats = beats;
+            ArmLoop();
+        }
+        _loopReqSteps = periodSteps;
+        _loopWake = wake < 1 ? 1 : wake;
+        _loopNap = nap < 0 ? 0 : nap;
+        _loopShift[0] = shiftA < 0 ? 0 : shiftA;
+        _loopShift[1] = shiftB < 0 ? 0 : shiftB;
+    }
+
+    // Throw the captured phrase away and grab whatever is playing now. Backs the
+    // NEW PHRASE action — the loop is a lottery, and re-rolling it until one
+    // lands is how the feature is actually used.
+    void ArmLoop() {
+        _loopHaveSnap = false;
+        _loopPos = 0;
+        _loopNum = 0;
+        _loopMuted[0] = _loopMuted[1] = false;
+    }
+
+    bool LoopActive() const { return _loopBeats > 0 && _loopReqSteps > 0; }
+    bool LoopMuted(int c) const { return _loopMuted[c & 1]; }
+    int LoopBeats() const { return _loopBeats; }
+    unsigned long LoopNumber() const { return _loopNum; }
+
+    // Which beat of the phrase is playing, 1..LoopBeats(). For the display.
+    int LoopBeat() const {
+        if (!LoopActive() || _loopSteps == 0) {
+            return 0;
+        }
+        int b = (int)((_loopPos * (unsigned long)_loopBeats) / _loopSteps) + 1;
+        return b > _loopBeats ? _loopBeats : b;
     }
 
   private:
@@ -654,6 +822,69 @@ class PhysicsWorld {
     unsigned long _couplingEvents = 0;
     float _coupleX = 0.0f, _coupleY = 0.0f;
     uint8_t _coupleFlash = 0;
+
+    // ── Loop state ──
+    int _loopBeats = 0;              // 0 = off
+    unsigned long _loopReqSteps = 0; // requested period, refreshed every pass
+    unsigned long _loopSteps = 0;    // latched period of the loop now running
+    unsigned long _loopPos = 0;      // steps into the current loop
+    unsigned long _loopNum = 0;      // repeat counter; 0 = the pass being captured
+    bool _loopHaveSnap = false;
+    int _loopWake = 1;
+    int _loopNap = 0;
+    int _loopShift[2] = {0, 0};
+    bool _loopMuted[2] = {false, false};
+    // Value-initialised: _loopHaveSnap guards every read, but the VCV plugin
+    // deep-copies this whole object per instance and copying indeterminate
+    // bytes is not something to leave lying around.
+    ContainerSnapshot _snap[2] = {};
+
+    // Called once per step, before the step runs.
+    void LoopTick() {
+        if (!LoopActive()) {
+            if (_loopHaveSnap) {
+                ArmLoop(); // loop was just switched off — drop the phrase
+            }
+            return;
+        }
+
+        if (!_loopHaveSnap) {
+            // First pass: this is the phrase. It plays through once as normal,
+            // and every repeat after it is a rewind to this instant.
+            _loopSteps = _loopReqSteps;
+            _c[0].SaveSnapshot(_snap[0], _simUs);
+            _c[1].SaveSnapshot(_snap[1], _simUs);
+            _loopHaveSnap = true;
+            _loopPos = 0;
+            _loopNum = 0;
+            UpdateNap();
+        } else if (_loopPos >= _loopSteps) {
+            // A tempo change is picked up here rather than mid-phrase, so the
+            // loop always ends where it started even while the BPM is moving.
+            _loopSteps = _loopReqSteps;
+            _c[0].RestoreSnapshot(_snap[0], _simUs);
+            _c[1].RestoreSnapshot(_snap[1], _simUs);
+            _loopPos = 0;
+            _loopNum++;
+            UpdateNap();
+        }
+        _loopPos++;
+    }
+
+    // Which containers are asleep for the loop that just started. The physics
+    // keeps running while napping — only the note output is muted — so the
+    // phrase stays in phase and comes back exactly where it left off.
+    void UpdateNap() {
+        for (int i = 0; i < 2; i++) {
+            if (_loopNap <= 0) {
+                _loopMuted[i] = false;
+                continue;
+            }
+            unsigned long cycle = (unsigned long)(_loopWake + _loopNap);
+            unsigned long pos = (_loopNum + (unsigned long)_loopShift[i]) % cycle;
+            _loopMuted[i] = (pos >= (unsigned long)_loopWake);
+        }
+    }
 
     void StepOnce(unsigned long nowUs) {
         Contact contacts[2][PHYS_MAX_BALLS];

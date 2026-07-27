@@ -346,3 +346,75 @@ TEST(Sequencer, AccentNeverShrinksATriggerOrGate) {
     ch.envelope.SetMode(GateEnvelope);
     EXPECT_LT(ch.AccentedLevel(30.0f), 100);
 }
+
+// ── Loop nap muting ──────────────────────────────────────────────────────────
+
+namespace {
+
+// Drive a channel until its container produces a hit, then report the gate.
+uint16_t GateAfterHits(GravityChannel &ch, Container &c, int ms) {
+    Clock clk;
+    Contact contacts[PHYS_MAX_BALLS];
+    uint16_t peak = 0;
+    for (int i = 0; i < ms; i++) {
+        unsigned long now = 1000UL + (unsigned long)i * 1000UL;
+        int count = 0;
+        c.Step(now, contacts, count, PHYS_MAX_BALLS);
+        ch.Process(c, now, clk, false);
+        if (ch.GetGateOutput() > peak) {
+            peak = ch.GetGateOutput();
+        }
+    }
+    return peak;
+}
+
+} // namespace
+
+TEST(Sequencer, NappingChannelEmitsNoGate) {
+    GravityChannel ch;
+    Container c;
+    c.SetBallCount(4);
+    ASSERT_GT(GateAfterHits(ch, c, 2000), 0) << "the channel never fired at all";
+
+    GravityChannel muted;
+    Container c2;
+    c2.SetBallCount(4);
+    muted.SetMuted(true);
+    EXPECT_EQ(0, GateAfterHits(muted, c2, 2000)) << "a napping channel must be silent";
+}
+
+TEST(Sequencer, NappingChannelHoldsItsPitchAndDoesNotBurstOnWake) {
+    // Two things the nap must not do: drop the CV to zero (a rest is not a note
+    // change), and stockpile hits that all fire the moment it wakes up.
+    GravityChannel ch;
+    Container c;
+    Clock clk;
+    Contact contacts[PHYS_MAX_BALLS];
+    c.SetBallCount(4);
+
+    // Play until a note has sounded.
+    int i = 0;
+    for (; i < 3000 && ch.GetSemitone() < 0; i++) {
+        unsigned long now = 1000UL + (unsigned long)i * 1000UL;
+        int count = 0;
+        c.Step(now, contacts, count, PHYS_MAX_BALLS);
+        ch.Process(c, now, clk, false);
+    }
+    ASSERT_GE(ch.GetSemitone(), 0) << "no note was ever emitted";
+    uint16_t heldCv = ch.GetCVOutput();
+
+    // Nap through a stretch that would otherwise have produced several notes.
+    ch.SetMuted(true);
+    for (int n = 0; n < 1000; n++, i++) {
+        unsigned long now = 1000UL + (unsigned long)i * 1000UL;
+        int count = 0;
+        c.Step(now, contacts, count, PHYS_MAX_BALLS);
+        ch.Process(c, now, clk, false);
+        ASSERT_EQ(0, ch.GetGateOutput());
+    }
+    EXPECT_EQ(heldCv, ch.GetCVOutput()) << "the pitch output moved during a nap";
+
+    // The first step awake must not release a queued hit.
+    ch.SetMuted(false);
+    EXPECT_FALSE(ch.HasPending()) << "a hit was stockpiled during the nap";
+}

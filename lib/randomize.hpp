@@ -14,6 +14,11 @@
 // "give me a new rhythm" gesture into "break my patch". VCV Rack draws the same
 // line when it leaves ports alone on randomize.
 //
+// The loop settings are on that list too, and for a stronger reason: a roll
+// while a four-beat phrase is running should hand you a NEW four-beat phrase,
+// not a different phrase length. It gets one for free — the Reset() below
+// re-arms the loop, so the next repeat captures the patch that was just rolled.
+//
 // Every range below is narrower than the parameter's own min/max. The full
 // ranges are all reachable by hand, but a uniform draw across them mostly yields
 // containers that either barely ring a peg or buzz — neither reads as a sequence.

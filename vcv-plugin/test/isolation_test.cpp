@@ -63,6 +63,17 @@ int main() {
     CHECK(proximityGet(b) == 0, "B: proximity untouched (per-instance isolation)");
     CHECK(couplingGet(b) == 60, "B: couple still at its default");
 
+    // ── Loop / phrase mode is per-instance ──────────────────────────────────
+    loopBeatsSet(a, 4);
+    loopWakeSet(a, 2);
+    loopNapSet(a, 1);
+    loopShiftSet(a, 1, 3);
+    CHECK(loopBeatsGet(a) == 4 && loopWakeGet(a) == 2 && loopNapGet(a) == 1 &&
+              loopShiftGet(a, 1) == 3,
+          "A: loop length + nap/wake + shift set");
+    CHECK(loopBeatsGet(b) == 0 && loopNapGet(b) == 0 && loopShiftGet(b, 1) == 0,
+          "B: loop settings untouched (per-instance isolation)");
+
     // ── Physics parameters are per-instance ─────────────────────────────────
     gravitySet(a, 0, 700);
     bounceSet(a, 0, 90);
@@ -212,6 +223,11 @@ int main() {
           "B: proximity + couple restored from A's blob");
     CHECK(bpmGet(b) == 200 && quantizeGet(b) == 3,
           "B: tempo + quantize restored from A's blob");
+    // A loop setting missing from CollectParams() would be silently dropped here
+    // and the patch would reload not looping.
+    CHECK(loopBeatsGet(b) == 4 && loopWakeGet(b) == 2 && loopNapGet(b) == 1 &&
+              loopShiftGet(b, 1) == 3,
+          "B: loop settings restored from A's blob");
     CHECK(in1RoleGet(b) == 2 && cvTargetGet(b, 0) == 3 && cvDepthGet(b, 0) == 77,
           "B: IN 1 role + CV matrix restored from A's blob");
 

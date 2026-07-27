@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <vector>
+
 #include "physics.hpp"
 
 namespace {
@@ -476,3 +478,394 @@ TEST(Physics, TransmittedNotesUseTheReceivingContainersOwnPegRing) {
     }
 }
 
+
+// ── Loop / phrase mode ───────────────────────────────────────────────────────
+//
+// The feature rests entirely on the simulation being reproducible: capture the
+// state, run N steps, put the state back, and the same N steps have to produce
+// the same notes. These tests pin that, because a loop that repeats *almost*
+// exactly is worse than no loop at all — it sounds like a fault.
+
+namespace {
+
+struct LoopHit {
+    int step; // milliseconds since the run started
+    int container;
+    int peg;
+};
+
+// Step a world one millisecond at a time, draining note events as the firmware
+// does, and record every hit with the step it landed on.
+std::vector<LoopHit> RunCapturingHits(PhysicsWorld &w, int ms, unsigned long startUs = 1000) {
+    std::vector<LoopHit> hits;
+    for (int i = 0; i < ms; i++) {
+        w.Advance(startUs + (unsigned long)i * 1000UL);
+        for (int c = 0; c < 2; c++) {
+            int peg = -1;
+            float energy = 0.0f;
+            if (w.Get(c).ConsumeHit(peg, energy)) {
+                hits.push_back({i, c, peg});
+            }
+        }
+    }
+    return hits;
+}
+
+// The hits that fell inside [from, from+len), re-based so two loops can be
+// compared step for step.
+std::vector<LoopHit> Slice(const std::vector<LoopHit> &all, int from, int len) {
+    std::vector<LoopHit> out;
+    for (const LoopHit &h : all) {
+        if (h.step >= from && h.step < from + len) {
+            out.push_back({h.step - from, h.container, h.peg});
+        }
+    }
+    return out;
+}
+
+// Do two windows of hits agree note for note, step for step?
+bool SamePhrase(const std::vector<LoopHit> &a, const std::vector<LoopHit> &b) {
+    if (a.size() != b.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < a.size(); i++) {
+        if (a[i].step != b[i].step || a[i].container != b[i].container ||
+            a[i].peg != b[i].peg) {
+            return false;
+        }
+    }
+    return true;
+}
+
+} // namespace
+
+TEST(Physics, LoopReplaysTheSamePhraseExactly) {
+    // 1000 steps = 1000 ms = two beats at 120 BPM, which is what ApplyParams()
+    // works out from LOOP BEATS 2.
+    const int kPeriod = 1000;
+    PhysicsWorld w;
+    w.Get(0).SetBallCount(3);
+    w.Get(1).SetBallCount(2);
+    w.SetLoop(2, kPeriod, 1, 0, 0, 0);
+
+    std::vector<LoopHit> all = RunCapturingHits(w, kPeriod * 4);
+
+    std::vector<LoopHit> first = Slice(all, 0, kPeriod);
+    ASSERT_GT(first.size(), 5u) << "the phrase has to contain notes to be worth looping";
+
+    // Every later repeat must be note-for-note, step-for-step identical to it.
+    for (int rep = 1; rep < 4; rep++) {
+        std::vector<LoopHit> later = Slice(all, kPeriod * rep, kPeriod);
+        ASSERT_EQ(first.size(), later.size()) << "repeat " << rep << " changed length";
+        for (size_t i = 0; i < first.size(); i++) {
+            EXPECT_EQ(first[i].step, later[i].step) << "repeat " << rep << " hit " << i;
+            EXPECT_EQ(first[i].container, later[i].container) << "repeat " << rep;
+            EXPECT_EQ(first[i].peg, later[i].peg) << "repeat " << rep << " hit " << i;
+        }
+    }
+}
+
+TEST(Physics, LoopReplaysThePhraseWhileCoupled) {
+    // Coupling is the one path that reads state across containers, so a phrase
+    // is only really deterministic if it repeats with PROXIMITY up too.
+    const int kPeriod = 1000;
+    PhysicsWorld w;
+    w.SetProximity(0.9f);
+    w.SetCoupling(1.0f);
+    w.Get(0).SetBallCount(3);
+    w.Get(1).SetBallCount(3);
+    w.SetLoop(2, kPeriod, 1, 0, 0, 0);
+
+    std::vector<LoopHit> all = RunCapturingHits(w, kPeriod * 3);
+    std::vector<LoopHit> first = Slice(all, 0, kPeriod);
+    ASSERT_GT(first.size(), 5u);
+    EXPECT_TRUE(SamePhrase(first, Slice(all, kPeriod, kPeriod)));
+    EXPECT_TRUE(SamePhrase(first, Slice(all, kPeriod * 2, kPeriod)));
+}
+
+TEST(Physics, LoopRewindRestoresTheBallsAndTheRotation) {
+    // The audible test above still passes if a little state leaks across the
+    // boundary. This one pins the state itself.
+    const int kPeriod = 800;
+    PhysicsWorld w;
+    w.SetLoop(2, kPeriod, 1, 0, 0, 0);
+
+    // Halfway through the first phrase.
+    for (int i = 0; i < kPeriod / 2; i++) {
+        w.Advance(1000UL + (unsigned long)i * 1000UL);
+    }
+    float x[2], y[2], vx[2], rot[2];
+    for (int c = 0; c < 2; c++) {
+        x[c] = w.Get(c).GetBall(0).x;
+        y[c] = w.Get(c).GetBall(0).y;
+        vx[c] = w.Get(c).GetBall(0).vx;
+        rot[c] = w.Get(c).Rotation();
+    }
+
+    // Halfway through the second phrase — the same point in the loop.
+    for (int i = kPeriod / 2; i < kPeriod + kPeriod / 2; i++) {
+        w.Advance(1000UL + (unsigned long)i * 1000UL);
+    }
+    for (int c = 0; c < 2; c++) {
+        EXPECT_FLOAT_EQ(x[c], w.Get(c).GetBall(0).x) << "container " << c;
+        EXPECT_FLOAT_EQ(y[c], w.Get(c).GetBall(0).y) << "container " << c;
+        EXPECT_FLOAT_EQ(vx[c], w.Get(c).GetBall(0).vx) << "container " << c;
+        EXPECT_FLOAT_EQ(rot[c], w.Get(c).Rotation()) << "container " << c;
+    }
+}
+
+TEST(Physics, LoopOffLetsThePhraseKeepEvolving) {
+    // The counter-test: without the loop, two consecutive windows of the same
+    // length must NOT agree, or the sim is not generating anything and the test
+    // above is proving nothing.
+    const int kPeriod = 1000;
+    PhysicsWorld w;
+    w.Get(0).SetBallCount(3);
+
+    std::vector<LoopHit> all = RunCapturingHits(w, kPeriod * 2);
+    EXPECT_FALSE(SamePhrase(Slice(all, 0, kPeriod), Slice(all, kPeriod, kPeriod)))
+        << "free-running physics repeated itself exactly";
+}
+
+TEST(Physics, LoopSurvivesAnUnevenCallerCadence) {
+    // The hardware never calls Advance() on a tidy 1 ms grid — the display, the
+    // I2C writes and the encoder all steal time. The rewind is scheduled on STEP
+    // count, not wall time, so a lumpy caller must produce the same phrase as a
+    // smooth one.
+    const int kPeriod = 600;
+    PhysicsWorld smooth, lumpy;
+    smooth.SetLoop(2, kPeriod, 1, 0, 0, 0);
+    lumpy.SetLoop(2, kPeriod, 1, 0, 0, 0);
+
+    // Both run to the same final timestamp — three phrases' worth — so they are
+    // compared over exactly the same amount of simulated time. Only the size of
+    // the caller's steps differs.
+    const unsigned long kEndUs = (unsigned long)kPeriod * 3UL * 1000UL;
+    for (unsigned long t = 1000UL; t <= kEndUs; t += 1000UL) {
+        smooth.Advance(t);
+    }
+    for (unsigned long t = 3000UL; t <= kEndUs; t += 3000UL) {
+        lumpy.Advance(t);
+    }
+
+    for (int c = 0; c < 2; c++) {
+        EXPECT_FLOAT_EQ(smooth.Get(c).GetBall(0).x, lumpy.Get(c).GetBall(0).x)
+            << "container " << c << " diverged with a lumpy caller";
+        EXPECT_FLOAT_EQ(smooth.Get(c).GetBall(0).y, lumpy.Get(c).GetBall(0).y)
+            << "container " << c;
+    }
+}
+
+TEST(Physics, NapMutesWholeLoopsAndShiftOffsetsThem) {
+    // Wake 1 / nap 1 with B shifted by one loop is the call-and-response the
+    // page is designed around: exactly one container awake at a time.
+    const int kPeriod = 200;
+    PhysicsWorld w;
+    w.SetLoop(1, kPeriod, 1, 1, 0, 1);
+
+    bool sawAwake = false, sawAsleep = false;
+    for (int loop = 0; loop < 6; loop++) {
+        for (int i = 0; i < kPeriod; i++) {
+            w.Advance(1000UL + (unsigned long)(loop * kPeriod + i) * 1000UL);
+        }
+        EXPECT_NE(w.LoopMuted(0), w.LoopMuted(1))
+            << "loop " << loop << ": A and B should trade, never overlap";
+        sawAwake = sawAwake || !w.LoopMuted(0);
+        sawAsleep = sawAsleep || w.LoopMuted(0);
+    }
+    EXPECT_TRUE(sawAwake) << "A never woke up";
+    EXPECT_TRUE(sawAsleep) << "A never napped";
+}
+
+TEST(Physics, NapOffKeepsBothContainersAwake) {
+    const int kPeriod = 200;
+    PhysicsWorld w;
+    w.SetLoop(1, kPeriod, 1, 0, 0, 1); // nap 0 — shift must not matter
+
+    for (int i = 0; i < kPeriod * 5; i++) {
+        w.Advance(1000UL + (unsigned long)i * 1000UL);
+        ASSERT_FALSE(w.LoopMuted(0));
+        ASSERT_FALSE(w.LoopMuted(1));
+    }
+}
+
+TEST(Physics, NappingContainersKeepBouncing) {
+    // A nap is a rest in the OUTPUT, not a pause in the simulation. If the
+    // physics stopped, the phrase would come back out of phase.
+    const int kPeriod = 200;
+    PhysicsWorld w;
+    w.SetLoop(1, kPeriod, 1, 1, 0, 0);
+
+    // Run to a loop where A is asleep.
+    int i = 0;
+    for (; i < kPeriod * 4 && !w.LoopMuted(0); i++) {
+        w.Advance(1000UL + (unsigned long)i * 1000UL);
+    }
+    ASSERT_TRUE(w.LoopMuted(0)) << "A never napped";
+
+    float before = w.Get(0).GetBall(0).y;
+    for (int n = 0; n < 50; n++, i++) {
+        w.Advance(1000UL + (unsigned long)i * 1000UL);
+    }
+    EXPECT_NE(before, w.Get(0).GetBall(0).y) << "the balls froze during a nap";
+}
+
+TEST(Physics, TurningTheLoopOffResumesFreeRunning) {
+    const int kPeriod = 500;
+    PhysicsWorld w;
+    w.SetLoop(2, kPeriod, 1, 0, 0, 0);
+    for (int i = 0; i < kPeriod * 2; i++) {
+        w.Advance(1000UL + (unsigned long)i * 1000UL);
+    }
+    EXPECT_TRUE(w.LoopActive());
+
+    w.SetLoop(0, 0, 1, 0, 0, 0);
+    unsigned long base = 1000UL + (unsigned long)(kPeriod * 2) * 1000UL;
+    std::vector<LoopHit> all = RunCapturingHits(w, kPeriod * 2, base);
+    EXPECT_FALSE(w.LoopActive());
+    EXPECT_FALSE(SamePhrase(Slice(all, 0, kPeriod), Slice(all, kPeriod, kPeriod)))
+        << "the phrase kept repeating after LOOP was set to OFF";
+}
+
+TEST(Physics, ChangingTheLengthCapturesANewPhrase) {
+    // A new length has to mean a new phrase starting now, not the old snapshot
+    // replayed against a different period.
+    const int kPeriod = 400;
+    PhysicsWorld w;
+    w.SetLoop(1, kPeriod, 1, 0, 0, 0);
+    for (int i = 0; i < kPeriod + kPeriod / 2; i++) {
+        w.Advance(1000UL + (unsigned long)i * 1000UL);
+    }
+    ASSERT_GT(w.LoopNumber(), 0UL) << "should have completed at least one repeat";
+
+    w.SetLoop(2, kPeriod * 2, 1, 0, 0, 0);
+    w.Advance(1000UL + (unsigned long)(kPeriod + kPeriod / 2) * 1000UL);
+    EXPECT_EQ(0UL, w.LoopNumber()) << "a length change must re-arm the loop";
+    EXPECT_EQ(2, w.LoopBeats());
+}
+
+TEST(Physics, ATempoChangeDoesNotRearmTheLoop) {
+    // ApplyParams() recomputes the period every pass, so an external clock
+    // wandering by a BPM re-sends a slightly different step count constantly. If
+    // that re-armed the loop it would never repeat at all — the failure mode
+    // this guards is "LOOP does nothing when synced to an external clock".
+    const int kPeriod = 400;
+    PhysicsWorld w;
+    w.SetLoop(2, kPeriod, 1, 0, 0, 0);
+    for (int i = 0; i < kPeriod * 3; i++) {
+        // Jitter the requested period the way a live tempo reading would.
+        w.SetLoop(2, (unsigned long)(kPeriod + (i % 5) - 2), 1, 0, 0, 0);
+        w.Advance(1000UL + (unsigned long)i * 1000UL);
+    }
+    EXPECT_GT(w.LoopNumber(), 1UL) << "tempo jitter kept re-arming the loop";
+}
+
+TEST(Physics, ResetRearmsTheLoop) {
+    // RESET (and Randomize, which calls it) replaces the balls, so the captured
+    // phrase no longer describes anything that exists.
+    const int kPeriod = 300;
+    PhysicsWorld w;
+    w.SetLoop(1, kPeriod, 1, 0, 0, 0);
+    for (int i = 0; i < kPeriod * 3; i++) {
+        w.Advance(1000UL + (unsigned long)i * 1000UL);
+    }
+    ASSERT_GT(w.LoopNumber(), 0UL);
+
+    w.Reset();
+    EXPECT_EQ(0UL, w.LoopNumber());
+}
+
+TEST(Physics, LoopBeatCountsThroughThePhrase) {
+    // The home screen's "L n/N" badge: it has to walk 1..N and never overrun.
+    const int kPeriod = 400; // 4 beats of 100 steps
+    PhysicsWorld w;
+    w.SetLoop(4, kPeriod, 1, 0, 0, 0);
+
+    bool seen[5] = {false, false, false, false, false};
+    for (int i = 0; i < kPeriod * 2; i++) {
+        w.Advance(1000UL + (unsigned long)i * 1000UL);
+        int b = w.LoopBeat();
+        ASSERT_GE(b, 1);
+        ASSERT_LE(b, 4);
+        seen[b] = true;
+    }
+    for (int b = 1; b <= 4; b++) {
+        EXPECT_TRUE(seen[b]) << "beat " << b << " never displayed";
+    }
+}
+
+// ── Snapshot mechanics ───────────────────────────────────────────────────────
+
+TEST(Physics, SnapshotRoundTripsTheContainerState) {
+    Container c;
+    c.SetBallCount(4);
+    c.SetOmega(3.0f);
+    Contact contacts[PHYS_MAX_BALLS];
+    int count = 0;
+    for (int i = 0; i < 500; i++) {
+        count = 0;
+        c.Step(1000UL + (unsigned long)i * 1000UL, contacts, count, PHYS_MAX_BALLS);
+    }
+
+    ContainerSnapshot snap;
+    const unsigned long tSave = 501000UL;
+    c.SaveSnapshot(snap, tSave);
+
+    float x0 = c.GetBall(0).x, rot0 = c.Rotation();
+
+    // Move on, then rewind — much later, so a snapshot that stored absolute hit
+    // timestamps rather than ages would show up here.
+    for (int i = 500; i < 1500; i++) {
+        count = 0;
+        c.Step(1000UL + (unsigned long)i * 1000UL, contacts, count, PHYS_MAX_BALLS);
+    }
+    ASSERT_NE(x0, c.GetBall(0).x) << "the container did not move; nothing was tested";
+
+    const unsigned long tLoad = 1501000UL;
+    c.RestoreSnapshot(snap, tLoad);
+    EXPECT_FLOAT_EQ(x0, c.GetBall(0).x);
+    EXPECT_FLOAT_EQ(rot0, c.Rotation());
+
+    // Ages, not timestamps: the restored refractory clock has to sit the same
+    // distance behind "now" as it did when it was captured.
+    for (int i = 0; i < PHYS_MAX_BALLS; i++) {
+        EXPECT_EQ(snap.balls[i].hitAgeUs, tLoad - c.GetBall(i).lastHitUs)
+            << "ball " << i << " came back with a stale refractory clock";
+    }
+}
+
+TEST(Physics, SnapshotRestoreReproducesTheNextSteps) {
+    // The property the loop actually depends on: restore, and the same steps
+    // produce the same motion.
+    Container c;
+    c.SetBallCount(3);
+    c.SetOmega(2.0f);
+    Contact contacts[PHYS_MAX_BALLS];
+    int count = 0;
+
+    for (int i = 0; i < 300; i++) {
+        count = 0;
+        c.Step(1000UL + (unsigned long)i * 1000UL, contacts, count, PHYS_MAX_BALLS);
+    }
+
+    ContainerSnapshot snap;
+    c.SaveSnapshot(snap, 301000UL);
+
+    float firstX[PHYS_MAX_BALLS];
+    for (int i = 300; i < 600; i++) {
+        count = 0;
+        c.Step(1000UL + (unsigned long)i * 1000UL, contacts, count, PHYS_MAX_BALLS);
+    }
+    for (int b = 0; b < c.GetBallCount(); b++) {
+        firstX[b] = c.GetBall(b).x;
+    }
+
+    c.RestoreSnapshot(snap, 301000UL);
+    for (int i = 300; i < 600; i++) {
+        count = 0;
+        c.Step(1000UL + (unsigned long)i * 1000UL, contacts, count, PHYS_MAX_BALLS);
+    }
+    for (int b = 0; b < c.GetBallCount(); b++) {
+        EXPECT_FLOAT_EQ(firstX[b], c.GetBall(b).x) << "ball " << b << " replayed differently";
+    }
+}

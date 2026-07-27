@@ -94,15 +94,38 @@ static void HOME_DrawPage() {
     display.setTextColor(WHITE);
 
     // ── Header ──
+    // Measured rather than assumed: the tempo readout grows an "E" under an
+    // external clock and PRX loses a digit below 100 %, so both ends of the
+    // header move and the loop badge between them has to be placed from their
+    // real widths.
+    String bpm = getBpm() + "BPM";
     display.setCursor(5, 0);
-    display.print(getBpm());
-    display.print("BPM");
+    display.print(bpm);
+    int bpmEnd = 5 + (int)bpm.length() * 6;
 
     // Proximity is the module's signature control, so it is on the home screen
     // rather than buried a page away.
     String prx = "PRX" + String((int)lroundf(worldParams.proximity * 100.0f));
-    display.setCursor(SCREEN_WIDTH - 2 - (int)prx.length() * 6, 0);
+    int prxX = SCREEN_WIDTH - 2 - (int)prx.length() * 6;
+    display.setCursor(prxX, 0);
     display.print(prx);
+
+    // Loop position, centred in the gap the two readouts leave. Without it a
+    // repeating phrase is indistinguishable from a lucky patch — the counter is
+    // what tells you the module is looping and where in the bar it is, which is
+    // the whole point of setting a length in beats.
+    if (physicsWorld.LoopActive()) {
+        String lp = "L" + String(physicsWorld.LoopBeat()) + "/" +
+                    String(physicsWorld.LoopBeats());
+        int w = (int)lp.length() * 6;
+        int x = (SCREEN_WIDTH - w) / 2;
+        // Tempo and proximity are the readouts that must stay legible, so when
+        // the gap is too narrow the badge is what gets dropped.
+        if (x >= bpmEnd + 2 && x + w <= prxX - 2) {
+            display.setCursor(x, 0);
+            display.print(lp);
+        }
+    }
 
     // ── Containers ──
     HOME_DrawContainer(0, true);
@@ -111,7 +134,12 @@ static void HOME_DrawPage() {
     // ── Footer: the live note of each channel ──
     for (int ch = 0; ch < NUM_CHANNELS; ch++) {
         String note;
-        if (channels[ch].GetSemitone() < 0) {
+        // A napping channel is still bouncing on screen, so without a marker the
+        // silence reads as a broken output rather than a rest the module was
+        // told to take. "zz" says asleep, and it says it in two characters.
+        if (channels[ch].IsMuted()) {
+            note = "zz";
+        } else if (channels[ch].GetSemitone() < 0) {
             note = "--";
         } else {
             note = String(noteNames[channels[ch].GetNoteIndex()]) +
@@ -162,12 +190,13 @@ static const char *const groupTitles[] = {
     "COUPLING",  //  2
     "A PHYSICS", //  3
     "B PHYSICS", //  4
-    "A NOTES",   //  5
-    "B NOTES",   //  6
-    "A GATE",    //  7
-    "B GATE",    //  8
-    "CV IN",     //  9
-    "SETTINGS",  // 10
+    "LOOP",      //  5
+    "A NOTES",   //  6
+    "B NOTES",   //  7
+    "A GATE",    //  8
+    "B GATE",    //  9
+    "CV IN",     // 10
+    "SETTINGS",  // 11
 };
 
 void HandleDisplay() {

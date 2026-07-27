@@ -628,6 +628,68 @@ void in1RoleSet(Engine *e, int index) {
     REQUEST_DISPLAY_REFRESH();
 }
 
+// ── Loop / phrase mode ──
+// These write worldParams like every other setter here; ApplyParams() turns the
+// beat count into an exact step count and PhysicsWorld does the rewind.
+int loopBeatsMax() { return PARAM_LOOP_BEATS_MAX; }
+int loopBeatsGet(Engine *e) {
+    EngineScope scope(e);
+    return (int)worldParams.loopBeats;
+}
+void loopBeatsSet(Engine *e, int beats) {
+    EngineScope scope(e);
+    worldParams.loopBeats = (unsigned char)constrain(beats, 0, PARAM_LOOP_BEATS_MAX);
+    MarkUnsaved();
+    REQUEST_DISPLAY_REFRESH();
+}
+
+int loopWakeMin() { return PARAM_LOOP_WAKE_MIN; }
+int loopWakeMax() { return PARAM_LOOP_WAKE_MAX; }
+int loopWakeGet(Engine *e) {
+    EngineScope scope(e);
+    return (int)worldParams.loopWake;
+}
+void loopWakeSet(Engine *e, int loops) {
+    EngineScope scope(e);
+    worldParams.loopWake =
+        (unsigned char)constrain(loops, PARAM_LOOP_WAKE_MIN, PARAM_LOOP_WAKE_MAX);
+    MarkUnsaved();
+    REQUEST_DISPLAY_REFRESH();
+}
+
+int loopNapMax() { return PARAM_LOOP_NAP_MAX; }
+int loopNapGet(Engine *e) {
+    EngineScope scope(e);
+    return (int)worldParams.loopNap;
+}
+void loopNapSet(Engine *e, int loops) {
+    EngineScope scope(e);
+    worldParams.loopNap = (unsigned char)constrain(loops, 0, PARAM_LOOP_NAP_MAX);
+    MarkUnsaved();
+    REQUEST_DISPLAY_REFRESH();
+}
+
+int loopShiftMax() { return PARAM_LOOP_SHIFT_MAX; }
+int loopShiftGet(Engine *e, int c) {
+    EngineScope scope(e);
+    return (int)worldParams.loopShift[clampC(c)];
+}
+void loopShiftSet(Engine *e, int c, int loops) {
+    EngineScope scope(e);
+    worldParams.loopShift[clampC(c)] =
+        (unsigned char)constrain(loops, 0, PARAM_LOOP_SHIFT_MAX);
+    MarkUnsaved();
+    REQUEST_DISPLAY_REFRESH();
+}
+
+void loopNewPhrase(Engine *e) {
+    EngineScope scope(e);
+    // Not a parameter change — the settings are untouched, only the captured
+    // phrase — so this deliberately does not mark the patch unsaved.
+    physicsWorld.ArmLoop();
+    REQUEST_DISPLAY_REFRESH();
+}
+
 // ── Physics, per container ──
 int gravityMin() { return (int)PARAM_GRAVITY_MIN; }
 int gravityMax() { return (int)PARAM_GRAVITY_MAX; }

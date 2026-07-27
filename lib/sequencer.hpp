@@ -79,6 +79,11 @@ class GravityChannel {
     int _pendingPegCount = 0;
     float _pendingEnergy = 0.0f;
 
+    // Asleep for this loop (LOOP ▸ NAP). The container keeps bouncing — it has
+    // to, or the phrase would fall out of phase and come back somewhere else —
+    // so this silences the voice rather than stopping the simulation.
+    bool _muted = false;
+
   public:
     Envelope envelope;
 
@@ -229,6 +234,19 @@ class GravityChannel {
 
         int peg = 0;
         float energy = 0.0f;
+
+        // Napping: drain the hit and throw it away. Draining rather than leaving
+        // it queued is the point — a hit left pending would fire the instant the
+        // container woke up, putting a note at the top of every wake loop that
+        // the phrase does not contain.
+        if (_muted) {
+            c.ConsumeHit(peg, energy);
+            _pendingPeg = -1;
+            envelope.Update(nowUs); // keep the envelope's own timing honest
+            _gateValue = 0;
+            return;
+        }
+
         if (c.ConsumeHit(peg, energy)) {
             if (clk.QuantizeEnabled()) {
                 _pendingPeg = peg; // last-wins, see the member comment
@@ -250,6 +268,12 @@ class GravityChannel {
     // Report the IN 1 level, for the envelope's GATE mode.
     void SetGateHigh(bool high) { envelope.SetGateHigh(high); }
 
+    // Silence this voice for a napping loop. CV holds its last note rather than
+    // dropping to zero — a nap is a rest, not a note change, and anything
+    // tracking the pitch output should stay where it was.
+    void SetMuted(bool m) { _muted = m; }
+    bool IsMuted() const { return _muted; }
+
     // ── Outputs (cached by Process(); reading them never advances state) ─────
     uint16_t GetCVOutput() const { return _cvCounts; }
     uint16_t GetGateOutput() const { return _gateValue; }
@@ -257,7 +281,9 @@ class GravityChannel {
     int GetSemitone() const { return _semitone; }
     int GetNoteIndex() const { return _semitone < 0 ? 0 : SemitoneToNoteIndex(_semitone); }
     int GetOctaveOut() const { return _semitone < 0 ? 0 : SemitoneToOctave(_semitone); }
-    bool IsGateActive() const { return envelope.IsActive(); }
+    // Follows the JACK, not the envelope: a napping channel outputs nothing, so
+    // the display must not keep flashing an envelope nobody can hear.
+    bool IsGateActive() const { return !_muted && envelope.IsActive(); }
     bool HasPending() const { return _pendingPeg >= 0; }
 
     bool ConsumeNoteChanged() {

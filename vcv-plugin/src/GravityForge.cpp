@@ -389,6 +389,59 @@ struct GravityForgeWidget : ModuleWidget {
                                                  [=](size_t r) { gfengine::in1RoleSet(e, (int)r); }));
                                          }));
 
+        // ── Loop / phrase mode ────────────────────────────────────────────────
+        // The simulation is deterministic, so a phrase is just a snapshot plus a
+        // step count. This is the one control that lets a patch you like stay.
+        menu->addChild(createSubmenuItem(
+            "Loop",
+            gfengine::loopBeatsGet(e) == 0
+                ? "Off"
+                : string::f("%d beats", gfengine::loopBeatsGet(e)),
+            [=](Menu *menu) {
+                menu->addChild(createSubmenuItem(
+                    "Length",
+                    gfengine::loopBeatsGet(e) == 0
+                        ? "Off"
+                        : string::f("%d beats", gfengine::loopBeatsGet(e)),
+                    [=](Menu *menu) {
+                        addSlider(menu, "Length (0 = off)", " beats", 0.f,
+                                  (float)gfengine::loopBeatsMax(), 0.f,
+                                  [=]() { return gfengine::loopBeatsGet(e); },
+                                  [=](int v) { gfengine::loopBeatsSet(e, v); });
+                    }));
+
+                menu->addChild(createMenuItem("New phrase", "", [=]() { gfengine::loopNewPhrase(e); }));
+
+                menu->addChild(new MenuSeparator);
+                // Nap/wake mutes whole loops; shifting one container against the
+                // other turns that into call-and-response.
+                menu->addChild(createMenuLabel("Nap / wake"));
+
+                menu->addChild(createSubmenuItem("Wake", string::f("%d loops", gfengine::loopWakeGet(e)),
+                                                 [=](Menu *menu) {
+                                                     addSlider(menu, "Wake", " loops", (float)gfengine::loopWakeMin(), (float)gfengine::loopWakeMax(), 1.f, [=]() { return gfengine::loopWakeGet(e); }, [=](int v) { gfengine::loopWakeSet(e, v); });
+                                                 }));
+
+                menu->addChild(createSubmenuItem(
+                    "Nap",
+                    gfengine::loopNapGet(e) == 0 ? "Off"
+                                                 : string::f("%d loops", gfengine::loopNapGet(e)),
+                    [=](Menu *menu) {
+                        addSlider(menu, "Nap (0 = never)", " loops", 0.f,
+                                  (float)gfengine::loopNapMax(), 0.f,
+                                  [=]() { return gfengine::loopNapGet(e); },
+                                  [=](int v) { gfengine::loopNapSet(e, v); });
+                    }));
+
+                for (int c = 0; c < 2; c++) {
+                    const char *label = (c == 0) ? "Shift A" : "Shift B";
+                    menu->addChild(createSubmenuItem(label, string::f("%d loops", gfengine::loopShiftGet(e, c)),
+                                                     [=](Menu *menu) {
+                                                         addSlider(menu, label, " loops", 0.f, (float)gfengine::loopShiftMax(), 0.f, [=]() { return gfengine::loopShiftGet(e, c); }, [=](int v) { gfengine::loopShiftSet(e, c, v); });
+                                                     }));
+                }
+            }));
+
         // ── CV modulation matrix ──────────────────────────────────────────────
         menu->addChild(createSubmenuItem("CV modulation", "", [=](Menu *menu) {
             for (int in = 0; in < 2; in++) {

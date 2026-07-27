@@ -41,7 +41,8 @@ extern uint8_t cvDepth[NUM_CV_INS];           // lib/cvInputs.hpp
 // presets fall back to defaults instead of loading garbage into new fields.
 // 0xE1: first GravityForge layout.
 // 0xE2: per-channel OCTAVE replaced by SPREAD + BIAS.
-#define VALID_MAGIC 0xE2 // 0xFF = erased flash, 0x00 = zeroed RAM
+// 0xE3: loop / phrase mode (beats, wake, nap, per-container shift).
+#define VALID_MAGIC 0xE3 // 0xFF = erased flash, 0x00 = zeroed RAM
 
 struct LoadSaveParams {
     uint8_t valid; // VALID_MAGIC = valid data; any other = use defaults
@@ -72,6 +73,12 @@ struct LoadSaveParams {
     // ── World ──
     float proximity;
     float coupling;
+
+    // ── Loop / phrase mode ──
+    uint8_t loopBeats; // 0 = off
+    uint8_t loopWake;
+    uint8_t loopNap;
+    uint8_t loopShift[2];
 
     // ── Clock ──
     uint16_t bpm;
@@ -140,6 +147,16 @@ LoadSaveParams LoadDefaultParams() {
     p.proximity = 0.0f;
     p.coupling = 0.6f;
 
+    // Loop off by default. The endless evolving stream is what the module IS;
+    // booting into a repeating four-bar phrase would hide the thing it does
+    // that nothing else does. Looping is one page away when you want to keep
+    // something.
+    p.loopBeats = 0;
+    p.loopWake = 1;
+    p.loopNap = 0;
+    p.loopShift[0] = 0;
+    p.loopShift[1] = 0;
+
     p.bpm = 120;
     p.ppqn = Ppqn4;
     p.quantize = QOff;
@@ -202,6 +219,12 @@ LoadSaveParams CollectParams() {
     p.proximity = worldParams.proximity;
     p.coupling = worldParams.coupling;
 
+    p.loopBeats = worldParams.loopBeats;
+    p.loopWake = worldParams.loopWake;
+    p.loopNap = worldParams.loopNap;
+    p.loopShift[0] = worldParams.loopShift[0];
+    p.loopShift[1] = worldParams.loopShift[1];
+
     p.bpm = (uint16_t)clockEngine.GetBpm();
     p.ppqn = (uint8_t)clockEngine.GetPpqn();
     p.quantize = (uint8_t)clockEngine.GetQuantize();
@@ -255,6 +278,15 @@ void UpdateParameters(LoadSaveParams p) {
 
     worldParams.proximity = constrain(p.proximity, 0.0f, 1.0f);
     worldParams.coupling = constrain(p.coupling, 0.0f, 1.0f);
+
+    worldParams.loopBeats = (uint8_t)constrain((int)p.loopBeats, 0, PARAM_LOOP_BEATS_MAX);
+    worldParams.loopWake = (uint8_t)constrain((int)p.loopWake, PARAM_LOOP_WAKE_MIN,
+                                              PARAM_LOOP_WAKE_MAX);
+    worldParams.loopNap = (uint8_t)constrain((int)p.loopNap, 0, PARAM_LOOP_NAP_MAX);
+    for (int i = 0; i < 2; i++) {
+        worldParams.loopShift[i] =
+            (uint8_t)constrain((int)p.loopShift[i], 0, PARAM_LOOP_SHIFT_MAX);
+    }
 
     clockEngine.SetBpm((int)p.bpm);
     clockEngine.SetPpqn(p.ppqn);

@@ -87,6 +87,26 @@ std::string in1RoleName(int index);
 int in1RoleGet(Engine *);
 void in1RoleSet(Engine *, int index);
 
+// ── Loop / phrase mode ───────────────────────────────────────────────────────
+// The simulation is deterministic, so a phrase is a snapshot plus a step count.
+// LOOP BEATS sets the length (0 = off); NAP/WAKE mute whole loops per container
+// and SHIFT offsets that cycle so A and B can trade phrases.
+int loopBeatsMax();
+int loopBeatsGet(Engine *);
+void loopBeatsSet(Engine *, int beats); // 0 = off
+int loopWakeMin();
+int loopWakeMax();
+int loopWakeGet(Engine *);
+void loopWakeSet(Engine *, int loops);
+int loopNapMax();
+int loopNapGet(Engine *);
+void loopNapSet(Engine *, int loops); // 0 = never nap
+int loopShiftMax();
+int loopShiftGet(Engine *, int c);
+void loopShiftSet(Engine *, int c, int loops);
+// Throw the captured phrase away and keep whatever is playing now.
+void loopNewPhrase(Engine *);
+
 // ── Physics, per container ───────────────────────────────────────────────────
 int gravityMin();
 int gravityMax();

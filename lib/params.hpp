@@ -37,6 +37,14 @@
 #define PARAM_FREEHZ_MIN 0.0f
 #define PARAM_FREEHZ_MAX 4.0f
 
+// Loop / phrase mode. The same parameter set and the same ranges as ClockForge's
+// Loops, so the two modules behave identically where they overlap.
+#define PARAM_LOOP_BEATS_MAX 64 // 0 = off
+#define PARAM_LOOP_WAKE_MIN 1
+#define PARAM_LOOP_WAKE_MAX 16
+#define PARAM_LOOP_NAP_MAX 16 // 0 = never nap
+#define PARAM_LOOP_SHIFT_MAX 16
+
 struct ContainerParams {
     float gravity = 220.0f;
     float bounce = 0.72f;
@@ -52,6 +60,15 @@ struct ContainerParams {
 struct WorldParams {
     float proximity = 0.0f; // 0..1
     float coupling = 0.6f;  // 0..1
+
+    // ── Loop / phrase mode ──
+    // The length is in beats because that is the unit the phrase is heard in;
+    // PhysicsWorld converts it to an exact step count and does the rewind on a
+    // step boundary. Nap/wake/shift count whole loops.
+    uint8_t loopBeats = 0; // 0 = off
+    uint8_t loopWake = 1;  // loops a container speaks before napping
+    uint8_t loopNap = 0;   // loops it stays quiet for (0 = never nap)
+    uint8_t loopShift[2] = {0, 0}; // per-container offset into that cycle
 };
 
 // This loop's modulation offsets. Cleared and refilled every pass, so a CV that
@@ -101,4 +118,17 @@ inline void ApplyParams(PhysicsWorld &world, const Clock &clk,
 
     world.SetProximity(constrain(wp.proximity + mod.proximity, 0.0f, 1.0f));
     world.SetCoupling(constrain(wp.coupling + mod.coupling, 0.0f, 1.0f));
+
+    // Loop length in beats → exact 1 ms steps. Recomputed every pass so a tempo
+    // change is picked up, but PhysicsWorld only latches it at a loop boundary
+    // (see SetLoop) — the phrase must end where it started.
+    unsigned long loopSteps = 0;
+    if (wp.loopBeats > 0) {
+        loopSteps = (unsigned long)wp.loopBeats * clk.BeatUs() / PHYS_STEP_US;
+        if (loopSteps < 1) {
+            loopSteps = 1;
+        }
+    }
+    world.SetLoop((int)wp.loopBeats, loopSteps, (int)wp.loopWake, (int)wp.loopNap,
+                  (int)wp.loopShift[0], (int)wp.loopShift[1]);
 }

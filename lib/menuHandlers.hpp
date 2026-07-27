@@ -30,15 +30,19 @@
 // ──────────
 //   0  HOME       — the physics view (custom renderer in menuRender.hpp)
 //   1  CLOCK      — bpm, ppqn, quantize grid, IN 1 role
-//   2  COUPLING   — proximity, couple amount, reset/kick
-//   3  A PHYSICS  — gravity, bounce, grip, spin, reverse, balls
-//   4  B PHYSICS
-//   5  A NOTES    — scale, root, spread, bias, peg count
-//   6  B NOTES
-//   7  A GATE     — mode, attack, decay, level, accent
-//   8  B GATE
-//   9  CV         — IN 2 / IN 3 target + depth
-//  10  SETTINGS   — preset slot, save, load, randomize, screen timeout
+//   2  LOOP       — phrase length in beats, nap/wake, per-container shift
+//   3  COUPLING   — proximity, couple amount, reset/kick
+//   4  A PHYSICS  — gravity, bounce, grip, spin, reverse, balls
+//   5  B PHYSICS
+//   6  A NOTES    — scale, root, spread, bias, peg count
+//   7  B NOTES
+//   8  A GATE     — mode, attack, decay, level, accent
+//   9  B GATE
+//  10  CV         — IN 2 / IN 3 target + depth
+//  11  SETTINGS   — preset slot, save, load, randomize, screen timeout
+//
+// LOOP sits next to CLOCK rather than at the end because it is a clock-domain
+// control — its length is in beats and it follows the tempo.
 //
 // PAGE LENGTH LIMIT: six rows. MD_START_Y=12 with MD_ROW_H=9 puts row 6 at
 // y=57, whose glyphs end on row 63 — exactly the bottom of the screen. A
@@ -108,6 +112,57 @@ static void setIn1Role(int d) {
     // keep turning at a tempo nothing is driving any more.
     clockEngine.SetExternal(in1Role == In1Clock);
     MarkUnsaved();
+}
+
+// ── LOOP ─────────────────────────────────────────────────────
+// The module's one weakness is that a phrase you like walks away. The
+// simulation is deterministic, so LOOP snapshots it and rewinds every N beats;
+// see the loop section of physics.hpp for how the rewind is kept exact.
+static String getLoopBeats() {
+    return worldParams.loopBeats == 0 ? String("OFF") : String(worldParams.loopBeats);
+}
+static void setLoopBeats(int d) {
+    // Accepts the encoder's speed factor rather than a single step: the range
+    // runs to 64 and a long phrase should not need sixty detents.
+    worldParams.loopBeats =
+        (uint8_t)constrain((int)worldParams.loopBeats + d, 0, PARAM_LOOP_BEATS_MAX);
+    MarkUnsaved();
+}
+
+static String getLoopWake() { return String(worldParams.loopWake); }
+static void setLoopWake(int d) {
+    worldParams.loopWake = (uint8_t)constrain((int)worldParams.loopWake + Dir(d),
+                                              PARAM_LOOP_WAKE_MIN, PARAM_LOOP_WAKE_MAX);
+    MarkUnsaved();
+}
+
+static String getLoopNap() {
+    return worldParams.loopNap == 0 ? String("OFF") : String(worldParams.loopNap);
+}
+static void setLoopNap(int d) {
+    worldParams.loopNap =
+        (uint8_t)constrain((int)worldParams.loopNap + Dir(d), 0, PARAM_LOOP_NAP_MAX);
+    MarkUnsaved();
+}
+
+// Offsetting one container's nap cycle against the other is what turns nap/wake
+// from a tremolo into call-and-response: wake 1 / nap 1 with B shifted by 1 has
+// the containers trading phrases.
+template <int C>
+static String getLoopShift() { return String(worldParams.loopShift[C]); }
+template <int C>
+static void setLoopShift(int d) {
+    worldParams.loopShift[C] =
+        (uint8_t)constrain((int)worldParams.loopShift[C] + Dir(d), 0, PARAM_LOOP_SHIFT_MAX);
+    MarkUnsaved();
+}
+
+// Throw the captured phrase away and keep whatever the balls are doing now.
+// The loop is a lottery — this is the re-roll, and it is how the page is
+// actually used once the length is set.
+static void actNewPhrase() {
+    physicsWorld.ArmLoop();
+    ShowTemporaryMessage("PHRASE", 400);
 }
 
 // ── COUPLING ─────────────────────────────────────────────────
@@ -376,46 +431,54 @@ const MenuItem MENU_ITEMS[] = {
     {"DIR", getReverse<1>, nullptr, 76, 0, 4, ROW_SINGLE, MENU_TOGGLE, nullptr, actReverse<1>},
     {"BALLS", getBalls<1>, nullptr, 76, 0, 4, ROW_SINGLE, MENU_EDIT, setBalls<1>, nullptr},
 
-    // ── 5 A NOTES ──
-    {"SCALE", getScaleName<0>, nullptr, 76, 0, 5, ROW_SINGLE, MENU_EDIT, setScale<0>, nullptr},
-    {"ROOT", getRootName<0>, nullptr, 76, 0, 5, ROW_SINGLE, MENU_EDIT, setRoot<0>, nullptr},
-    {"SPREAD", getSpread<0>, nullptr, 76, 0, 5, ROW_SINGLE, MENU_EDIT, setSpread<0>, nullptr},
-    {"BIAS", getBias<0>, nullptr, 76, 0, 5, ROW_SINGLE, MENU_EDIT, setBias<0>, nullptr},
-    {"PEGS", getPegs<0>, nullptr, 76, 0, 5, ROW_SINGLE, MENU_EDIT, setPegs<0>, nullptr},
+    // ── 5 LOOP ── (exactly six rows — the page limit)
+    {"BEATS", getLoopBeats, nullptr, 82, 0, 5, ROW_SINGLE, MENU_EDIT, setLoopBeats, nullptr},
+    {"WAKE", getLoopWake, nullptr, 82, 0, 5, ROW_SINGLE, MENU_EDIT, setLoopWake, nullptr},
+    {"NAP", getLoopNap, nullptr, 82, 0, 5, ROW_SINGLE, MENU_EDIT, setLoopNap, nullptr},
+    {"A SHIFT", getLoopShift<0>, nullptr, 82, 0, 5, ROW_SINGLE, MENU_EDIT, setLoopShift<0>, nullptr},
+    {"B SHIFT", getLoopShift<1>, nullptr, 82, 0, 5, ROW_SINGLE, MENU_EDIT, setLoopShift<1>, nullptr},
+    {"NEW PHRASE", nullptr, nullptr, 0, 0, 5, ROW_ACTION, MENU_ACTION, nullptr, actNewPhrase},
 
-    // ── 6 B NOTES ──
-    {"SCALE", getScaleName<1>, nullptr, 76, 0, 6, ROW_SINGLE, MENU_EDIT, setScale<1>, nullptr},
-    {"ROOT", getRootName<1>, nullptr, 76, 0, 6, ROW_SINGLE, MENU_EDIT, setRoot<1>, nullptr},
-    {"SPREAD", getSpread<1>, nullptr, 76, 0, 6, ROW_SINGLE, MENU_EDIT, setSpread<1>, nullptr},
-    {"BIAS", getBias<1>, nullptr, 76, 0, 6, ROW_SINGLE, MENU_EDIT, setBias<1>, nullptr},
-    {"PEGS", getPegs<1>, nullptr, 76, 0, 6, ROW_SINGLE, MENU_EDIT, setPegs<1>, nullptr},
+    // ── 6 A NOTES ──
+    {"SCALE", getScaleName<0>, nullptr, 76, 0, 6, ROW_SINGLE, MENU_EDIT, setScale<0>, nullptr},
+    {"ROOT", getRootName<0>, nullptr, 76, 0, 6, ROW_SINGLE, MENU_EDIT, setRoot<0>, nullptr},
+    {"SPREAD", getSpread<0>, nullptr, 76, 0, 6, ROW_SINGLE, MENU_EDIT, setSpread<0>, nullptr},
+    {"BIAS", getBias<0>, nullptr, 76, 0, 6, ROW_SINGLE, MENU_EDIT, setBias<0>, nullptr},
+    {"PEGS", getPegs<0>, nullptr, 76, 0, 6, ROW_SINGLE, MENU_EDIT, setPegs<0>, nullptr},
 
-    // ── 7 A GATE ──
-    {"MODE", getGateMode<0>, nullptr, 76, 0, 7, ROW_SINGLE, MENU_EDIT, setGateMode<0>, nullptr},
-    {"ATTACK", getAttack<0>, nullptr, 76, 0, 7, ROW_SINGLE, MENU_EDIT, setAttack<0>, nullptr},
-    {"DECAY", getDecay<0>, nullptr, 76, 0, 7, ROW_SINGLE, MENU_EDIT, setDecay<0>, nullptr},
-    {"LEVEL", getLevel<0>, nullptr, 76, 0, 7, ROW_SINGLE, MENU_EDIT, setLevel<0>, nullptr},
-    {"ACCENT", getAccent<0>, nullptr, 76, 0, 7, ROW_SINGLE, MENU_EDIT, setAccent<0>, nullptr},
+    // ── 7 B NOTES ──
+    {"SCALE", getScaleName<1>, nullptr, 76, 0, 7, ROW_SINGLE, MENU_EDIT, setScale<1>, nullptr},
+    {"ROOT", getRootName<1>, nullptr, 76, 0, 7, ROW_SINGLE, MENU_EDIT, setRoot<1>, nullptr},
+    {"SPREAD", getSpread<1>, nullptr, 76, 0, 7, ROW_SINGLE, MENU_EDIT, setSpread<1>, nullptr},
+    {"BIAS", getBias<1>, nullptr, 76, 0, 7, ROW_SINGLE, MENU_EDIT, setBias<1>, nullptr},
+    {"PEGS", getPegs<1>, nullptr, 76, 0, 7, ROW_SINGLE, MENU_EDIT, setPegs<1>, nullptr},
 
-    // ── 8 B GATE ──
-    {"MODE", getGateMode<1>, nullptr, 76, 0, 8, ROW_SINGLE, MENU_EDIT, setGateMode<1>, nullptr},
-    {"ATTACK", getAttack<1>, nullptr, 76, 0, 8, ROW_SINGLE, MENU_EDIT, setAttack<1>, nullptr},
-    {"DECAY", getDecay<1>, nullptr, 76, 0, 8, ROW_SINGLE, MENU_EDIT, setDecay<1>, nullptr},
-    {"LEVEL", getLevel<1>, nullptr, 76, 0, 8, ROW_SINGLE, MENU_EDIT, setLevel<1>, nullptr},
-    {"ACCENT", getAccent<1>, nullptr, 76, 0, 8, ROW_SINGLE, MENU_EDIT, setAccent<1>, nullptr},
+    // ── 8 A GATE ──
+    {"MODE", getGateMode<0>, nullptr, 76, 0, 8, ROW_SINGLE, MENU_EDIT, setGateMode<0>, nullptr},
+    {"ATTACK", getAttack<0>, nullptr, 76, 0, 8, ROW_SINGLE, MENU_EDIT, setAttack<0>, nullptr},
+    {"DECAY", getDecay<0>, nullptr, 76, 0, 8, ROW_SINGLE, MENU_EDIT, setDecay<0>, nullptr},
+    {"LEVEL", getLevel<0>, nullptr, 76, 0, 8, ROW_SINGLE, MENU_EDIT, setLevel<0>, nullptr},
+    {"ACCENT", getAccent<0>, nullptr, 76, 0, 8, ROW_SINGLE, MENU_EDIT, setAccent<0>, nullptr},
 
-    // ── 9 CV ──
-    {"IN2 DEST", getCvTarget<0>, nullptr, 72, 0, 9, ROW_SINGLE, MENU_EDIT, setCvTarget<0>, nullptr},
-    {"IN2 DEPTH", getCvDepth<0>, nullptr, 82, 0, 9, ROW_SINGLE, MENU_EDIT, setCvDepth<0>, nullptr},
-    {"IN3 DEST", getCvTarget<1>, nullptr, 72, 0, 9, ROW_SINGLE, MENU_EDIT, setCvTarget<1>, nullptr},
-    {"IN3 DEPTH", getCvDepth<1>, nullptr, 82, 0, 9, ROW_SINGLE, MENU_EDIT, setCvDepth<1>, nullptr},
+    // ── 9 B GATE ──
+    {"MODE", getGateMode<1>, nullptr, 76, 0, 9, ROW_SINGLE, MENU_EDIT, setGateMode<1>, nullptr},
+    {"ATTACK", getAttack<1>, nullptr, 76, 0, 9, ROW_SINGLE, MENU_EDIT, setAttack<1>, nullptr},
+    {"DECAY", getDecay<1>, nullptr, 76, 0, 9, ROW_SINGLE, MENU_EDIT, setDecay<1>, nullptr},
+    {"LEVEL", getLevel<1>, nullptr, 76, 0, 9, ROW_SINGLE, MENU_EDIT, setLevel<1>, nullptr},
+    {"ACCENT", getAccent<1>, nullptr, 76, 0, 9, ROW_SINGLE, MENU_EDIT, setAccent<1>, nullptr},
 
-    // ── 10 SETTINGS ──
-    {"SLOT", getSlot, nullptr, 82, 0, 10, ROW_SINGLE, MENU_EDIT, setSlot, nullptr},
-    {"SAVE", nullptr, nullptr, 0, 0, 10, ROW_ACTION, MENU_ACTION, nullptr, actSave},
-    {"LOAD", nullptr, nullptr, 0, 0, 10, ROW_ACTION, MENU_ACTION, nullptr, actLoad},
-    {"RANDOM", nullptr, nullptr, 0, 0, 10, ROW_ACTION, MENU_ACTION, nullptr, actRandom},
-    {"TIMEOUT", getTimeout, nullptr, 82, 0, 10, ROW_SINGLE, MENU_EDIT, setTimeout, nullptr},
+    // ── 10 CV ──
+    {"IN2 DEST", getCvTarget<0>, nullptr, 72, 0, 10, ROW_SINGLE, MENU_EDIT, setCvTarget<0>, nullptr},
+    {"IN2 DEPTH", getCvDepth<0>, nullptr, 82, 0, 10, ROW_SINGLE, MENU_EDIT, setCvDepth<0>, nullptr},
+    {"IN3 DEST", getCvTarget<1>, nullptr, 72, 0, 10, ROW_SINGLE, MENU_EDIT, setCvTarget<1>, nullptr},
+    {"IN3 DEPTH", getCvDepth<1>, nullptr, 82, 0, 10, ROW_SINGLE, MENU_EDIT, setCvDepth<1>, nullptr},
+
+    // ── 11 SETTINGS ──
+    {"SLOT", getSlot, nullptr, 82, 0, 11, ROW_SINGLE, MENU_EDIT, setSlot, nullptr},
+    {"SAVE", nullptr, nullptr, 0, 0, 11, ROW_ACTION, MENU_ACTION, nullptr, actSave},
+    {"LOAD", nullptr, nullptr, 0, 0, 11, ROW_ACTION, MENU_ACTION, nullptr, actLoad},
+    {"RANDOM", nullptr, nullptr, 0, 0, 11, ROW_ACTION, MENU_ACTION, nullptr, actRandom},
+    {"TIMEOUT", getTimeout, nullptr, 82, 0, 11, ROW_SINGLE, MENU_EDIT, setTimeout, nullptr},
 };
 
 const int MENU_ITEM_COUNT = (int)(sizeof(MENU_ITEMS) / sizeof(MENU_ITEMS[0]));

@@ -301,6 +301,52 @@ containers stay musically related to the patch: **SPIN** selects beats per
 revolution (`1/2/4/8/16`, plus reverse), and there is a FREE setting for when you
 want it detached.
 
+### Loop mode — keeping a phrase
+
+The module's one real weakness is that a passage you like is gone before you can
+reach the encoder. The fix falls out of determinism: the same state, stepped the
+same number of times, produces the same notes. So a phrase is nothing more than a
+snapshot plus a step count. Capture the balls, the rotation and the `PhysRandom`
+state; run N beats' worth of steps; put it all back.
+
+Three decisions make it hold together, and each of them is the difference
+between a phrase that repeats and one that only nearly repeats:
+
+**The rewind lands on an exact step, not on elapsed time.** `LoopTick()` runs
+inside `PhysicsWorld::Advance()`'s stepping loop and counts steps. Scheduling it
+from wall time would put the boundary a step early or late depending on how the
+caller was interrupted, and one step of divergence in a chaotic system is a
+different phrase within a few repeats.
+
+**The simulation runs on its own clock.** `_simUs` advances exactly
+`PHYS_STEP_US` per step and is what the peg refractory windows are measured
+against. Previously the wall time was passed down, which meant identical ball
+states could clear a 12 ms window on one pass and miss it on the next depending
+on how many catch-up steps a call happened to batch. Free-running that is
+invisible; looping it is fatal.
+
+**Hit timestamps travel as ages, not absolute times.** The refractory guards ask
+"how long since this ball last spoke". A restored absolute timestamp would sit
+further into the past on every repeat, so the first bounce of each loop would
+eventually clear a window it had not cleared the first time and the phrase would
+gain a note it never contained.
+
+What is deliberately _not_ snapshotted is the parameter set — gravity, spin, the
+peg mask, proximity, the scale. Restoring those would make the loop fight the
+menu and freeze CV modulation, when the reason to lock the motion is so you can
+keep playing everything else over the top of it.
+
+**NAP/WAKE** then mutes whole loops per container, with **SHIFT** offsetting each
+container's place in that cycle — wake 1 / nap 1 with B shifted by one is
+call-and-response for the cost of one menu row. The physics keeps running through
+a nap and only the voice is silenced (`GravityChannel::SetMuted`), so a container
+returns exactly where it would have been rather than restarting.
+
+A change to **BEATS** re-arms and captures a new phrase; a change of _tempo_ does
+not, or an external clock wandering by a BPM would re-arm every pass and the loop
+would never repeat at all. `Reset()` re-arms too, which is what gives Randomize a
+freshly captured phrase without any code of its own.
+
 ---
 
 ## 7. Pitch
@@ -413,12 +459,17 @@ stalls the 1 kHz physics on Core 0.
 | 2     | COUPLING  | proximity, coupling amount, reset/kick actions     |
 | 3     | A PHYSICS | gravity, bounce, balls, spin ratio                 |
 | 4     | B PHYSICS | same, container B                                  |
-| 5     | A NOTES   | scale, root, octave, peg count                     |
-| 6     | B NOTES   | same, container B                                  |
-| 7     | A GATE    | mode, attack, decay, level                         |
-| 8     | B GATE    | same, container B                                  |
-| 9     | CV        | IN2 target, IN3 target, depths                     |
-| 10    | SETTINGS  | preset save/load, screen timeout, calibration info |
+| 5     | LOOP      | phrase length, nap/wake, shift, new phrase         |
+| 6     | A NOTES   | scale, root, octave, peg count                     |
+| 7     | B NOTES   | same, container B                                  |
+| 8     | A GATE    | mode, attack, decay, level                         |
+| 9     | B GATE    | same, container B                                  |
+| 10    | CV        | IN2 target, IN3 target, depths                     |
+| 11    | SETTINGS  | preset save/load, screen timeout, calibration info |
+
+LOOP sits after the two PHYSICS pages rather than next to CLOCK: its shift and
+nap/wake settings are read per container, so it belongs with the rest of the
+per-container editing rather than in the clock-domain block at the top.
 
 Every page except HOME is a plain list handled by the existing generic
 `MD_RenderGroup()` — no new rendering code per page.
