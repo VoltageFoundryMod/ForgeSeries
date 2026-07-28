@@ -1,0 +1,76 @@
+// engine_state.def — THE registry of per-instance firmware state.
+//
+// Every mutable file-scope global the firmware (../lib + fw_engine.cpp) carries
+// is listed here exactly once.  The list is expanded three times by
+// fw_engine.cpp — to declare the EngineState mirror struct, to swap globals→state,
+// and to swap state→globals — so adding a firmware global means adding ONE line
+// here, not editing three hand-synced code sites.
+//
+// Macros (define before #include-ing this file; all are #undef'd by the includer):
+//   CF_SCALAR(type, name)        a scalar global (type is the *non-volatile*
+//                                storage type; volatile globals list their base
+//                                type, e.g. `unsigned long tickCounter`).
+//   CF_ARRAY(type, name, count)  a C array global.
+//   CF_OBJECT(type, name)        a default-constructible, swappable object.
+//
+// NOT listed here (handled explicitly / deliberately shared):
+//   • outputs[NUM_OUTPUTS] — Output has no default ctor, so it is declared with
+//     an initializer and swapped by hand in fw_engine.cpp.
+//   • displayMgr / display / metrics — scratch or diagnostic; re-rendered or
+//     reset each entry and safe to share under the entry-point lock (see notes
+//     in fw_engine.cpp).  Promote to a CF_OBJECT here if that ever changes.
+//   • const description arrays, MENU_ITEMS, scales — immutable, never per-instance.
+
+// ── Clock engine (../lib/clockEngine.hpp) ────────────────────────────────────
+CF_SCALAR(unsigned int,  BPM)
+CF_SCALAR(unsigned int,  lastInternalBPM)
+CF_SCALAR(unsigned long, tickCounter)           // volatile global
+CF_SCALAR(unsigned long, clockInterval)         // volatile global
+CF_SCALAR(unsigned long, lastClockInterruptTime)// volatile global
+CF_SCALAR(bool,          usingExternalClock)    // volatile global
+CF_SCALAR(unsigned long, externalTickCounter)   // volatile global
+CF_SCALAR(bool,          extClockBlinkState)
+CF_SCALAR(int,           pendingExtClockPulses)
+CF_SCALAR(int,           externalDividerIndex)
+CF_SCALAR(bool,          bpmNeedsUpdate)
+CF_SCALAR(unsigned long, _tapLastTime)
+CF_ARRAY (unsigned long, _tapTimes, 3)
+CF_SCALAR(int,           _tapIndex)
+CF_ARRAY (unsigned long, _extInterval, 3)
+CF_SCALAR(int,           _extIntervalIndex)
+
+// ── CV inputs (../lib/cvInputs.hpp) ──────────────────────────────────────────
+CF_ARRAY (CVTarget, pendingCVInputTarget, NUM_CV_INS)
+CF_ARRAY (CVTarget, CVInputTarget,        NUM_CV_INS)
+CF_ARRAY (int,      CVInputAttenuation,   NUM_CV_INS)
+CF_ARRAY (int,      CVInputOffset,        NUM_CV_INS)
+CF_ARRAY (float,    channelADC,           NUM_CV_INS)
+CF_ARRAY (float,    oldChannelADC,        NUM_CV_INS)
+CF_ARRAY (float,    lastDispatchedADC,    NUM_CV_INS)
+CF_SCALAR(bool,     lastResetState)                    // volatile global
+
+// ── Presets (../lib/presetManager.hpp) ───────────────────────────────────────
+CF_SCALAR(int, saveSlot)
+
+// ── Menu / transport (fw_engine.cpp file-scope) ──────────────────────────────
+CF_SCALAR(bool, masterState)
+CF_SCALAR(int,  menuItem)
+CF_SCALAR(bool, switchState)
+CF_SCALAR(bool, oldSwitchState)
+CF_SCALAR(int,  menuMode)
+CF_SCALAR(bool, displayRefresh)
+CF_SCALAR(bool, unsavedChanges)
+CF_SCALAR(int,  euclideanOutputSelect)
+CF_SCALAR(int,  quantizerOutputSelect)
+CF_SCALAR(int,  envelopeOutputSelect)
+CF_SCALAR(int,  loopOutputSelect)
+CF_SCALAR(int,  menuScreenTimeout)
+
+// ── Objects (default-constructible, swappable) ───────────────────────────────
+CF_OBJECT(CalibrationData, cal)
+CF_OBJECT(EEPROMClass,     EEPROM)   // per-instance presets/calibration blob
+
+// ── Engine time + on-screen message overlay (fw_engine.cpp file-scope) ───────
+CF_SCALAR(unsigned long, g_engineMicros)
+CF_ARRAY (char,          _tempMsg, 32)
+CF_SCALAR(unsigned long, _tempMsgUntil)

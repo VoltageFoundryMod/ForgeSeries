@@ -1,0 +1,38 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "VCV Plugin: Build and Install",
+      "type": "shell",
+      "command": "make",
+      "args": ["install"],
+      "options": {
+        "cwd": "${workspaceFolder}/vcv-plugin",
+        "env": {
+          "PATH": "/c/msys64/usr/bin:/c/msys64/mingw64/bin:${env:PATH}",
+          "MSYSTEM": "MINGW64"
+        }
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "VCV Plugin: Clean",
+      "type": "shell",
+      "command": "make",
+      "args": ["clean"],
+      "options": {
+        "cwd": "${workspaceFolder}/vcv-plugin",
+        "env": {
+          "PATH": "/c/msys64/usr/bin:/c/msys64/mingw64/bin:${env:PATH}",
+          "MSYSTEM": "MINGW64"
+        }
+      },
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}
