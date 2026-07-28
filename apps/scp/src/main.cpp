@@ -28,6 +28,15 @@
 // OLED display (Wire / I2C1, owned by Core 1 at runtime)
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
+// Board calibration, as used by core/boardIO.hpp's DAC write path.
+//
+// ForgeView has no calibration wizard of its own — it never had one, and once
+// the unified firmware lands, calibration belongs to the shell and is shared by
+// every app. Until then this stays value-initialised: magic 0 and valid=false
+// make the output correction fall through to identity, which is exactly what
+// the scope did before it started sharing boardIO.
+CalibrationData cal = {};
+
 // Rotary encoder (polled on Core 0)
 Encoder encoder(ENC_PIN_1, ENC_PIN_2);
 long oldPosition = 0;

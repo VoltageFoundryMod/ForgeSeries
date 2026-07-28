@@ -1,9 +1,9 @@
 #pragma once
 
-// DAC resolution constants — shared across all platforms
+// DAC/ADC resolution constants — shared across all platforms
 #define DAC_RESOLUTION (12)
-#define MAXDAC 4095 // This is the maximum value for a 12-bit DAC, which is 2^12 - 1 = 4095.
-#define MAXADC 4095 // This is the maximum value for a 12-bit ADC, which is also 4095 which RP2040 supports.
+#define MAXDAC 4095 // Maximum value for a 12-bit DAC: 2^12 - 1
+#define MAXADC 4095 // Maximum value for the RP2040's 12-bit ADC
 // MCP4728 I2C address (all 4 outputs go through this DAC)
 #define MCP4728_ADDR 0x60
 
@@ -24,23 +24,33 @@ static uint16_t _dacShadow[4] = {0, 0, 0, 0};
 // Physical channel mapping: board wiring has DACB and DACC swapped relative
 // to the expected output order (Out1=A, Out2=C, Out3=B, Out4=D).
 static const MCP4728_channel_t _chanMap[4] = {
-    MCP4728_CHANNEL_A, // Output 1 → DACA → Jack 1
-    MCP4728_CHANNEL_C, // Output 2 → DACC → Jack 2  (B/C swapped in hardware)
-    MCP4728_CHANNEL_B, // Output 3 → DACB → Jack 3  (B/C swapped in hardware)
-    MCP4728_CHANNEL_D, // Output 4 → DACD → Jack 4
+    MCP4728_CHANNEL_A, // Output 1 → DACA → Jack 1 (CV 1)
+    MCP4728_CHANNEL_C, // Output 2 → DACC → Jack 2 (CV 2)   (B/C swapped in HW)
+    MCP4728_CHANNEL_B, // Output 3 → DACB → Jack 3 (GATE 1) (B/C swapped in HW)
+    MCP4728_CHANNEL_D, // Output 4 → DACD → Jack 4 (GATE 2)
 };
 
 void InitIO() {
     analogReadResolution(12); // RP2040 supports 12-bit ADC
 
-    pinMode(CLK_IN_PIN, INPUT_PULLDOWN); // CLK in — pull low so floating input
-                                         // doesn't trigger spurious interrupts
+    pinMode(CLK_IN_PIN, INPUT_PULLDOWN); // TRIG in — pull low so a floating
+                                         // input doesn't fire spurious triggers
     for (int i = 0; i < NUM_CV_INS; i++) {
         pinMode(CV_IN_PINS[i], INPUT);
     }
     pinMode(ENCODER_SW, INPUT_PULLUP);
     // No GPIO gate output pins — all outputs via MCP4728
 }
+
+// Display bus speed. The SSD1306 is rated for 400 kHz, which is what most
+// modules use, but the panel tolerates considerably more and ForgeView drives it
+// at 1 MHz to hit its scope refresh rate. Apps override this by defining it
+// before including this header (see apps/scp/lib/pinouts.hpp).
+//
+// This applies to Wire ONLY. Do not raise Wire1 to match — see InitWire().
+#ifndef FORGE_DISPLAY_I2C_HZ
+#define FORGE_DISPLAY_I2C_HZ 400000
+#endif
 
 // Initialize Wire (display) and Wire1 (DAC) I2C buses.
 // Called from setup() BEFORE display.begin() and InitDAC().
@@ -51,7 +61,7 @@ void InitWire() {
     Wire.setSDA(I2C_SDA_PIN);
     Wire.setSCL(I2C_SCL_PIN);
     Wire.begin();
-    Wire.setClock(400000); // SSD1306 rated 400kHz — keep conservative
+    Wire.setClock(FORGE_DISPLAY_I2C_HZ);
 
     Wire1.setSDA(I2C_DAC_SDA_PIN);
     Wire1.setSCL(I2C_DAC_SCL_PIN);
