@@ -35,11 +35,15 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <EEPROM.h>
+#include <LittleFS.h>
 #include <Wire.h>
 
 #include "IApp.hpp"
 #include "boardIO.hpp"
 #include "boardPinouts.hpp"
+// Global scope: settings.hpp reaches this from inside the namespace, and it
+// pulls in <LittleFS.h> and the standard library.
+#include "fsStore.hpp"
 
 #include "scp_app.hpp"
 

@@ -16,6 +16,10 @@
 #include <EEPROM.h>
 #include <cstring>
 
+#ifdef FORGE_USE_FS
+#include "fsStore.hpp"
+#endif
+
 #define SETTINGS_SAVE_DELAY_MS 5000
 #define SETTINGS_MAGIC 0x46565332u // "FVS2" — bump when the blob layout changes
 
@@ -34,6 +38,39 @@ struct ScopeSettingsBlob {
     int8_t specChan;
     uint8_t checksum; // XOR of every byte before this field
 };
+
+// ── Storage backend ──────────────────────────────────────────────────────────
+// -DFORGE_USE_FS routes to core/fsStore.hpp, which the unified firmware uses:
+// four apps cannot share the 4096-byte emulated EEPROM sector. Standalone
+// ForgeView keeps the EEPROM path, where it owns the sector outright.
+//
+// The blob keeps its own magic and checksum either way. fsStore only guarantees
+// a blob came back intact and the right size; the checksum is what says this
+// firmware's layout wrote it.
+#ifdef FORGE_USE_FS
+
+#define SCOPE_SETTINGS_PATH "/scp.set"
+static inline void _SettingsBackendBegin() {} // shell mounts the filesystem
+static inline bool _SettingsBackendRead(ScopeSettingsBlob &b) {
+    return forge::fs::Read(SCOPE_SETTINGS_PATH, b);
+}
+static inline void _SettingsBackendWrite(const ScopeSettingsBlob &b) {
+    forge::fs::Write(SCOPE_SETTINGS_PATH, b);
+}
+
+#else
+
+static inline void _SettingsBackendBegin() { EEPROM.begin(256); }
+static inline bool _SettingsBackendRead(ScopeSettingsBlob &b) {
+    EEPROM.get(0, b);
+    return true; // validity is the caller's magic/checksum check
+}
+static inline void _SettingsBackendWrite(const ScopeSettingsBlob &b) {
+    EEPROM.put(0, b);
+    EEPROM.commit(); // sector erase+write; idles Core 1 while flash is busy
+}
+
+#endif
 
 static ScopeSettingsBlob _settingsSaved;   // last blob committed to flash
 static ScopeSettingsBlob _settingsPending; // last blob observed in RAM
@@ -86,10 +123,10 @@ static void _SettingsApply(const ScopeSettingsBlob &b) {
 
 // Load saved settings (if any) into the scope. Call once after ScopeInit().
 void ScopeSettingsInit() {
-    EEPROM.begin(256);
-    ScopeSettingsBlob b;
-    EEPROM.get(0, b);
-    if (b.magic == SETTINGS_MAGIC && b.checksum == _SettingsChecksum(b))
+    _SettingsBackendBegin();
+    ScopeSettingsBlob b{};
+    if (_SettingsBackendRead(b) && b.magic == SETTINGS_MAGIC &&
+        b.checksum == _SettingsChecksum(b))
         _SettingsApply(b);
     // else: first boot / layout change — keep ScopeInit() defaults.
     _SettingsCapture(_settingsSaved); // post-apply state counts as "saved"
@@ -114,8 +151,7 @@ void ScopeSettingsPoll() {
     }
     if (memcmp(&_settingsPending, &_settingsSaved, sizeof(cur)) != 0 &&
         (now - _settingsChangedMs) >= SETTINGS_SAVE_DELAY_MS) {
-        EEPROM.put(0, _settingsPending);
-        EEPROM.commit(); // sector erase+write; idles Core 1 while flash is busy
+        _SettingsBackendWrite(_settingsPending);
         _settingsSaved = _settingsPending;
         Serial.println("Settings saved.");
     }
