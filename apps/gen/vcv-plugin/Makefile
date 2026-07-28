@@ -1,5 +1,6 @@
-# If RACK_DIR is not defined when calling the Makefile, default to two directories above
-RACK_DIR ?= ../../Rack-SDK
+# If RACK_DIR is not defined when calling the Makefile, default to a Rack-SDK
+# checkout sitting alongside the ForgeSeries monorepo.
+RACK_DIR ?= ../../../../Rack-SDK
 
 # FLAGS will be passed to both the C and C++ compiler
 FLAGS +=
@@ -13,7 +14,7 @@ LDFLAGS +=
 # The shared ForgeSeries VCV layer (shim + forgevcv/ headers + forgevcv.mk).
 # Override FORGEVCV to point at a different checkout/submodule path. The fragment
 # adds C++17, the forgevcv include path, and exports FORGEVCV_SHIM.
-FORGEVCV ?= ../../ForgeSeries-VCVLib
+FORGEVCV ?= ../../../vcvlib
 
 # Check if the ForgeSeries VCV layer is present, and if not, print a warning and exit.
 ifeq ($(wildcard $(FORGEVCV)/forgevcv.mk),)
