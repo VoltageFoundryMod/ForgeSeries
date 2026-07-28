@@ -59,6 +59,67 @@ In your plugin:
    their `module` at your module instance. Add your own ports, panel, keyboard
    shortcuts, and context menu.
 
+## Display rendering
+
+`FramebufferDisplay` rasterizes the 128x64 framebuffer on the CPU, straight to
+whatever resolution the screen currently occupies, then blits it 1:1 onto
+device-pixel-snapped coordinates so the GPU never resamples it.
+
+This matters because a ForgeSeries screen cutout is ~35 mm ≈ 103 px at 100 %
+zoom, i.e. the panel *downscales* the framebuffer. Sampling that with
+`NVG_IMAGE_NEAREST` drops 25 of the 128 columns and 13 of the 64 rows outright,
+so 1 px font stems vanish; linear sampling smears them instead. Integrating the
+exact area each output texel covers keeps a stem that falls between two texels
+alive as two dimmer ones, which is why hardware looks sharper than a naive blit.
+
+Above 3 device pixels per OLED pixel it switches to an integer supersample, so
+every pixel stays exactly the same size when you zoom in.
+
+Three corrections keep the downscaled result as bright and tight as hardware,
+measured on a glyph-like test pattern at 103x51 (0.80 texels per OLED pixel):
+
+| | total light | 1 px stem | solid fill | mid-tone texels |
+| - | - | - | - | - |
+| plain area resample | — | 209 | 210 | 144 |
+| + gap fade | +41.6 % | 246 | **255** | 113 |
+| + isolated-pixel gain | +56.0 % | **255** | **255** | 81 |
+| + `sharpen` | +58.1 % | **255** | **255** | **4** |
+
+- **Gap fade** — a dark inter-pixel grid only reads as a grid once there are
+  enough texels to draw one. Below that it is invisible and just costs
+  `(1-gap)²` of the light, so it fades in over 4..8 texels per pixel.
+- **Gain** — when downscaling, an isolated lit pixel can only ever cover `s` of
+  a texel, so without a `1/s` gain a 1 px stem could never reach the full
+  brightness it has on hardware.
+- **`sharpen`** — pulls partial coverage away from the middle, so an edge that
+  lands well inside a texel goes fully on or off instead of grey. Mid-tone
+  texels are what read as blur, and block-heavy UIs are the worst case for
+  them: on a keyboard/grid screen this takes them from 647 to 50.
+
+`sharpen` is safe to push hard because the gain pins an evenly-split 1 px stem
+to coverage exactly 0.5 — the curve's pivot — so it is invariant under any
+amount of sharpening. Measured over every column and row at ten zoom levels, the
+dimmest a stem ever gets is 189/255, and it is a full 255 at every zoom at or
+above 1:1. That is the difference from the nearest-neighbour blit this replaced:
+comparably hard edges, but nothing can ever vanish.
+
+Tweakable per instance (set `dirty = true` if you change one after the first
+frame):
+
+| Field | Default | Effect |
+| ----- | ------- | ------ |
+| `litColor` / `bgColor` | OLED blue / near-black | pixel and glass colours |
+| `pixelGap` | `0.16` | dark fraction of each cell — the inter-pixel grid a real OLED has, faded in as it becomes resolvable. `0` fills cells solid |
+| `sharpen` | `4` | >1 snaps edges toward fully on/off; `1` is plain area coverage. Higher approaches nearest-neighbour hardness without its dropped pixels. Backed off automatically as `pixelGap` fades in, since the grid ring is a soft edge worth keeping |
+| `gamma` | `2.2` | coverage → alpha encode. OLED light adds linearly but NanoVG blends in sRGB, so without this partial coverage comes out far too dark. `1` disables |
+| `bloom` | `0` | 0..1 light spill into the 4 neighbours; a little sells the emissive look at the cost of some sharpness |
+| `glassSheen` | `false` | diagonal reflection over the glass; lifts the black floor, so it costs screen contrast |
+
+The lit pixels are drawn on Rack's light layer, so the screen keeps glowing when
+the room is dimmed; the glass and sheen stay on the panel layer and darken with
+it. The texture is rebuilt only when the framebuffer actually changes, so a
+static screen costs one `nvgFill` per frame.
+
 ## Custom fonts
 
 The GFX shim implements the full Adafruit custom-font API (`setFont`,
