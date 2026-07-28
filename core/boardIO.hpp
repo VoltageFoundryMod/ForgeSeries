@@ -1,7 +1,7 @@
 #pragma once
 
 // Converter resolutions (DAC_RESOLUTION / MAXDAC / MAXADC) are board facts and
-// live in boardPinouts.hpp, pulled in via pinouts.hpp below, so code that only
+// live in boardPinouts.hpp, included below, so code that only
 // needs to scale a reading does not have to include the whole DAC driver.
 
 // MCP4728 I2C address (all 4 outputs go through this DAC)
@@ -13,7 +13,10 @@
 #include <math.h> // lroundf (output calibration remap)
 
 #include "calibrationData.hpp" // CalibrationData (full definition)
-#include "pinouts.hpp"
+// boardPinouts.hpp, not the app-level pinouts.hpp: this layer needs the board
+// wiring only, never an app's jack semantics. Depending on the app header
+// would make core/ unbuildable without one.
+#include "boardPinouts.hpp"
 
 // MCP4728 quad 12-bit I2C DAC (channels A=out1, B=out2, C=out3, D=out4)
 inline Adafruit_MCP4728 dac4;

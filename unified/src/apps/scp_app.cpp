@@ -52,10 +52,10 @@
 namespace forge {
 namespace scp {
 
-#include "definitions.hpp"
-#include "scope.hpp"    // #includes fixfft.cpp itself — no separate TU
-#include "settings.hpp" // after scope.hpp: persists its globals
-#include "version.hpp"
+#include "../../../apps/scp/lib/definitions.hpp"
+#include "../../../apps/scp/lib/scope.hpp"    // #includes fixfft.cpp itself — no separate TU
+#include "../../../apps/scp/lib/settings.hpp" // after scope.hpp: persists its globals
+#include "../../../apps/scp/src/version.hpp"
 
 // ── 3. The shell contract ───────────────────────────────────────────────────
 class ScopeApp final : public IApp {

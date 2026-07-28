@@ -1,13 +1,8 @@
-// dq_app.cpp — NoteForge (dual quantizer) hosted in the unified firmware.
+// gen_app.cpp — GravityForge (physics sequencer) hosted in the unified firmware.
 //
-// See scp_app.cpp for the pattern and the include-order rule. NoteForge is the
-// first app with a menu system, so it also exercises the part ForgeView did not:
-// core/menuDisplay.hpp is included INSIDE the namespace, so its RedrawDisplay()
-// and MenuHeader() hooks bind to this app's implementations, while `display`,
-// `displayMgr` and `encoder` stay global via core/shellObjects.hpp.
+// See scp_app.cpp for the pattern and the include-order rule.
 
 // ── 1. Global scope: standard library, third-party, core ────────────────────
-// Every header reached from inside the namespace must already be included here.
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -30,62 +25,70 @@
 #include "encoder.hpp"
 #include "envelope.hpp"
 #include "scales.hpp"
-#include "shellObjects.hpp" // display / displayMgr / encoder / cal — the globals
+#include "shellObjects.hpp"
 #include "splash.hpp"
 #include "utils.hpp"
 
-#include "dq_app.hpp"
+#include "gen_app.hpp"
 
 #define OLED_ADDRESS 0x3C
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 
 namespace forge {
-namespace dq {
+namespace gen {
 
-// Core 0 prepares a frame; Core 1 flushes it. Per-app, because each app runs its
-// own render policy — the shell only decides which app owns the cores.
 static volatile bool _displayFrameReady = false;
 static volatile bool _displayLocked = false;
 
-// Marks the display dirty and restarts the screen-timeout clock. Must be defined
-// before menuHandlers.hpp, which uses it.
 #define REQUEST_DISPLAY_REFRESH()     \
     do {                              \
         displayRefresh = 1;           \
         displayMgr.MarkInteraction(); \
     } while (0)
 
-// ── 2. NoteForge's own headers ──────────────────────────────────────────────
-#include "../../../apps/dq/lib/pinouts.hpp"
-#include "../../../apps/dq/lib/channel.hpp"
-#include "../../../apps/dq/lib/cvInputs.hpp"
-#include "../../../apps/dq/lib/storage.hpp" // pulls in presetManager.hpp
+// ── 2. GravityForge's own headers ───────────────────────────────────────────
+#include "../../../apps/gen/lib/pinouts.hpp"
+#include "../../../apps/gen/lib/params.hpp"
+#include "../../../apps/gen/lib/physics.hpp"
+#include "../../../apps/gen/lib/clock.hpp"
+#include "../../../apps/gen/lib/sequencer.hpp"
+#include "../../../apps/gen/lib/cvInputs.hpp"
+#include "../../../apps/gen/lib/randomize.hpp"
+#include "../../../apps/gen/lib/storage.hpp"
 
-#include "../../../apps/dq/lib/menuDefinitions.hpp"
-#include "../../../apps/dq/lib/menuHandlers.hpp"
-#include "menuDisplay.hpp" // core header, namespaced for its app hooks
-#include "../../../apps/dq/lib/menuRender.hpp"
+#include "../../../apps/gen/lib/menuDefinitions.hpp"
+#include "../../../apps/gen/lib/menuHandlers.hpp"
+#include "menuDisplay.hpp"
+#include "../../../apps/gen/lib/menuRender.hpp"
 
-#include "../../../apps/dq/lib/calibration.hpp"
-#include "../../../apps/dq/src/version.hpp"
+#include "../../../apps/gen/lib/calibration.hpp"
+#include "../../../apps/gen/src/version.hpp"
 
-// ── App state (was main.cpp's file-scope globals) ───────────────────────────
-QuantizerChannel channels[NUM_CHANNELS];
+// ── The instrument ──────────────────────────────────────────────────────────
+// physicsWorld is the simulation; channels[] turn its peg hits into notes;
+// containerParams/worldParams are what the *user* set, kept separate so CV
+// modulation can sit on top without overwriting it.
+PhysicsWorld physicsWorld;
+GravityChannel channels[NUM_CHANNELS];
+ContainerParams containerParams[2];
+WorldParams worldParams;
+Clock clockEngine;
+ModBus modBus;
 
-int menuItem = 1; // 1-based; item 1 is the keyboard home screen
+int menuItem = 1; // 1-based; item 1 is the physics home screen
 bool switchState = 1;
 bool oldSwitchState = 1;
-int menuMode = 0; // 0 = navigating, else the item being edited
+int menuMode = 0;
 bool displayRefresh = 1;
 bool unsavedChanges = false;
-int menuScreenTimeout = 2; // index into screenTimeoutOptions[]
+int menuScreenTimeout = 2;
 unsigned long lastEncoderUpdate = 0;
 
 void HandleOutputs();
 
-// Encoder acceleration. The shell does detent detection and hands us a
-// direction, so this only tracks how fast those arrive.
+// Encoder acceleration — the shell does detent detection, so this only times
+// how fast the events arrive.
 static float speedFactor = 1.0f;
 static unsigned long lastEncoderTime = 0;
 static int lastEncoderDir = 0;
@@ -96,7 +99,7 @@ static void UpdateSpeedFactor(int dir) {
     lastEncoderTime = now;
 
     if (lastEncoderDir != 0 && dir != lastEncoderDir) {
-        speedFactor = 1.0f; // reversing always starts from a single step
+        speedFactor = 1.0f;
         lastEncoderDir = dir;
         return;
     }
@@ -113,12 +116,9 @@ static void UpdateSpeedFactor(int dir) {
     }
 }
 
-// Brief full-screen message ("SAVED", "LOADED"). Core 0 never touches Wire, so
-// it prepares the buffer and lets Core 1 flush. Keeps the quantizers running
-// throughout so held notes do not drop out.
 void ShowTemporaryMessage(const char *msg, uint32_t durationMs) {
     _displayLocked = true;
-    delay(10); // let Core 1 finish any in-flight HandleDisplay()
+    delay(10);
 
     display.clearDisplay();
     display.setTextSize(2);
@@ -137,46 +137,80 @@ void ShowTemporaryMessage(const char *msg, uint32_t durationMs) {
     REQUEST_DISPLAY_REFRESH();
 }
 
-// Core 0 prepares the buffer (no I2C) and signals Core 1 to flush it.
 void RedrawDisplay() {
     displayMgr.PrepareFrame();
     displayRefresh = 0;
     _displayFrameReady = true;
 }
 
-// Advance both quantizer voices and push all four DAC outputs.
-// Jack map: 1 = CV 1, 2 = CV 2, 3 = GATE 1, 4 = GATE 2.
+// What IN 1 does with a rising edge, per the menu-selected role.
+static void HandleTriggerRole(unsigned long edgeUs) {
+    switch (in1Role) {
+    case In1Clock:
+        clockEngine.ExternalEdge(edgeUs);
+        break;
+    case In1Reset:
+        physicsWorld.Reset();
+        break;
+    case In1Kick:
+        physicsWorld.Kick(180.0f);
+        break;
+    case In1Spawn:
+        // Wraps back to the minimum rather than saturating: a spawn input that
+        // silently stops doing anything after eight pulses reads as broken.
+        for (int i = 0; i < 2; i++) {
+            int n = containerParams[i].balls + 1;
+            containerParams[i].balls =
+                (uint8_t)(n > PHYS_MAX_BALLS ? PHYS_MIN_BALLS : n);
+        }
+        MarkUnsaved();
+        REQUEST_DISPLAY_REFRESH();
+        break;
+    default:
+        break;
+    }
+}
+
 void HandleOutputs() {
     const unsigned long now = micros();
-    const bool trigEdge = ConsumeTrigger();
+
+    unsigned long edgeUs = now;
+    if (ConsumeTrigger(&edgeUs)) {
+        HandleTriggerRole(edgeUs);
+    }
     HandleTriggerLevel();
-    HandleTransposeInput();
+
+    clockEngine.Update(now);
+
+    // Base parameters + this loop's CV modulation → the live simulation.
+    BuildModBus(modBus);
+    ApplyParams(physicsWorld, clockEngine, containerParams, worldParams, modBus);
+
+    physicsWorld.Advance(now);
+
+    // Consumed once and handed to both channels: two calls would give the
+    // boundary to channel A and nothing to channel B.
+    const bool boundary = clockEngine.ConsumeBoundary();
 
     for (int i = 0; i < NUM_CHANNELS; i++) {
-        // With IN 2 handed to the transpose CV, channel 2 has no pitch input of
-        // its own, so it quantizes IN 1 alongside channel 1.
-        const float pitchCv = (in2Role == In2Transpose) ? channelCv[0] : channelCv[i];
-        channels[i].SetTransposeDegrees(transposeDegrees);
-        channels[i].Process(CvSemitones(pitchCv), now, trigEdge, trigLevel);
+        channels[i].SetGateHigh(trigLevel);
+        // LOOP ▸ NAP silences the voice while the simulation keeps running, so
+        // the phrase stays in phase across the rest.
+        channels[i].SetMuted(physicsWorld.LoopMuted(i));
+        channels[i].Process(physicsWorld.Get(i), now, clockEngine, boundary);
     }
 
     DACWriteAll(channels[0].GetCVOutput(), channels[1].GetCVOutput(),
                 channels[0].GetGateOutput(), channels[1].GetGateOutput());
-
-    for (int i = 0; i < NUM_CHANNELS; i++) {
-        if (channels[i].ConsumeNoteChanged())
-            displayRefresh = 1;
-    }
 }
 
 // ── 3. The shell contract ───────────────────────────────────────────────────
-class NoteForgeApp final : public IApp {
+class GravityForgeApp final : public IApp {
   public:
-    const char *Name() const override { return "QUANTIZER"; }
+    const char *Name() const override { return "GRAVITY"; }
     const char *Version() const override { return VERSION; }
 
     void Begin() override {
-        // The shell has done InitWire/InitIO/display.begin/InitDAC already.
         EEPROMInit();
         cal = LoadCalibration();
         UpdateParameters(Load(0));
@@ -188,20 +222,16 @@ class NoteForgeApp final : public IApp {
     void Tick0() override {
         HandleCVInputs();
         HandleOutputs();
-        // HandleOutputs() can set displayRefresh on a note change but cannot
-        // reach displayMgr; propagate here so HandleDisplay() actually fires
-        // (it needs both flags).
         if (displayRefresh)
             displayMgr.MarkDirty();
     }
 
     void Tick1(Adafruit_SSD1306 &disp) override {
-        // Skip rendering while Core 0 holds the buffer (temporary message).
         if (!_displayLocked)
             HandleDisplay();
         if (_displayFrameReady) {
             _displayFrameReady = false;
-            disp.display(); // Wire (I2C1) — Core 1 only
+            disp.display();
         }
     }
 
@@ -214,7 +244,8 @@ class NoteForgeApp final : public IApp {
         lastEncoderUpdate = millis();
         REQUEST_DISPLAY_REFRESH();
         if (menuMode != 0) {
-            menuMode = 0; // commit and leave edit mode
+            menuMode = 0;    // commit and leave edit mode
+            LiveViewClear(); // …and land back on the page, not the animation
             return;
         }
         if (menuItem >= 1 && menuItem <= MENU_ITEM_COUNT) {
@@ -222,21 +253,21 @@ class NoteForgeApp final : public IApp {
             if (mi.type == MENU_ACTION || mi.type == MENU_TOGGLE) {
                 if (mi.action)
                     mi.action();
+                // A flagged toggle (DIR) has no edit mode to turn in, so the
+                // click itself has to be what shows the result.
+                if (mi.livePreview)
+                    LiveViewArm();
+                else
+                    LiveViewClear();
             } else { // MENU_EDIT
                 menuMode = menuItem;
+                LiveViewClear(); // the first detent is what opens the physics view
             }
         }
     }
 
-    // Direction is deliberately identical to the standalone firmware — only the
-    // control flow changed (the shell polls and calls us, rather than us polling
-    // the pins). The chain, unchanged end to end:
-    //
-    //   (new-3)/4 > old/4  ->  shell sends -1  ->  menuItem-1, setter(-speed)
-    //   (new+3)/4 < old/4  ->  shell sends +1  ->  menuItem+1, setter(+speed)
-    //
-    // If a turn ever feels backwards, the quarter-step test in the shell's
-    // PollEncoder() is the single place to flip it, for every app at once.
+    // Direction matches the standalone firmware exactly; only the control flow
+    // changed. See the note in dq_app.cpp.
     void EncoderTurn(int detents) override {
         if (detents == 0)
             return;
@@ -251,17 +282,17 @@ class NoteForgeApp final : public IApp {
                 menuItem = MENU_ITEM_COUNT;
             else if (menuItem > MENU_ITEM_COUNT)
                 menuItem = 1;
+            LiveViewClear(); // navigating away drops any toggle-armed preview
         } else if (menuMode >= 1 && menuMode <= MENU_ITEM_COUNT) {
-            if (MENU_ITEMS[menuMode - 1].setter)
-                MENU_ITEMS[menuMode - 1].setter(dir * (int)speedFactor);
+            MenuApplyEdit(menuMode, dir * (int)speedFactor);
         }
     }
 };
 
-inline NoteForgeApp g_app;
+inline GravityForgeApp g_app;
 
-} // namespace dq
+} // namespace gen
 
-IApp *DqApp() { return &dq::g_app; }
+IApp *GenApp() { return &gen::g_app; }
 
 } // namespace forge

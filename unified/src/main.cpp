@@ -28,7 +28,9 @@
 #include "shellObjects.hpp"
 #include "splash.hpp"
 
+#include "apps/clk_app.hpp"
 #include "apps/dq_app.hpp"
+#include "apps/gen_app.hpp"
 #include "apps/scp_app.hpp"
 
 // ── Board-owned singletons ──────────────────────────────────────────────────
@@ -47,7 +49,9 @@ CalibrationData cal = {};
 // ── The app registry ────────────────────────────────────────────────────────
 // Adding an app is one include, one entry, and one -I line in platformio.ini.
 static forge::IApp *const kApps[] = {
+    forge::ClkApp(),
     forge::DqApp(),
+    forge::GenApp(),
     forge::ScpApp(),
 };
 static constexpr int kAppCount = (int)(sizeof(kApps) / sizeof(kApps[0]));
