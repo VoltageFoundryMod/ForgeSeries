@@ -176,7 +176,7 @@ class QuantizerChannel {
     int GetOctaveOut() const { return SemitoneToOctave(_outputSemitone); }
     int GetQuantizedSemitone() const { return _quantizedSemitone; }
     int GetSoundingSemitone() const { return _playedSemitone; }
-    uint16_t GetCVOutput() const { return (uint16_t)constrain((int)(_cvCounts + 0.5f), 0, 4095); }
+    uint16_t GetCVOutput() const { return (uint16_t)constrain((int)(_cvCounts + 0.5f), 0, MAXDAC); }
     uint16_t GetGateOutput() const { return _gateCounts; }
     bool IsGateActive() const { return envelope.IsActive(); }
 

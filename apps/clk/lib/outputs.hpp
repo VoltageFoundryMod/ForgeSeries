@@ -1703,12 +1703,12 @@ float Output::ApplyCrossOp(float ownRaw, float srcNorm) {
     case CrossBitOr:
     case CrossBitXor:
     case CrossBitAnd: {
-        int ia = (int)(a * 4095.0f);
-        int ib = (int)(b * 4095.0f);
+        int ia = (int)(a * (float)MAXDAC);
+        int ib = (int)(b * (float)MAXDAC);
         int ir = (_crossOp == CrossBitOr) ? (ia | ib)
                  : (_crossOp == CrossBitXor) ? (ia ^ ib)
                                              : (ia & ib);
-        r = ir / 4095.0f;
+        r = ir / (float)MAXDAC;
         break;
     }
     case CrossSeed: {

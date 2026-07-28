@@ -27,8 +27,8 @@
 #define QUANT_MAX_SEMITONE (QUANT_OCTAVES * 12) // 60 — inclusive top of range
 #define QUANT_SEMITONE_COUNT (QUANT_MAX_SEMITONE + 1)
 
-// Counts per semitone on a 12-bit 0–5V output (4095 / 60 = 68.25).
-#define QUANT_COUNTS_PER_SEMITONE (4095.0f / (float)QUANT_MAX_SEMITONE)
+// Counts per semitone across the output range (MAXDAC / 60 = 68.25 at 12 bit).
+#define QUANT_COUNTS_PER_SEMITONE ((float)MAXDAC / (float)QUANT_MAX_SEMITONE)
 
 // Default hysteresis, in semitones, applied past the note boundary before the
 // output moves on. 0.15 ≈ 10 mV at 1V/oct — comfortably above ADC noise while
@@ -165,7 +165,7 @@ class Quantizer {
 
 // ── Unit conversions ─────────────────────────────────────────────────────────
 
-// DAC/ADC counts (0..4095 == 0..5V) → fractional semitones.
+// DAC counts (0..MAXDAC == 0..5V) → fractional semitones.
 inline float CountsToSemitones(float counts) {
     return counts / QUANT_COUNTS_PER_SEMITONE;
 }
@@ -173,7 +173,7 @@ inline float CountsToSemitones(float counts) {
 // Semitones → DAC counts, clamped to the output range.
 inline float SemitonesToCounts(float semitones) {
     float counts = semitones * QUANT_COUNTS_PER_SEMITONE;
-    return constrain(counts, 0.0f, 4095.0f);
+    return constrain(counts, 0.0f, (float)MAXDAC);
 }
 
 // Pitch class (0=C … 11=B) of a semitone offset from the bottom of the range.

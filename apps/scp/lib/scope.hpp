@@ -27,6 +27,8 @@
 
 #include <math.h>
 
+#include "boardPinouts.hpp" // MAXADC — this file scales raw ADC readings
+
 // Custom fonts for the Tuner's big readout only. The overlay menu and axis
 // labels keep the classic 5x7 font (dense layouts built on its 6x8 cell).
 #include "fonts/helvB12.h"
@@ -651,7 +653,7 @@ static void ScopeDrawUnits(Adafruit_SSD1306 &display, bool withTime) {
     display.setTextColor(WHITE, BLACK);
 
     // Vertical: a 16px grid division covers 1024/scale ADC counts.
-    float vdiv = (1024.0f / scale) * (scopeInputSpanV / 4095.0f);
+    float vdiv = (1024.0f / scale) * (scopeInputSpanV / (float)MAXADC);
     if (vdiv >= 1.0f)
         snprintf(b, sizeof(b), "%.2fV", (double)vdiv);
     else

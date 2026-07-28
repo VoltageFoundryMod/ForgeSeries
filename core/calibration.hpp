@@ -167,7 +167,7 @@ static int _CalEnterMV(const char *title, const char *prompt, int startMV) {
 
 // Convert a raw 12-bit ADC value to an approximate display voltage in mV.
 static uint32_t _CalRawToMVDisplay(uint16_t raw) {
-    return (uint32_t)raw * 5000 / 4095;
+    return (uint32_t)raw * 5000 / MAXADC;
 }
 
 // ── Phase 1: Output trim ──────────────────────────────────────────────────────
@@ -305,7 +305,7 @@ void RunCalibration() {
         // saw the same voltage, so keep the nominal mapping for this channel
         // rather than storing an infinity that poisons every later reading.
         if (rawRef[1] == rawRef[0]) {
-            newCal.cvScale[ch] = 5000.0f / 4095.0f;
+            newCal.cvScale[ch] = 5000.0f / (float)MAXADC;
             newCal.cvOffset[ch] = 0.0f;
             Serial.printf("  CV%d: identical captures — keeping nominal scale.\n", ch + 1);
             continue;
