@@ -43,6 +43,7 @@ static volatile bool _core1Enabled = false;
 #include "shellObjects.hpp"
 
 #include "boardIO.hpp"
+#include "pinouts.hpp"     // CAL_OUT_NAMES, needed by calibration.hpp
 #include "calibration.hpp" // RunCalibration() — output trim + CV LUT capture
 #include "clockEngine.hpp"
 #include "cvInputs.hpp"

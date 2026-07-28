@@ -85,7 +85,7 @@ static volatile bool _displayLocked = false;
 #include "menuDisplay.hpp" // core header, namespaced for its app hooks
 #include "../../../apps/dq/lib/menuRender.hpp"
 
-#include "../../../apps/dq/lib/calibration.hpp"
+#include "calibration.hpp" // core: the shared wizard
 #include "../../../apps/dq/src/version.hpp"
 // clang-format on
 

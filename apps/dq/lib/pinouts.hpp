@@ -16,3 +16,8 @@
 // Jack 1 = CV 1, Jack 2 = CV 2, Jack 3 = GATE 1, Jack 4 = GATE 2.
 #define OUT_CV(ch) (ch)                  // ch 0 -> jack 1, ch 1 -> jack 2
 #define OUT_GATE(ch) (NUM_CHANNELS + ch) // ch 0 -> jack 3, ch 1 -> jack 4
+
+// What this module calls its output jacks, used by the calibration wizard
+// (core/calibration.hpp). Jack naming is module semantics, so it lives here
+// with NUM_CHANNELS and OUT_CV/OUT_GATE rather than in the shared wizard.
+static const char *const CAL_OUT_NAMES[NUM_OUTPUTS] = {"CV 1", "CV 2", "GATE1", "GATE2"};
