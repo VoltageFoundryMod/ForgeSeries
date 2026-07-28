@@ -36,6 +36,16 @@
 
 namespace forge {
 
+// Ask the shell to return to the module selector.
+//
+// Implemented by the shell; callable from anywhere inside an app (a menu action,
+// say). The switch is not immediate: the shell finishes the current tick, calls
+// End() so the app can flush what it owes to storage, and reboots into the menu.
+//
+// The shell also offers this as a hold-the-encoder gesture, so an app does not
+// have to spend a menu slot on it.
+void RequestAppMenu();
+
 struct IApp {
     virtual ~IApp() = default;
 

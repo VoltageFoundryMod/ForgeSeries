@@ -72,8 +72,33 @@ static volatile bool g_setupDone = false;
 static long oldPosition = 0;
 static long newPosition = 0;
 
+// Hold the encoder this long while an app is running to return to the selector.
+// Long enough not to fire on an ordinary click, short enough to find by
+// accident-then-intent.
+#define APP_SWITCH_HOLD_MS 2000
+
+static bool g_switchRequested = false;
+static unsigned long g_pressStartMs = 0;
+static bool g_wasPressed = false;
+
+namespace forge {
+void RequestAppMenu() { g_switchRequested = true; }
+} // namespace forge
+
 static void PollEncoder(forge::IApp *app) {
-    app->EncoderButton(digitalRead(ENCODER_SW) == LOW); // active-low, pull-up
+    const bool pressed = (digitalRead(ENCODER_SW) == LOW); // active-low, pull-up
+
+    // Hold-to-switch. Every app acts on the button's *release* edge, so a hold
+    // that ends in a reboot is never seen as a click: the app only ever receives
+    // "pressed", and the release it would act on never arrives.
+    if (pressed && !g_wasPressed) {
+        g_pressStartMs = millis();
+    } else if (pressed && (millis() - g_pressStartMs) >= APP_SWITCH_HOLD_MS) {
+        g_switchRequested = true;
+    }
+    g_wasPressed = pressed;
+
+    app->EncoderButton(pressed);
 
     newPosition = encoder.read();
     if ((newPosition - 3) / 4 > oldPosition / 4) { // counter-clockwise
@@ -176,10 +201,15 @@ static forge::IApp *SelectApp() {
     if (stored >= kAppCount)
         stored = 0; // stale index (app removed from this build)
 
-    if (digitalRead(ENCODER_SW) == LOW) {
+    // Either gesture opens the menu: the encoder held at power-on, or an app
+    // having asked for it before rebooting.
+    const bool requested = forge::fs::BootMenuRequested();
+    if (requested || digitalRead(ENCODER_SW) == LOW) {
         const int chosen = RunBootMenu(stored);
-        if (chosen != (int)stored)
-            forge::fs::SaveBootApp((uint8_t)chosen);
+        // Always rewrite, even when the choice is unchanged: it is what clears
+        // the showMenu flag, and leaving it set would trap the module in the
+        // menu on every boot.
+        forge::fs::SaveBootApp((uint8_t)chosen, false);
         stored = (uint8_t)chosen;
     }
     return kApps[stored];
@@ -253,8 +283,39 @@ void setup() {
     g_setupDone = true; // release Core 1
 }
 
+// Return to the selector. Reboots rather than unwinding in place — the running
+// app owns interrupts, hardware timers and Core 1 work, and restarting is both
+// simpler and more reliable than tearing that down live.
+static void SwitchToMenu() {
+    g_app->End(); // let the app flush anything it owes to storage
+
+    // Keep the current app as the pre-selection so the menu opens on it.
+    uint8_t current = 0;
+    for (int i = 0; i < kAppCount; i++) {
+        if (kApps[i] == g_app) {
+            current = (uint8_t)i;
+            break;
+        }
+    }
+    forge::fs::SaveBootApp(current, /*showMenu=*/true);
+
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.setCursor(18, 28);
+    display.print("SELECT MODULE...");
+    display.display();
+    delay(400); // let the message register before the screen blanks
+
+    rp2040.reboot();
+    for (;;) { /* not reached */
+    }
+}
+
 void loop() {
     PollEncoder(g_app);
+    if (g_switchRequested)
+        SwitchToMenu();
     g_app->Tick0();
 }
 

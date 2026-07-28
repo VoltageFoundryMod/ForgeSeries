@@ -174,14 +174,27 @@ inline CalibrationData LoadCalibrationFs() {
 #define FORGE_BOOT_PATH "/boot"
 
 struct BootRecord {
-    uint32_t magic;  // FORGE_FS_MAGIC when written by us
+    uint32_t magic;   // FORGE_FS_MAGIC when written by us
     uint8_t appIndex;
-    uint8_t _pad[3];
+    // Set when an app asks to return to the selector. The shell reboots to get
+    // there rather than unwinding in place — apps attach interrupts, start
+    // hardware timers and hand work to Core 1, and tearing that down live is a
+    // far larger source of bugs than a one-second restart. This flag survives
+    // the reset and is cleared as soon as the menu opens.
+    uint8_t showMenu;
+    uint8_t _pad[2];
 };
 
-inline bool SaveBootApp(uint8_t index) {
-    BootRecord b{FORGE_FS_MAGIC, index, {0, 0, 0}};
+inline bool SaveBootApp(uint8_t index, bool showMenu = false) {
+    BootRecord b{FORGE_FS_MAGIC, index, (uint8_t)(showMenu ? 1 : 0), {0, 0}};
     return Write(FORGE_BOOT_PATH, b);
+}
+
+// True if a reboot-into-the-menu was requested. Reading it does not clear it;
+// the shell rewrites the record once the menu is up.
+inline bool BootMenuRequested() {
+    BootRecord b{};
+    return Read(FORGE_BOOT_PATH, b) && b.magic == FORGE_FS_MAGIC && b.showMenu;
 }
 
 // Returns the stored index, or `fallback` if nothing valid is stored.
