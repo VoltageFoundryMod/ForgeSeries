@@ -1,4 +1,21 @@
 #pragma once
+
+// ── Page layout ──────────────────────────────────────────────────────────────
+// ClockForge's generic group pages start lower than the other modules' (20 vs
+// the shared default of 12). Set here because menuDefinitions.hpp is included
+// before core/menuDisplay.hpp on both the firmware and VCV paths, and that
+// header takes this as an #ifndef override.
+//
+// NOTE: at 20, with 9px rows, a sixth row lands at y=65 and is clipped off the
+// 64px screen. Several groups here hold six to eight items, but most of those
+// are drawn by custom renderers that pass their own startY at the
+// MD_PageBegin call site; only groups falling through to the generic
+// MD_RenderGroup path use this value. Whether any of those actually renders a
+// sixth visible row has NOT been verified - ROW_HIDDEN items are skipped, so
+// the item count is an upper bound on the row count. Unchanged behaviour from
+// before core/menuDisplay.hpp was shared; worth an eyeball on hardware.
+#define MD_START_Y 20
+
 // ============================================================
 // Menu item descriptor — type enum and struct.
 // The MENU_ITEMS[] array and all setter/action implementations
