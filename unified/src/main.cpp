@@ -25,6 +25,7 @@
 #include "boardPinouts.hpp"
 #include "calibrationData.hpp"
 #include "encoder.hpp"
+#include "fsStore.hpp"
 #include "shellObjects.hpp"
 #include "splash.hpp"
 
@@ -84,15 +85,104 @@ static void PollEncoder(forge::IApp *app) {
     }
 }
 
-// ── App selection ───────────────────────────────────────────────────────────
-// TODO(step 4): persist the choice and show the boot menu when the encoder is
-// held at power-on. Deliberately not done yet — the obvious place to store a
-// slot byte is the emulated EEPROM, but that is exactly the sector ForgeView's
-// settings.hpp already owns from offset 0, and the whole layout is due to move
-// to LittleFS. Inventing a byte here would collide now and be thrown away then.
-// Until that lands, the unified image always boots the first registered app.
+// ── Boot menu ───────────────────────────────────────────────────────────────
+// Hold the encoder at power-on to choose which module the hardware is. The
+// choice persists, so the module boots straight into it from then on.
+//
+// This runs entirely on Core 0, before Core 1 is released, so it can drive the
+// display directly — no frame-ready handshake, and no app is running yet.
+static void DrawMenu(int sel, int top) {
+    display.clearDisplay();
+    display.setTextColor(WHITE);
+    display.setTextSize(1);
+    display.setCursor(2, 2);
+    display.print("SELECT MODULE");
+    display.drawFastHLine(0, 11, SCREEN_WIDTH, WHITE);
+
+    // Four visible rows at 13px; the list scrolls when there are more apps.
+    const int rows = 4;
+    for (int r = 0; r < rows && (top + r) < kAppCount; r++) {
+        const int i = top + r;
+        const int y = 15 + r * 12;
+        if (i == sel) {
+            display.fillRect(0, y - 2, SCREEN_WIDTH, 11, WHITE);
+            display.setTextColor(BLACK);
+        } else {
+            display.setTextColor(WHITE);
+        }
+        display.setCursor(4, y);
+        display.print(kApps[i]->Name());
+        display.setCursor(84, y);
+        display.print("v");
+        display.print(kApps[i]->Version());
+    }
+    display.setTextColor(WHITE);
+    display.display();
+}
+
+// Blocks until the user clicks. Returns the chosen index.
+static int RunBootMenu(int initial) {
+    int sel = (initial >= 0 && initial < kAppCount) ? initial : 0;
+    int top = 0;
+
+    // The gesture that got us here is the button being held. Wait for release
+    // first, or that same press is read as the selection click immediately.
+    while (digitalRead(ENCODER_SW) == LOW)
+        delay(10);
+    delay(50); // contact settle
+
+    long oldPos = encoder.read();
+    DrawMenu(sel, top);
+
+    for (;;) {
+        const long newPos = encoder.read();
+        int dir = 0;
+        if ((newPos - 3) / 4 > oldPos / 4) {
+            dir = -1;
+            oldPos = newPos;
+        } else if ((newPos + 3) / 4 < oldPos / 4) {
+            dir = +1;
+            oldPos = newPos;
+        }
+        if (dir != 0) {
+            sel += dir;
+            if (sel < 0)
+                sel = kAppCount - 1;
+            else if (sel >= kAppCount)
+                sel = 0;
+            if (sel < top)
+                top = sel;
+            else if (sel > top + 3)
+                top = sel - 3;
+            DrawMenu(sel, top);
+        }
+
+        if (digitalRead(ENCODER_SW) == LOW) { // clicked — commit
+            while (digitalRead(ENCODER_SW) == LOW)
+                delay(10);
+            return sel;
+        }
+        delay(2);
+    }
+}
+
+// Which app to run: the stored choice, unless the encoder is held at boot.
+//
+// The held-encoder check is deliberately unconditional and happens before any
+// app code runs, so a firmware that hangs in its own Begin() can still be
+// escaped — hold the encoder and power-cycle.
 static forge::IApp *SelectApp() {
-    return kApps[0];
+    uint8_t stored = forge::fs::LoadBootApp(0);
+    if (stored >= kAppCount)
+        stored = 0; // stale index (app removed from this build)
+
+    if (digitalRead(ENCODER_SW) == LOW) {
+        const int chosen = RunBootMenu(stored);
+        if (chosen != (int)stored)
+            forge::fs::SaveBootApp((uint8_t)chosen);
+        stored = (uint8_t)chosen;
+    }
+    return kApps[stored];
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -129,9 +219,14 @@ void setup() {
     if (!InitDAC())
         Serial.println("MCP4728 not found — outputs disabled.");
 
-    // TODO(step 4): cal = LoadCalibration() once storage moves to LittleFS.
-    // Until then `cal` stays value-initialised: valid=false makes the DAC
-    // correction fall through to identity and CV reads use the nominal mapping.
+    // Storage, then calibration. One calibration serves every app because it
+    // describes the board, not the module — which is the whole reason it lives
+    // in the shell rather than being re-run per firmware.
+    if (!forge::fs::Begin())
+        Serial.println("No persistent storage — presets and calibration disabled.");
+    cal = forge::fs::LoadCalibrationFs();
+    Serial.println(cal.valid ? "Calibration: loaded"
+                             : "Calibration: not set (using nominal)");
 
     display.clearDisplay();
     display.drawBitmap(30, 0, VFM_Splash, 68, 64, 1);
