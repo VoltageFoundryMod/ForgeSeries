@@ -65,9 +65,8 @@
 #define MAXDAC 4095 // Maximum value for a 12-bit DAC: 2^12 - 1
 #define MAXADC 4095 // Maximum value for the RP2040's 12-bit ADC
 
-// `static` matters: this is a definition in a header, so without internal
-// linkage every translation unit that includes it emits the same symbol. Today
-// each firmware includes it from exactly one TU and gets away with it, but the
-// unified firmware links all the apps together and would hit a duplicate-symbol
-// error (CLK and SCP previously declared this without `static`).
-static int CV_IN_PINS[] = {CV_1_IN_PIN, CV_2_IN_PIN};
+// `inline` matters: this is a definition in a header. Without it, every TU that
+// includes the header emits the symbol and the unified firmware (shell + one TU
+// per app) fails to link. `inline` rather than `static` so all TUs share ONE
+// array instead of each carrying a private copy.
+inline int CV_IN_PINS[] = {CV_1_IN_PIN, CV_2_IN_PIN};

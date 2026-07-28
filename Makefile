@@ -57,3 +57,14 @@ everything: all plugins
 # the compiler must be mingw64 g++ (not the arm-none-eabi one PlatformIO uses).
 # On Windows both live in msys64:
 #     export PATH="/c/msys64/usr/bin:/c/msys64/mingw64/bin:$PATH"
+
+# ── Unified firmware ─────────────────────────────────────────────────────────
+# One image hosting the shell plus every app. Separate PlatformIO project (see
+# unified/platformio.ini for why), so it is not part of `make all`.
+.PHONY: unified upload-unified clean-unified
+unified:
+	$(PIO) run -d unified -e $(ENV)
+upload-unified:
+	$(PIO) run -d unified -e $(ENV) -t upload
+clean-unified:
+	$(PIO) run -d unified -e $(ENV) -t clean

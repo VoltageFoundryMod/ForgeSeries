@@ -16,21 +16,21 @@
 #include "pinouts.hpp"
 
 // MCP4728 quad 12-bit I2C DAC (channels A=out1, B=out2, C=out3, D=out4)
-Adafruit_MCP4728 dac4;
+inline Adafruit_MCP4728 dac4;
 
 // Current per-channel shadow values for fast single-channel updates
-static uint16_t _dacShadow[4] = {0, 0, 0, 0};
+inline uint16_t _dacShadow[4] = {0, 0, 0, 0};
 
 // Physical channel mapping: board wiring has DACB and DACC swapped relative
 // to the expected output order (Out1=A, Out2=C, Out3=B, Out4=D).
-static const MCP4728_channel_t _chanMap[4] = {
+inline const MCP4728_channel_t _chanMap[4] = {
     MCP4728_CHANNEL_A, // Output 1 → DACA → Jack 1 (CV 1)
     MCP4728_CHANNEL_C, // Output 2 → DACC → Jack 2 (CV 2)   (B/C swapped in HW)
     MCP4728_CHANNEL_B, // Output 3 → DACB → Jack 3 (GATE 1) (B/C swapped in HW)
     MCP4728_CHANNEL_D, // Output 4 → DACD → Jack 4 (GATE 2)
 };
 
-void InitIO() {
+inline void InitIO() {
     analogReadResolution(12); // RP2040 supports 12-bit ADC
 
     pinMode(CLK_IN_PIN, INPUT_PULLDOWN); // TRIG in — pull low so a floating
@@ -62,7 +62,7 @@ void InitIO() {
 // Wire  (GPIO6/7, I2C1) → SSD1306 display only.
 // Wire1 (GPIO0/1, I2C0) → MCP4728 DAC only.
 // Independent hardware blocks — can run simultaneously, no conflicts.
-void InitWire() {
+inline void InitWire() {
     Wire.setSDA(I2C_SDA_PIN);
     Wire.setSCL(I2C_SCL_PIN);
     Wire.begin();
@@ -79,7 +79,7 @@ void InitWire() {
 
 // Initialize the MCP4728 DAC. Returns false if not found.
 // Called from setup() AFTER display.begin() so errors can be shown on screen.
-bool InitDAC() {
+inline bool InitDAC() {
     if (!dac4.begin(MCP4728_ADDR, &Wire1)) {
         Serial.println("MCP4728 not found! Check I2C wiring and address.");
         return false;
@@ -107,13 +107,13 @@ extern CalibrationData cal;
 // 0..MAXDAC == 0..5V) to the code actually commanded so the jack voltage
 // matches the ideal mapping.  Bypassed during the calibration wizard so the
 // user trims and measures true, uncorrected hardware.
-static bool _dacCalBypass = false;
-static inline void SetDACCalBypass(bool bypass) { _dacCalBypass = bypass; }
+inline bool _dacCalBypass = false;
+inline void SetDACCalBypass(bool bypass) { _dacCalBypass = bypass; }
 
 // Apply the stored per-channel output correction. Returns `desired` unchanged
 // (clamped) when calibration is invalid or bypassed, so an uncalibrated module
 // behaves exactly as before.
-static inline uint16_t _CalibrateDACValue(int channel, uint32_t desired) {
+inline uint16_t _CalibrateDACValue(int channel, uint32_t desired) {
     if (_dacCalBypass || !cal.valid)
         return (uint16_t)constrain((int)desired, 0, MAXDAC);
     float cmd = cal.dacScale[channel] * (float)desired + cal.dacOffset[channel];
@@ -126,7 +126,7 @@ static inline uint16_t _CalibrateDACValue(int channel, uint32_t desired) {
 // Hardware channel mapping: DACA=sw0, DACB=sw2, DACC=sw1, DACD=sw3 (B/C wired
 // swapped). Each 3-byte block: [CMD: 0x40|(hwCh<<2)]
 // [VREF=0,PD=00,GAIN=0,D11:8] [D7:0]
-void DACWriteAll(uint16_t ch0, uint16_t ch1, uint16_t ch2, uint16_t ch3) {
+inline void DACWriteAll(uint16_t ch0, uint16_t ch1, uint16_t ch2, uint16_t ch3) {
     _dacShadow[0] = ch0;
     _dacShadow[1] = ch1;
     _dacShadow[2] = ch2;
@@ -152,7 +152,7 @@ void DACWriteAll(uint16_t ch0, uint16_t ch1, uint16_t ch2, uint16_t ch3) {
 }
 
 // Write a single DAC channel; keeps other channels at their last value.
-void DACWrite(int channel, uint32_t value) {
+inline void DACWrite(int channel, uint32_t value) {
     if (channel < 0 || channel > 3)
         return;
     _dacShadow[channel] = (uint16_t)value;
