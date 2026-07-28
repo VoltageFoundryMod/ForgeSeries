@@ -130,11 +130,35 @@ Current sizes on `xiao_rp2040` (release):
 | scp | 19124 (7.3%) | 127384 (6.1%) |
 | unified (shell + scp) | 19144 (7.3%) | 127500 (6.1%) |
 
-All four together are ~32% of RAM and ~27% of flash — the headroom the unified
-firmware relies on. Note this holds because only one app *runs* at a time but
-all of them are *linked*: RAM is the sum of every app's static state, not the
-maximum. At ~20 KB each that is comfortable, which is what makes the whole
-approach viable without overlays or arenas.
+### How the unified image scales with app count
+
+Only one app *runs* at a time, but all of them are *linked*, so static RAM is
+the sum of every app's state rather than the maximum. The per-app totals above
+badly overstate that, though: most of each is the Arduino/TinyUSB framework
+baseline, which is paid once. What an app actually adds is its own translation
+unit's `data+bss`:
+
+| app | RAM added | flash added |
+|-----|-----------|-------------|
+| clk | 7066 | 46325 |
+| gen | 1860 | 27562 |
+| scp | 1177 | 14182 |
+| dq  |  661 | 18582 |
+| shell | 189 | 1928 |
+
+Baseline is ~17.8 KB (SCP standalone is 19124 total, its own TU 1338). The
+unified image checks out against that: 17.8 KB + 189 + 1177 = 19144.
+
+So four apps is ~28.7 KB, 11 % of RAM. Ten CLK-weight apps would be ~88 KB
+(34 %); ten typical ones ~38 KB (15 %). Flash is looser still — 14-46 KB per
+app against 2 MB.
+
+If it ever does get tight, the escape hatch is already half-built: each app's
+`vcv-plugin/src/engine/engine_state.def` enumerates every mutable global it
+owns, because the Rack port needs per-instance state. The same X-macro could
+place app state in a shared arena sized to the largest app, making RAM
+max(app) instead of sum(app). Not needed at four apps, and probably not at
+ten — but the enumeration exists if it is.
 
 ## Building the VCV Rack plugins
 
