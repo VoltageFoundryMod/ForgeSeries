@@ -36,7 +36,7 @@ SOURCES += $(wildcard src/engine/*.cpp)
 # several Forge modules can be linked into one plugin (see the ForgeSeries-VCV
 # meta-repo). That gives internal linkage to firmware entry points this build
 # never calls, so unused-function/variable warnings are expected here.
-build/src/engine/fw_engine.cpp.o: EXTRA_CXXFLAGS += -I$(FORGEVCV_SHIM) -I../lib \
+build/src/engine/fw_engine.cpp.o: EXTRA_CXXFLAGS += -I$(FORGEVCV_SHIM) -I../lib -I../../../core \
                                                     -Wno-unused-function -Wno-unused-variable
 
 # Add files to the ZIP package when running `make dist`
