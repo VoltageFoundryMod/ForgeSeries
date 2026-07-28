@@ -1,0 +1,81 @@
+// engine_state.def — THE registry of per-instance firmware state.
+//
+// Every mutable file-scope global the firmware (../lib + fw_engine.cpp) carries
+// is listed here exactly once.  The list is expanded three times by
+// fw_engine.cpp — to declare the EngineState mirror struct, to swap globals with
+// state, and to deep-copy globals into a pristine snapshot — so adding a
+// firmware global means adding ONE line here, not editing three hand-synced
+// code sites.
+//
+// test/build_isolation_test.sh is the guard: a global that belongs here but is
+// missing shows up as two Rack instances sharing a setting.
+//
+// Macros (define before #include-ing this file; all are #undef'd by the includer):
+//   CF_SCALAR(type, name)          a scalar global (type is the *non-volatile*
+//                                  storage type; volatile globals list their
+//                                  base type, e.g. `bool trigPending`).
+//   CF_ARRAY(type, name, count)    a C array of scalars.
+//   CF_OBJECT(type, name)          a default-constructible, swappable object.
+//   CF_OBJARRAY(type, name, count) an array of such objects.
+//
+// NOT listed here (deliberately shared, safe under the entry-point lock):
+//   • displayMgr / display — scratch: re-rendered on every getFramebuffer().
+//   • _md_rowY (menuDisplay.hpp) — scratch within a single render pass.
+//   • const description arrays, MENU_ITEMS, scale tables — immutable.
+//   • the one-time shim setup (interrupt vector, display.begin, InitDAC).
+
+// ── The simulation (../lib/physics.hpp) ──────────────────────────────────────
+// Ball positions/velocities, rotation, peg masks and the proximity/coupling
+// state all live inside this one object.
+CF_OBJECT(PhysicsWorld, physicsWorld)
+
+// ── The voices (../lib/sequencer.hpp) ────────────────────────────────────────
+// Scale/root/octave, the note mask, the deferred-hit slot and both envelopes.
+CF_OBJARRAY(GravityChannel, channels, NUM_CHANNELS)
+
+// ── Base parameters (../lib/params.hpp) ──────────────────────────────────────
+// What the *user* set, as opposed to what the container is currently running
+// with CV modulation applied. These are what presets store.
+CF_OBJARRAY(ContainerParams, containerParams, 2)
+CF_OBJECT (WorldParams,      worldParams)
+CF_OBJECT (ModBus,           modBus)
+
+// ── Clock (../lib/clock.hpp) ─────────────────────────────────────────────────
+// Tempo, external-clock interval history and the quantize grid phase.
+CF_OBJECT(Clock, clockEngine)
+
+// ── CV / IN 1 inputs (../lib/cvInputs.hpp) ───────────────────────────────────
+CF_ARRAY (float,         channelADC,    NUM_CV_INS)
+CF_ARRAY (float,         oldChannelADC, NUM_CV_INS)
+CF_SCALAR(unsigned char, in1Role)
+CF_ARRAY (unsigned char, cvTarget,      NUM_CV_INS)
+CF_ARRAY (unsigned char, cvDepth,       NUM_CV_INS)
+CF_SCALAR(bool,          trigPending)   // volatile global
+CF_SCALAR(unsigned long, lastTrigUs)    // volatile global
+CF_SCALAR(bool,          trigSeen)      // volatile global
+CF_SCALAR(bool,          trigLevel)     // volatile global
+CF_SCALAR(unsigned long, trigEdgeUs)    // volatile global
+
+// ── Presets (../lib/presetManager.hpp) ───────────────────────────────────────
+CF_SCALAR(int, saveSlot)
+
+// ── Menu / UI (fw_engine.cpp file-scope) ─────────────────────────────────────
+CF_SCALAR(int,  menuItem)
+CF_SCALAR(bool, switchState)
+CF_SCALAR(bool, oldSwitchState)
+CF_SCALAR(int,  menuMode)
+CF_SCALAR(bool, displayRefresh)
+CF_SCALAR(bool, unsavedChanges)
+CF_SCALAR(int,  menuScreenTimeout)
+// The live physics view's hold-off deadline (../lib/menuHandlers.hpp). Shared,
+// two Rack instances would yank each other's screen between menu and animation.
+CF_SCALAR(unsigned long, liveViewUntil)
+
+// ── Objects (default-constructible, swappable) ───────────────────────────────
+CF_OBJECT(CalibrationData, cal)
+CF_OBJECT(EEPROMClass,     EEPROM) // per-instance presets/calibration blob
+
+// ── Engine time + on-screen message overlay (fw_engine.cpp file-scope) ───────
+CF_SCALAR(unsigned long, g_engineMicros)
+CF_ARRAY (char,          _tempMsg, 32)
+CF_SCALAR(unsigned long, _tempMsgUntil)
