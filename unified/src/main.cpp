@@ -25,8 +25,10 @@
 #include "boardPinouts.hpp"
 #include "calibrationData.hpp"
 #include "encoder.hpp"
+#include "shellObjects.hpp"
 #include "splash.hpp"
 
+#include "apps/dq_app.hpp"
 #include "apps/scp_app.hpp"
 
 // ── Board-owned singletons ──────────────────────────────────────────────────
@@ -35,6 +37,7 @@
 // and the encoder only through IApp's event calls, so they cannot fight over
 // either.
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+DisplayManager displayMgr(display);
 Encoder encoder(ENC_PIN_1, ENC_PIN_2);
 
 // Referenced by core/boardIO.hpp (DAC correction) and core/cvInput.hpp.
@@ -44,6 +47,7 @@ CalibrationData cal = {};
 // ── The app registry ────────────────────────────────────────────────────────
 // Adding an app is one include, one entry, and one -I line in platformio.ini.
 static forge::IApp *const kApps[] = {
+    forge::DqApp(),
     forge::ScpApp(),
 };
 static constexpr int kAppCount = (int)(sizeof(kApps) / sizeof(kApps[0]));

@@ -72,6 +72,10 @@ void attachInterrupt(int, void (*isr)(), int) { _trigIsr = isr; }
 #include "Adafruit_GFX.h"
 #include "Adafruit_SSD1306.h"
 
+// shellObjects.hpp declares the board-owned display/displayMgr/encoder/cal
+// that the shared headers reference. Must precede all of them.
+#include "shellObjects.hpp"
+
 #include "boardIO.hpp"
 #include "channel.hpp"
 #include "cvInputs.hpp"

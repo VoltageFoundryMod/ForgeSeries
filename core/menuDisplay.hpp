@@ -8,8 +8,14 @@
 // menuHandlers.hpp).
 // ============================================================
 
-// Forward declarations for main.cpp globals used by this header.
-extern Adafruit_SSD1306 display;
+// App-supplied hooks. These are deliberately the ONLY externs here: when an app
+// TU is wrapped in namespace forge::<app>, this header is included from inside
+// that namespace so these resolve to that app's own implementations.
+//
+// The board-owned objects this header also uses — `display` above all — are
+// declared in core/shellObjects.hpp instead, which is included at global scope.
+// Declaring `display` here would have namespaced it too, giving every app a
+// private framebuffer. See that header for the full explanation.
 extern void RedrawDisplay();
 extern void MenuHeader(const char *header);
 

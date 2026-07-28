@@ -148,7 +148,6 @@ static inline int CvMap(float cv, int lo, int hi) {
 float lastDispatchedCv[NUM_CV_INS] = {-1.0e9f, -1.0e9f};
 
 // ── extern refs defined in main.cpp / clockEngine.hpp ────────────────────────
-extern CalibrationData cal;
 extern bool masterState;
 extern void SetMasterState(bool state);
 

@@ -48,7 +48,6 @@ static constexpr unsigned long TRIG_DEBOUNCE_US = 1000;
 // build-flag change.
 float channelCv[NUM_CV_INS], oldChannelCv[NUM_CV_INS];
 
-extern CalibrationData cal;
 
 // ── IN 1 role ────────────────────────────────────────────────────────────────
 // One jack, several jobs. Auto-detection is impossible — the hardware has no

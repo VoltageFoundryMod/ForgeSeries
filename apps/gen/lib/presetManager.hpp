@@ -26,7 +26,6 @@ extern GravityChannel channels[NUM_CHANNELS]; // src/main.cpp
 extern ContainerParams containerParams[2];    // src/main.cpp
 extern WorldParams worldParams;               // src/main.cpp
 extern Clock clockEngine;                     // src/main.cpp
-extern DisplayManager displayMgr;             // src/main.cpp
 extern int menuScreenTimeout;                 // src/main.cpp
 extern uint8_t in1Role;                       // lib/cvInputs.hpp
 extern uint8_t cvTarget[NUM_CV_INS];          // lib/cvInputs.hpp

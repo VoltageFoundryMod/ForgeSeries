@@ -80,7 +80,6 @@ int transposeDegrees = 0; // current transposition, in scale degrees
 static constexpr float TRANSPOSE_HYSTERESIS = 0.15f;
 
 // ── extern refs defined in main.cpp ──────────────────────────────────────────
-extern CalibrationData cal;
 
 // ── TRIG input ───────────────────────────────────────────────────────────────
 volatile bool trigPending = false;      // set by the ISR, drained by the loop

@@ -16,7 +16,6 @@
 #include "fonts/helvB24.h"
 
 // ── Globals owned by main.cpp ────────────────────────────────
-extern DisplayManager displayMgr;
 extern bool displayRefresh;
 extern bool unsavedChanges;
 extern int menuItem;

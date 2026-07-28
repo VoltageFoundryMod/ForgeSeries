@@ -57,7 +57,6 @@ extern ContainerParams containerParams[2];
 extern WorldParams worldParams;
 extern PhysicsWorld physicsWorld;
 extern Clock clockEngine;
-extern DisplayManager displayMgr;
 extern bool unsavedChanges;
 extern bool displayRefresh; // REQUEST_DISPLAY_REFRESH() writes it
 extern int menuMode;

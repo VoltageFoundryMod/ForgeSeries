@@ -21,7 +21,6 @@
 #include "outputs.hpp"
 #include "pinouts.hpp"
 
-extern DisplayManager displayMgr; // defined in src/main.cpp
 extern int menuScreenTimeout;     // defined in src/main.cpp
 
 // ── Preset schema ─────────────────────────────────────────────────────────────

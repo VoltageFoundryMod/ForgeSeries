@@ -32,6 +32,11 @@ static volatile bool _core1Enabled = false;
 #include <Wire.h>
 
 // Load local libraries
+// shellObjects.hpp first: it declares the board-owned display/displayMgr/
+// encoder/cal that several headers below reference, and it must precede all of
+// them rather than sit in alphabetical order.
+#include "shellObjects.hpp"
+
 #include "boardIO.hpp"
 #include "calibration.hpp" // RunCalibration() — output trim + CV LUT capture
 #include "clockEngine.hpp"

@@ -39,9 +39,6 @@
 #include "presetManager.hpp"
 
 // Forward declarations from main.cpp
-extern Adafruit_SSD1306 display;
-extern CalibrationData cal;
-extern Encoder encoder;
 extern void SaveCalibration(const CalibrationData &);
 
 // ── Calibration constants ────────────────────────────────────────────────────

@@ -1,0 +1,258 @@
+// dq_app.cpp — NoteForge (dual quantizer) hosted in the unified firmware.
+//
+// See scp_app.cpp for the pattern and the include-order rule. NoteForge is the
+// first app with a menu system, so it also exercises the part ForgeView did not:
+// core/menuDisplay.hpp is included INSIDE the namespace, so its RedrawDisplay()
+// and MenuHeader() hooks bind to this app's implementations, while `display`,
+// `displayMgr` and `encoder` stay global via core/shellObjects.hpp.
+
+// ── 1. Global scope: standard library, third-party, core ────────────────────
+// Every header reached from inside the namespace must already be included here.
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <math.h>
+#include <string>
+
+#include <Arduino.h>
+
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <EEPROM.h>
+#include <Wire.h>
+
+#include "IApp.hpp"
+#include "boardIO.hpp"
+#include "boardPinouts.hpp"
+#include "calibrationData.hpp"
+#include "cvInput.hpp"
+#include "displayManager.hpp"
+#include "encoder.hpp"
+#include "envelope.hpp"
+#include "scales.hpp"
+#include "shellObjects.hpp" // display / displayMgr / encoder / cal — the globals
+#include "splash.hpp"
+#include "utils.hpp"
+
+#include "dq_app.hpp"
+
+#define OLED_ADDRESS 0x3C
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+
+namespace forge {
+namespace dq {
+
+// Core 0 prepares a frame; Core 1 flushes it. Per-app, because each app runs its
+// own render policy — the shell only decides which app owns the cores.
+static volatile bool _displayFrameReady = false;
+static volatile bool _displayLocked = false;
+
+// Marks the display dirty and restarts the screen-timeout clock. Must be defined
+// before menuHandlers.hpp, which uses it.
+#define REQUEST_DISPLAY_REFRESH()     \
+    do {                              \
+        displayRefresh = 1;           \
+        displayMgr.MarkInteraction(); \
+    } while (0)
+
+// ── 2. NoteForge's own headers ──────────────────────────────────────────────
+#include "pinouts.hpp"
+#include "channel.hpp"
+#include "cvInputs.hpp"
+#include "storage.hpp" // pulls in presetManager.hpp
+
+#include "menuDefinitions.hpp"
+#include "menuHandlers.hpp"
+#include "menuDisplay.hpp" // core header, namespaced for its app hooks
+#include "menuRender.hpp"
+
+#include "calibration.hpp"
+#include "version.hpp"
+
+// ── App state (was main.cpp's file-scope globals) ───────────────────────────
+QuantizerChannel channels[NUM_CHANNELS];
+
+int menuItem = 1; // 1-based; item 1 is the keyboard home screen
+bool switchState = 1;
+bool oldSwitchState = 1;
+int menuMode = 0; // 0 = navigating, else the item being edited
+bool displayRefresh = 1;
+bool unsavedChanges = false;
+int menuScreenTimeout = 2; // index into screenTimeoutOptions[]
+unsigned long lastEncoderUpdate = 0;
+
+void HandleOutputs();
+
+// Encoder acceleration. The shell does detent detection and hands us a
+// direction, so this only tracks how fast those arrive.
+static float speedFactor = 1.0f;
+static unsigned long lastEncoderTime = 0;
+static int lastEncoderDir = 0;
+
+static void UpdateSpeedFactor(int dir) {
+    const unsigned long now = millis();
+    const unsigned long timeDiff = now - lastEncoderTime;
+    lastEncoderTime = now;
+
+    if (lastEncoderDir != 0 && dir != lastEncoderDir) {
+        speedFactor = 1.0f; // reversing always starts from a single step
+        lastEncoderDir = dir;
+        return;
+    }
+    lastEncoderDir = dir;
+
+    if (timeDiff < 30) {
+        speedFactor = 8.0f;
+    } else if (timeDiff < 60) {
+        speedFactor = 4.0f;
+    } else if (timeDiff < 120) {
+        speedFactor = 2.0f;
+    } else {
+        speedFactor = 1.0f;
+    }
+}
+
+// Brief full-screen message ("SAVED", "LOADED"). Core 0 never touches Wire, so
+// it prepares the buffer and lets Core 1 flush. Keeps the quantizers running
+// throughout so held notes do not drop out.
+void ShowTemporaryMessage(const char *msg, uint32_t durationMs) {
+    _displayLocked = true;
+    delay(10); // let Core 1 finish any in-flight HandleDisplay()
+
+    display.clearDisplay();
+    display.setTextSize(2);
+    const int x = (SCREEN_WIDTH - (int)strlen(msg) * 12) / 2;
+    display.setCursor(x < 0 ? 0 : x, SCREEN_HEIGHT / 2 - 8);
+    display.print(msg);
+    _displayFrameReady = true;
+
+    const uint32_t start = millis();
+    while (millis() - start < durationMs) {
+        HandleCVInputs();
+        HandleOutputs();
+    }
+
+    _displayLocked = false;
+    REQUEST_DISPLAY_REFRESH();
+}
+
+// Core 0 prepares the buffer (no I2C) and signals Core 1 to flush it.
+void RedrawDisplay() {
+    displayMgr.PrepareFrame();
+    displayRefresh = 0;
+    _displayFrameReady = true;
+}
+
+// Advance both quantizer voices and push all four DAC outputs.
+// Jack map: 1 = CV 1, 2 = CV 2, 3 = GATE 1, 4 = GATE 2.
+void HandleOutputs() {
+    const unsigned long now = micros();
+    const bool trigEdge = ConsumeTrigger();
+    HandleTriggerLevel();
+    HandleTransposeInput();
+
+    for (int i = 0; i < NUM_CHANNELS; i++) {
+        // With IN 2 handed to the transpose CV, channel 2 has no pitch input of
+        // its own, so it quantizes IN 1 alongside channel 1.
+        const float pitchCv = (in2Role == In2Transpose) ? channelCv[0] : channelCv[i];
+        channels[i].SetTransposeDegrees(transposeDegrees);
+        channels[i].Process(CvSemitones(pitchCv), now, trigEdge, trigLevel);
+    }
+
+    DACWriteAll(channels[0].GetCVOutput(), channels[1].GetCVOutput(),
+                channels[0].GetGateOutput(), channels[1].GetGateOutput());
+
+    for (int i = 0; i < NUM_CHANNELS; i++) {
+        if (channels[i].ConsumeNoteChanged())
+            displayRefresh = 1;
+    }
+}
+
+// ── 3. The shell contract ───────────────────────────────────────────────────
+class NoteForgeApp final : public IApp {
+  public:
+    const char *Name() const override { return "QUANTIZER"; }
+    const char *Version() const override { return VERSION; }
+
+    void Begin() override {
+        // The shell has done InitWire/InitIO/display.begin/InitDAC already.
+        EEPROMInit();
+        cal = LoadCalibration();
+        UpdateParameters(Load(0));
+
+        attachInterrupt(digitalPinToInterrupt(CLK_IN_PIN), TriggerReceived, RISING);
+        REQUEST_DISPLAY_REFRESH();
+    }
+
+    void Tick0() override {
+        HandleCVInputs();
+        HandleOutputs();
+        // HandleOutputs() can set displayRefresh on a note change but cannot
+        // reach displayMgr; propagate here so HandleDisplay() actually fires
+        // (it needs both flags).
+        if (displayRefresh)
+            displayMgr.MarkDirty();
+    }
+
+    void Tick1(Adafruit_SSD1306 &disp) override {
+        // Skip rendering while Core 0 holds the buffer (temporary message).
+        if (!_displayLocked)
+            HandleDisplay();
+        if (_displayFrameReady) {
+            _displayFrameReady = false;
+            disp.display(); // Wire (I2C1) — Core 1 only
+        }
+    }
+
+    void EncoderButton(bool pressed) override {
+        oldSwitchState = switchState;
+        switchState = pressed ? 0 : 1; // active-low, matching the raw pin
+        if (switchState != 1 || oldSwitchState != 0)
+            return; // act on release only
+
+        lastEncoderUpdate = millis();
+        REQUEST_DISPLAY_REFRESH();
+        if (menuMode != 0) {
+            menuMode = 0; // commit and leave edit mode
+            return;
+        }
+        if (menuItem >= 1 && menuItem <= MENU_ITEM_COUNT) {
+            const MenuItem &mi = MENU_ITEMS[menuItem - 1];
+            if (mi.type == MENU_ACTION || mi.type == MENU_TOGGLE) {
+                if (mi.action)
+                    mi.action();
+            } else { // MENU_EDIT
+                menuMode = menuItem;
+            }
+        }
+    }
+
+    void EncoderTurn(int detents) override {
+        if (detents == 0)
+            return;
+        const int dir = (detents > 0) ? 1 : -1;
+        UpdateSpeedFactor(dir);
+        REQUEST_DISPLAY_REFRESH();
+        lastEncoderUpdate = millis();
+
+        if (menuMode == 0) {
+            menuItem += dir;
+            if (menuItem < 1)
+                menuItem = MENU_ITEM_COUNT;
+            else if (menuItem > MENU_ITEM_COUNT)
+                menuItem = 1;
+        } else if (menuMode >= 1 && menuMode <= MENU_ITEM_COUNT) {
+            if (MENU_ITEMS[menuMode - 1].setter)
+                MENU_ITEMS[menuMode - 1].setter(dir * (int)speedFactor);
+        }
+    }
+};
+
+inline NoteForgeApp g_app;
+
+} // namespace dq
+
+IApp *DqApp() { return &dq::g_app; }
+
+} // namespace forge

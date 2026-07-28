@@ -38,6 +38,7 @@ static volatile bool _core1Enabled = false;
 #include "clock.hpp"
 #include "cvInputs.hpp"
 #include "displayManager.hpp"
+#include "shellObjects.hpp" // extern display/displayMgr/encoder/cal
 #include "encoder.hpp"
 #include "params.hpp"
 #include "physics.hpp"

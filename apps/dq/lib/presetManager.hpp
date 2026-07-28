@@ -19,7 +19,6 @@
 #include "pinouts.hpp"
 
 extern QuantizerChannel channels[NUM_CHANNELS]; // defined in src/main.cpp
-extern DisplayManager displayMgr;               // defined in src/main.cpp
 extern int menuScreenTimeout;                   // defined in src/main.cpp
 extern uint8_t in2Role;                         // defined in lib/cvInputs.hpp
 extern uint8_t transposeRange;                  // defined in lib/cvInputs.hpp

@@ -58,7 +58,6 @@
 
 // ── Globals owned by src/main.cpp ────────────────────────────
 extern QuantizerChannel channels[NUM_CHANNELS];
-extern DisplayManager displayMgr;
 extern bool unsavedChanges;
 extern int menuMode;
 extern int menuScreenTimeout;
