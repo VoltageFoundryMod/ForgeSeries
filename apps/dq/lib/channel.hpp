@@ -197,10 +197,16 @@ class QuantizerChannel {
     // trigHigh       : current TRIG input level (used by Gate mode).
     void Process(float pitchSemitones, unsigned long nowUs, bool trigEdge, bool trigHigh) {
         // The quantizer's note table spans 0..QUANT_MAX_SEMITONE, so the input
-        // is clamped to that regardless of what the jack can deliver. On the
-        // bipolar hardware this means negative CV rests on the bottom note —
-        // whether -5..+5 V should instead span ten octaves is a musical
-        // decision for that hardware revision, not something to assume here.
+        // is clamped to that regardless of what the jack can deliver.
+        //
+        // 0 V is C0 — the bottom of the range — on both hardware revisions, so
+        // on the +/-5 V hardware negative CV simply rests on the bottom note
+        // and the usable span stays five octaves. Recovering the other half of
+        // that range is a later, opt-in change: putting C0 at -3 V would give
+        // eight octaves from the same jack. That belongs behind a menu setting
+        // (a pitch offset applied here, before the clamp) rather than being
+        // implied by the hardware revision, so patches keep sounding the same
+        // until the user asks for it.
         _inputSemitone =
             constrain(pitchSemitones, 0.0f, (float)QUANT_MAX_SEMITONE);
 

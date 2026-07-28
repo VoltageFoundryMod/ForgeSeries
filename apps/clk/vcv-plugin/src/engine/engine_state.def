@@ -44,8 +44,8 @@ CF_ARRAY (CVTarget, pendingCVInputTarget, NUM_CV_INS)
 CF_ARRAY (CVTarget, CVInputTarget,        NUM_CV_INS)
 CF_ARRAY (int,      CVInputAttenuation,   NUM_CV_INS)
 CF_ARRAY (int,      CVInputOffset,        NUM_CV_INS)
-CF_ARRAY (float,    channelADC,           NUM_CV_INS)
-CF_ARRAY (float,    oldChannelADC,        NUM_CV_INS)
+CF_ARRAY (float,    channelMv,            NUM_CV_INS)
+CF_ARRAY (float,    oldChannelMv,         NUM_CV_INS)
 CF_ARRAY (float,    lastDispatchedADC,    NUM_CV_INS)
 CF_SCALAR(bool,     lastResetState)                    // volatile global
 

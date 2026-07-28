@@ -4,8 +4,8 @@
 //
 // Owns: CVTarget enum, CVTargetDescription[],
 // CVInputTarget/Attenuation/Offset[],
-//       channelADC[], pendingCVInputTarget[],
-//       AdjustADCReadings(), HandleCVInputs(), HandleCVTarget().
+//       channelMv[], pendingCVInputTarget[],
+//       HandleCVInputs(), HandleCVTarget().
 // Depends on: outputs[], BPM/tickCounter/externalTickCounter (clockEngine.hpp),
 //             masterState/SetMasterState() (main.cpp via extern).
 
@@ -13,6 +13,7 @@
 
 #include "boardIO.hpp"
 #include "calibrationData.hpp" // CalibrationData
+#include "cvInput.hpp"         // shared acquisition + range adapters
 #include "clockEngine.hpp"
 #include "outputs.hpp"
 #include "pinouts.hpp"
@@ -108,8 +109,9 @@ String CVTargetDescription[] = {
 int CVTargetLength =
     sizeof(CVTargetDescription) / sizeof(CVTargetDescription[0]);
 
-// ── CV oversample count
-static constexpr int CV_OVERSAMPLE_SAMPLES = 8;
+// ── CV oversample count comes from core/cvInput.hpp (default 8).
+// Must be a macro, not a constexpr, so core's #ifndef guard can see it if this
+// module ever wants a different value.
 
 // ── CV input state globals
 // ────────────────────────────────────────────────────
@@ -120,8 +122,14 @@ CVTarget CVInputTarget[NUM_CV_INS] = {CVTarget::None, CVTarget::None};
 int CVInputAttenuation[NUM_CV_INS] = {0, 0};
 int CVInputOffset[NUM_CV_INS] = {0, 0};
 
-// ADC readings (calibrated, filtered)
-float channelADC[NUM_CV_INS], oldChannelADC[NUM_CV_INS];
+// CV readings (calibrated, filtered), in MILLIVOLTS at the jack.
+//
+// Millivolts rather than ADC counts so the reading survives the move to +/-5 V
+// hardware, where counts cannot express a negative CV. The modulation matrix
+// below still works in DAC counts — attenuation and offset are expressed as a
+// percentage of MAXDAC — so the conversion happens once, at the dispatch
+// boundary, via CvCountsFromMv(). See HandleCVInputs().
+float channelMv[NUM_CV_INS], oldChannelMv[NUM_CV_INS];
 
 // Last CV value actually dispatched to a modulation target, per channel. The
 // dispatch gate compares against this (cumulative change) rather than the
@@ -141,38 +149,14 @@ extern void SetMasterState(bool state);
 void HandleCVTarget(int ch, float CVValue, CVTarget cvTarget);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Read one ADC channel and apply linear calibration.
-// Raw ADC → millivolts via per-channel coefficients (mv = scale*raw + offset),
-// then → 0–4095 (0–5V scale) so downstream code sees the same 12-bit range.
-// Falls back to nominal scaling when calibration data is not yet valid.
-// ─────────────────────────────────────────────────────────────────────────────
-void AdjustADCReadings(int CV_IN_PIN, int ch) {
-    // Average multiple samples to reduce RP2040 ADC noise.
-    int32_t sum = 0;
-    for (int i = 0; i < CV_OVERSAMPLE_SAMPLES; i++) {
-        sum += analogRead(CV_IN_PIN);
-    }
-    int raw = (int)(sum / CV_OVERSAMPLE_SAMPLES);
-
-    // Apply calibration: linear mapping raw ADC → millivolts.
-    // If calibration is invalid (not yet run), use nominal full-scale.
-    float mv;
-    if (cal.valid) {
-        mv = cal.cvScale[ch] * raw + cal.cvOffset[ch];
-    } else {
-        mv = (float)raw * 5000.0f / 4095.0f;
-    }
-    // Convert millivolts (0–5000) to 12-bit DAC scale (0–4095)
-    channelADC[ch] = constrain(mv * 4095.0f / 5000.0f, 0.0f, 4095.0f);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Poll both CV inputs and dispatch to HandleCVTarget() on meaningful change
 // ─────────────────────────────────────────────────────────────────────────────
 void HandleCVInputs() {
     for (int i = 0; i < NUM_CV_INS; i++) {
-        oldChannelADC[i] = channelADC[i];
-        AdjustADCReadings(CV_IN_PINS[i], i);
+        oldChannelMv[i] = channelMv[i];
+        // Oversampling and calibration live in core/cvInput.hpp — the same
+        // acquisition path every module uses.
+        channelMv[i] = CvReadMillivolts(i);
 
         // Is this CV input mirrored to a output? (waveform "CV 1" reads CV in 1,
         // "CV 2" reads CV in 2).  Such outputs feed the quantizer and want a
@@ -190,17 +174,27 @@ void HandleCVInputs() {
         // ONE_POLE(out, in, coeff): out = (1-coeff)*out + coeff*in
         //   here out=new_raw, in=old_filtered → result = (1-α)*new_raw + α*old
         if (feedsOutput) {
-            ONE_POLE(channelADC[i], oldChannelADC[i], 0.15f); // light: pitch tracking
+            ONE_POLE(channelMv[i], oldChannelMv[i], 0.15f); // light: pitch tracking
         } else {
-            ONE_POLE(channelADC[i], oldChannelADC[i], 0.5f); // heavy: noise rejection
+            ONE_POLE(channelMv[i], oldChannelMv[i], 0.5f); // heavy: noise rejection
         }
+
+        // The modulation matrix below is expressed in DAC counts (attenuation
+        // and offset are percentages of MAXDAC), so convert once here rather
+        // than scattering the conversion through every target branch.
+        //
+        // NOTE: CvCountsFromMv() clamps at zero, so on the +/-5 V hardware the
+        // matrix will see negative CV as 0 until it is reworked to run in
+        // millivolts or normalised units. Acquisition above is already
+        // polarity-correct; only this counts-domain matrix is not.
+        const float cvCounts = (float)CvCountsFromMv(channelMv[i]);
 
         // Push the filtered CV to every output mirroring this input.  The
         // quantizer's own ±hysteresis decides note changes downstream.
         if (feedsOutput) {
             for (int o = 0; o < NUM_OUTPUTS; o++) {
                 if (outputs[o].GetWaveformType() == passthroughWave) {
-                    outputs[o].SetCVValue(channelADC[i]);
+                    outputs[o].SetCVValue(cvCounts);
                 }
             }
         }
@@ -209,9 +203,9 @@ void HandleCVInputs() {
         // gated on a meaningful change since the last dispatch to ignore ADC
         // jitter while still tracking slow CV sweeps.
         if (CVInputTarget[i] != CVTarget::None &&
-            abs(channelADC[i] - lastDispatchedADC[i]) > 10) {
-            HandleCVTarget(i, channelADC[i], CVInputTarget[i]);
-            lastDispatchedADC[i] = channelADC[i];
+            abs(cvCounts - lastDispatchedADC[i]) > 10) {
+            HandleCVTarget(i, cvCounts, CVInputTarget[i]);
+            lastDispatchedADC[i] = cvCounts;
         }
     }
 }
