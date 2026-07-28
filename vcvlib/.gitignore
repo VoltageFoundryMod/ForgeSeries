@@ -1,0 +1,7 @@
+# This is a header-only + Makefile-fragment library; it produces no build output
+# of its own. Consumers build it into their plugin. Ignore common cruft only.
+*.o
+*.d
+*.a
+.DS_Store
+Thumbs.db
