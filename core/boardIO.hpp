@@ -42,14 +42,19 @@ void InitIO() {
     // No GPIO gate output pins — all outputs via MCP4728
 }
 
-// Display bus speed. The SSD1306 is rated for 400 kHz, which is what most
-// modules use, but the panel tolerates considerably more and ForgeView drives it
-// at 1 MHz to hit its scope refresh rate. Apps override this by defining it
-// before including this header (see apps/scp/lib/pinouts.hpp).
+// Display bus speed, platform-wide.
 //
-// This applies to Wire ONLY. Do not raise Wire1 to match — see InitWire().
+// The SSD1306 datasheet rates the bus at 400 kHz, but the panel on this board
+// runs reliably at 1 MHz — ForgeView has shipped that way to hit its scope
+// refresh rate. Since a display.display() flush blocks the calling core for the
+// whole transfer, there is no upside to clocking it slower on the other
+// modules: 1 MHz simply makes every UI more responsive.
+//
+// This applies to Wire ONLY. Do NOT raise Wire1 to match — see InitWire().
+//
+// Left overridable so an app can drop back if a future panel revision needs it.
 #ifndef FORGE_DISPLAY_I2C_HZ
-#define FORGE_DISPLAY_I2C_HZ 400000
+#define FORGE_DISPLAY_I2C_HZ 1000000
 #endif
 
 // Initialize Wire (display) and Wire1 (DAC) I2C buses.
