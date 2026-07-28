@@ -524,10 +524,13 @@ static void setQtzOctave(int d) {
 // Group 13 — Settings / save-load  (items 62–66)
 // ================================================================
 
-// Save-slot scroll wraps within [0, NUM_SLOTS] inclusive.
+// Save-slot scroll wraps within [0, NUM_SLOTS-1] — the range Save()/Load()
+// actually accept. It used to wrap over [0, NUM_SLOTS] inclusive, which offered
+// a slot one past the end that both functions rejected on their bounds check,
+// so saving to the last displayed slot quietly did nothing.
 static void setSaveSlot(int d) {
     int dir = (d > 0) ? 1 : -1;
-    saveSlot = (saveSlot + dir + NUM_SLOTS + 1) % (NUM_SLOTS + 1);
+    saveSlot = (saveSlot + dir + NUM_SLOTS) % NUM_SLOTS;
 }
 
 static void actionSave() {

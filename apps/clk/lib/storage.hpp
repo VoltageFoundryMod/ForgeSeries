@@ -20,6 +20,19 @@
 #define EEPROM_CAL_BASE (NUM_SLOTS * (int)sizeof(LoadSaveParams))
 #define EEPROM_TOTAL_SIZE (EEPROM_CAL_BASE + (int)sizeof(CalibrationData))
 
+// The arduino-pico EEPROM emulation is ONE 4096-byte flash sector, and its
+// begin() clamps anything larger without telling you:
+//     if ((size <= 0) || (size > 4096)) { size = 4096; }
+// Past the clamp, EEPROM::get() leaves its argument untouched and EEPROM::put()
+// writes nothing — both without an error. Growing LoadSaveParams or NUM_SLOTS
+// far enough therefore silently disables the top preset slots and, once
+// EEPROM_CAL_BASE crosses the line, calibration entirely. Fail the build here
+// instead of shipping that.
+static_assert(EEPROM_TOTAL_SIZE <= 4096,
+              "EEPROM layout exceeds the 4096-byte emulated sector: reduce "
+              "NUM_SLOTS or shrink LoadSaveParams. Silently loses presets "
+              "and calibration at runtime otherwise.");
+
 void EEPROMInit() {
     EEPROM.begin(EEPROM_TOTAL_SIZE);
 }

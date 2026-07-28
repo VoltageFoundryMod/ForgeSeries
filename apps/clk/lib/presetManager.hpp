@@ -27,8 +27,17 @@ extern int menuScreenTimeout;     // defined in src/main.cpp
 // ── Preset schema ─────────────────────────────────────────────────────────────
 // Number of preset slots.
 // Slot 0 = auto-load/save on boot; slots 1–(NUM_SLOTS-1) = user presets.
-// Increasing this shifts EEPROM_CAL_BASE — re-run CV calibration after changing.
-#define NUM_SLOTS 10
+//
+// This is capped by the EEPROM budget, NOT chosen freely: arduino-pico emulates
+// EEPROM in a single 4096-byte flash sector and EEPROM::begin() silently clamps
+// any larger request, after which every get/put past the clamp is a no-op that
+// still reports success. LoadSaveParams is 572 bytes here, so
+//   7 slots + CalibrationData = 7*572 + 56 = 4060 <= 4096.
+// At the previous value of 10 the total came to 5776: slots 7-9 never saved, and
+// CalibrationData sat at offset 5720 — entirely outside the clamp — so the
+// calibration wizard wrote nothing and the module was permanently uncalibrated.
+// storage.hpp static_asserts the budget so this cannot regress silently again.
+#define NUM_SLOTS 7
 // Bump this whenever the LoadSaveParams layout changes so older (incompatible)
 // presets are treated as invalid and fall back to defaults instead of loading
 // garbage into the new fields.  0xA6: cross-op fields.  0xA7: loop + invert fields.
