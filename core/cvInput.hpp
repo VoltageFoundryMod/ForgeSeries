@@ -2,35 +2,43 @@
 
 // cvInput.hpp — CV acquisition and range adaptation for the ForgeSeries board.
 //
-// Every module reads the same two analog CV jacks through the same 12-bit ADC
-// with the same two-point calibration, so the acquisition path lives here once.
-// What each app *does* with the value stays in its own cvInputs.hpp.
+// Every module reads the same two analog CV jacks through the same ADC with the
+// same two-point calibration, so acquisition lives here once. What each app
+// *does* with the value stays in its own cvInputs.hpp.
+//
+// ── The unit: normalised float ──────────────────────────────────────────────
+// A reading is a float where 1.0 means +5 V at the jack, on every hardware
+// revision:
+//
+//     unipolar (0..+5 V)   CvRead() returns  0.0 .. 1.0
+//     bipolar  (-5..+5 V)  CvRead() returns -1.0 .. 1.0,  0 V == 0.0
+//
+// Normalised rather than ADC counts because a count is meaningless without also
+// knowing MAXADC and the polarity convention. Presets store these values, so a
+// count would silently change meaning the moment either did — and both are
+// expected to (a +/-5 V revision is planned, and MAXDAC moves if the DAC is ever
+// upgraded). A normalised 0.5 survives all of it.
+//
+// Cost is nil in practice: the RP2040 is Cortex-M0+ with no FPU, so float is
+// soft-emulated, but the CV path was already float (calibration is a float
+// multiply-add, and the smoothing filters are float). SCP's FFT is the one
+// genuinely hot path and stays fixed-point in fixfft.
+//
+// Deliberately NOT normalised elsewhere:
+//   * pitch is carried in semitones (see CvSemitones) — 1 V/oct is semantically
+//     a voltage, and expressing C4 as 0.4 helps nobody;
+//   * DAC output stays in counts, converted at the write in boardIO.hpp, which
+//     is the one place MAXDAC belongs.
 //
 // ── Polarity ────────────────────────────────────────────────────────────────
-// The current hardware revision accepts 0..+5 V. The next one accepts -5..+5 V.
-// Which one you are building for is a single build flag:
-//
 //     build_flags = -DFORGE_CV_BIPOLAR      ; -5..+5 V hardware
 //     (unset)                               ; 0..+5 V hardware (default)
 //
-// Nothing above this file may assume a polarity. Apps read CV through the three
-// adapters below, whose contracts hold on BOTH hardware revisions:
-//
-//     CvVolts(ch)    -> actual volts at the jack. The honest primitive.
-//     CvNorm(ch)     -> 0..1    for "amount" controls (depth, rate, count)
-//     CvBipolar(ch)  -> -1..+1  for "offset"/"trim" controls (centred at zero)
-//
-// The two normalised adapters swap which of them is the direct reading and which
-// is the derived one when the flag flips, which is exactly why callers must not
-// open-code either mapping:
-//
-//                    unipolar (0..5V)            bipolar (-5..+5V)
-//     CvNorm         mv / 5000        (direct)   (mv + 5000) / 10000  (derived)
-//     CvBipolar      2*CvNorm - 1     (derived)  mv / 5000            (direct)
-//
-// A patch that sends 0 V reads as CvNorm 0 on both revisions. A patch that
-// sends 2.5 V reads as CvBipolar 0 on unipolar hardware and +0.5 on bipolar -
-// that is inherent to the hardware change, not something this layer can hide.
+// Note the flag barely appears below. Once calibration has mapped raw counts to
+// millivolts, dividing by CV_FULLSCALE_MV yields the correct normalised value on
+// BOTH revisions — the coefficients captured on bipolar hardware simply produce
+// negative millivolts near 0 V. Only the uncalibrated fallback and the two
+// rescaling adapters need to know.
 
 #include "boardPinouts.hpp"
 #include "calibrationData.hpp"
@@ -40,74 +48,80 @@
 // unified firmware lands, owned by the shell and shared by every app).
 extern CalibrationData cal;
 
-// ── Hardware range ──────────────────────────────────────────────────────────
+// Millivolts at the jack corresponding to a normalised 1.0. Both revisions peak
+// at +5 V; they differ only in how far *down* they go.
+#define CV_FULLSCALE_MV 5000.0f
+
+// Lowest value CvRead() can return on this hardware.
 #ifdef FORGE_CV_BIPOLAR
-#define CV_RANGE_MIN_MV (-5000.0f)
+#define CV_MIN_NORM (-1.0f)
 #else
-#define CV_RANGE_MIN_MV (0.0f)
+#define CV_MIN_NORM (0.0f)
 #endif
-#define CV_RANGE_MAX_MV (5000.0f)
-#define CV_RANGE_SPAN_MV (CV_RANGE_MAX_MV - CV_RANGE_MIN_MV)
+#define CV_NORM_SPAN (1.0f - CV_MIN_NORM)
 
 // Oversampling depth for a single CV read. The RP2040 ADC is noisy enough that
 // a single conversion visibly jitters a quantizer a semitone at the top of its
-// range. Apps may override before including.
+// range. Apps may override before including — as a macro, so this #ifndef sees
+// it (a constexpr would not).
 #ifndef CV_OVERSAMPLE_SAMPLES
 #define CV_OVERSAMPLE_SAMPLES 8
 #endif
 
 // ── Acquisition ─────────────────────────────────────────────────────────────
-// Read one CV channel and return calibrated millivolts at the jack.
-//
-// Calibration maps raw ADC counts straight to millivolts, so it absorbs the
-// hardware's input range on its own: on bipolar hardware the captured
-// coefficients simply produce negative millivolts near 0 V input. That is why
-// the polarity flag affects only the normalising adapters below and NOT this
-// function - do not add a polarity term here.
-//
-// Falls back to nominal full-scale mapping when no valid calibration is stored.
-inline float CvReadMillivolts(int ch) {
+// Read one CV channel, calibrated and oversampled, as a normalised value.
+inline float CvRead(int ch) {
     if (ch < 0 || ch >= NUM_CV_INS)
         return 0.0f;
 
     int32_t sum = 0;
     for (int i = 0; i < CV_OVERSAMPLE_SAMPLES; i++)
         sum += analogRead(CV_IN_PINS[ch]);
-    const int raw = (int)(sum / CV_OVERSAMPLE_SAMPLES);
+    const float raw = (float)(sum / CV_OVERSAMPLE_SAMPLES);
 
-    if (cal.valid)
-        return cal.cvScale[ch] * (float)raw + cal.cvOffset[ch];
+    if (cal.valid) {
+        // Calibration yields millivolts, which already carries the sign on
+        // bipolar hardware — no polarity term needed here.
+        return (cal.cvScale[ch] * raw + cal.cvOffset[ch]) / CV_FULLSCALE_MV;
+    }
 
     // Uncalibrated: assume the ADC spans the jack's full range linearly.
-    return CV_RANGE_MIN_MV + ((float)raw / (float)MAXADC) * CV_RANGE_SPAN_MV;
+    return CV_MIN_NORM + (raw / (float)MAXADC) * CV_NORM_SPAN;
 }
 
 // ── Range adapters ──────────────────────────────────────────────────────────
-inline float CvVoltsFromMv(float mv) { return mv * 0.001f; }
+// Rescale a reading onto a fixed range regardless of the hardware revision.
+// Callers pick by intent, and must not open-code either mapping: which one is
+// the identity swaps when the polarity flag flips.
+//
+//                unipolar (0..1 in)      bipolar (-1..1 in)
+//   CvUni        identity                (v + 1) / 2
+//   CvBi         v * 2 - 1               identity
 
-// 0..1 across the jack's full range. "Amount" controls.
-inline float CvNormFromMv(float mv) {
-    return constrain((mv - CV_RANGE_MIN_MV) / CV_RANGE_SPAN_MV, 0.0f, 1.0f);
+// 0..1 across the jack's full range. "Amount" controls (depth, rate, count).
+inline float CvUni(float v) {
+    return constrain((v - CV_MIN_NORM) / CV_NORM_SPAN, 0.0f, 1.0f);
 }
 
 // -1..+1 across the jack's full range. "Offset"/"trim" controls, centred.
-inline float CvBipolarFromMv(float mv) {
-    return constrain(CvNormFromMv(mv) * 2.0f - 1.0f, -1.0f, 1.0f);
+inline float CvBi(float v) { return constrain(CvUni(v) * 2.0f - 1.0f, -1.0f, 1.0f); }
+
+// ── Pitch ───────────────────────────────────────────────────────────────────
+// Volt-per-octave pitch in (fractional) semitones. 1 V = 12 semitones and 0 V is
+// semitone 0 on both revisions, so on bipolar hardware negative CV yields
+// negative semitones.
+//
+// Deliberately unclamped: how far a module's pitch range extends, and where it
+// puts its lowest note, is the module's decision. Today every module treats 0 V
+// as C0; putting C0 at -3 V to win eight octaves from the bipolar jack would be
+// an offset applied by the caller, before its own clamp.
+inline float CvSemitones(float v) {
+    return v * (CV_FULLSCALE_MV / 1000.0f) * 12.0f;
 }
 
-// Volt-per-octave pitch, in (fractional) semitones. 1 V = 12 semitones, and 0 V
-// is semitone 0 on both hardware revisions.
-//
-// Unlike the normalised adapters this needs no polarity term at all: it is a
-// straight scaling of millivolts, so negative CV simply yields negative
-// semitones on the bipolar hardware. Deliberately NOT clamped here — how far a
-// module's pitch range extends is the module's decision, not the CV layer's.
-inline float CvSemitonesFromMv(float mv) { return mv * (12.0f / 1000.0f); }
-
-// Legacy 0..MAXADC counts, for code that still works in ADC units. Prefer the
-// float adapters in new code - this one cannot represent negative CV and so
-// clamps at zero on bipolar hardware.
-inline uint16_t CvCountsFromMv(float mv) {
-    return (uint16_t)constrain(CvNormFromMv(mv) * (float)MAXADC, 0.0f,
-                               (float)MAXADC);
+// ── Legacy counts ───────────────────────────────────────────────────────────
+// Normalised -> 0..MAXADC, for code still working in ADC units. Prefer the
+// adapters above: this cannot represent negative CV and clamps at zero.
+inline uint16_t CvCounts(float v) {
+    return (uint16_t)constrain(CvUni(v) * (float)MAXADC, 0.0f, (float)MAXADC);
 }

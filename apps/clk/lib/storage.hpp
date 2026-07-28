@@ -64,7 +64,7 @@ CalibrationData LoadCalibration() {
     EEPROM.get(EEPROM_CAL_BASE, cal);
     // Erased flash / freshly-initialised EEPROM reads as 0xFF bytes: that decodes
     // to a non-zero `valid` flag AND NaN coefficients, which would otherwise slip
-    // past a bare `if (!cal.valid)` check and make CvReadMillivolts() return NaN
+    // past a bare `if (!cal.valid)` check and make CvRead() return NaN
     // CV readings (CV inputs appear completely dead). Reject non-finite
     // coefficients too (NaN compares unequal to itself) so an uncalibrated module
     // always falls back to the nominal linear mapping.  A magic/version mismatch
@@ -82,7 +82,7 @@ CalibrationData LoadCalibration() {
     if (cal.magic != CAL_MAGIC || !cal.valid || !finite) {
         // No (or invalid) calibration stored yet — populate nominal coefficients:
         // CV inputs use 5000 mV full scale over 4095 counts / zero offset, and the
-        // output correction is identity (cmd = desired).  CvReadMillivolts() and
+        // output correction is identity (cmd = desired).  CvRead() and
         // the DAC write path also fall back to nominal when !cal.valid, so these
         // values are a consistent, NaN-free starting point.
         for (int i = 0; i < NUM_CV_INS; i++) {

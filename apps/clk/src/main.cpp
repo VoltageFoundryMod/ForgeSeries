@@ -287,7 +287,7 @@ void HandleOutputs() {
                 srcNorm = norm[src]; // another output's pre-cross value
             } else {
                 // IN1 / IN2 sampled CV, normalised 0..1 by the core adapter
-                srcNorm = CvNormFromMv(channelMv[src - NUM_OUTPUTS]);
+                srcNorm = CvUni(channelCv[src - NUM_OUTPUTS]);
             }
             r = outputs[i].ApplyCrossOp(raw[i], srcNorm);
         }

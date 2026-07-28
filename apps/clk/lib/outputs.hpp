@@ -292,7 +292,7 @@ class Output {
                 HandleGateRelease();
         }
     }
-    void SetCVValue(float CVValue) { _inputCV = CVValue; }; // Set the input CV value for the quantizer
+    void SetCVValue(float CVValue) { _inputCV = CVValue; }; // normalised 0..1 input CV (see core/cvInput.hpp)
 
     // Envelope parameter setters
     EnvelopeParams GetEnvelopeParams() { return _envParams; }
@@ -423,7 +423,7 @@ class Output {
     int _quantizerNoteBuff[62];      // active note voltages (counts), ascending
     int _quantizerNoteCount = 0;     // number of valid entries in _quantizerNoteBuff
     bool _activeNotes[12] = {false}; // 1=note valid,0=note invalid
-    float _inputCV = 0.0f;           // Input CV value for quantizer (set by HandleCVTarget)
+    float _inputCV = 0.0f;           // normalised 0..1 input CV (set by HandleCVInputs)
 
     unsigned long _internalPulseCounter = 0; // Pulse counter (used for external clock division)
     unsigned long _resetPulseStart = 0;      // Reset pulse start time
@@ -1461,9 +1461,9 @@ void Output::Pulse(int PPQN, unsigned long globalTick) {
     case WaveformType::CVInput1:
     case WaveformType::CVInput2:
         // Output mirrors a CV input.  Keep _waveValue in sync for the blink
-        // indicator; ComputeRawOutput() emits the raw _inputCV (ADC domain) so
+        // indicator; ComputeRawOutput() emits _inputCV scaled to the output domain so
         // the quantiser, when enabled, sees the correct note grid.
-        _waveValue = (_inputCV / 4095.0f) * MaxWaveValue;
+        _waveValue = _inputCV * MaxWaveValue;
         _isPulseOn = true;
         break;
 
@@ -1557,13 +1557,13 @@ float Output::ComputeRawOutput() {
         return 0.0f;
 
     // ── CV passthrough (CV 1 / CV 2) ─────────────────────────────────────────
-    // _inputCV lives in 0..MAXADC (4095) — identical to the note grid used by
-    // BuildQuantBuffer / QuantizeCV (68.25 counts/semitone × 60 = 4095).
-    // Pass it directly so the quantiser (if enabled) sees the correct pitch
-    // distances and snaps to the right note (e.g. 2V = 1638 counts → C2).
+    // _inputCV is normalised 0..1; scale it into the output domain here, where
+    // it lands on the same grid BuildQuantBuffer / QuantizeCV use (68.25
+    // counts/semitone × 60 = MAXDAC), so the quantiser (if enabled) sees the
+    // correct pitch distances and snaps to the right note (2 V → C2).
     // The hardware ceiling is enforced by FinalizeOutput()'s clamp.
     if (_waveformType == WaveformType::CVInput1 || _waveformType == WaveformType::CVInput2) {
-        return _inputCV; // 0..4095 calibrated ADC (0..5V after LUT)
+        return _inputCV * (float)MAXDAC;
     }
 
     // floorVal: the DC floor (0V when offset=0%).

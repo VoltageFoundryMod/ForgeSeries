@@ -189,7 +189,7 @@ class QuantizerChannel {
 
     // ── Per-iteration processing ─────────────────────────────────────────────
     // pitchSemitones : calibrated, filtered pitch CV as fractional semitones at
-    //                  1 V/oct (see CvSemitonesFromMv()). Takes semitones rather
+    //                  1 V/oct (see CvSemitones()). Takes semitones rather
     //                  than ADC counts because counts cannot express a negative
     //                  CV, so a counts-based input would silently lose every
     //                  note below 0 V on the +/-5 V hardware.

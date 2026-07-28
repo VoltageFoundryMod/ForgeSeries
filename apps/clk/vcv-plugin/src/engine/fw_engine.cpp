@@ -156,7 +156,7 @@ void HandleOutputs() {
             if (src < NUM_OUTPUTS)
                 srcNorm = norm[src];
             else
-                srcNorm = CvNormFromMv(channelMv[src - NUM_OUTPUTS]);
+                srcNorm = CvUni(channelCv[src - NUM_OUTPUTS]);
             r = outputs[i].ApplyCrossOp(raw[i], srcNorm);
         }
         v[i] = (uint16_t)outputs[i].FinalizeOutput(r);

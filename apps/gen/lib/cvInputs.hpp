@@ -39,14 +39,14 @@ static constexpr float CV_FILTER_COEFF = 0.35f;
 // would otherwise fire several resets/kicks per pulse.
 static constexpr unsigned long TRIG_DEBOUNCE_US = 1000;
 
-// Calibrated, filtered CV per input, in MILLIVOLTS at the jack.
+// Calibrated, filtered CV per input, normalised (see core/cvInput.hpp).
 //
-// Millivolts rather than ADC counts because that is the one representation that
-// survives the move to +/-5 V hardware: counts cannot express a negative CV.
+// Normalised rather than ADC counts because presets store these values and a
+// count would change meaning if MAXADC or the CV range ever did - and both will.
 // Nothing outside this file reads these directly — everything goes through
 // CvNorm()/CvBipolar() below, which is what makes the polarity switch a
 // build-flag change.
-float channelMv[NUM_CV_INS], oldChannelMv[NUM_CV_INS];
+float channelCv[NUM_CV_INS], oldChannelCv[NUM_CV_INS];
 
 extern CalibrationData cal;
 
@@ -134,11 +134,11 @@ bool ConsumeTrigger(unsigned long *edgeUs = nullptr) {
 
 void HandleCVInputs() {
     for (int i = 0; i < NUM_CV_INS; i++) {
-        oldChannelMv[i] = channelMv[i];
+        oldChannelCv[i] = channelCv[i];
         // Oversampling and calibration live in core/cvInput.hpp — the same
         // acquisition path every module uses.
-        channelMv[i] = CvReadMillivolts(i);
-        ONE_POLE(channelMv[i], oldChannelMv[i], CV_FILTER_COEFF);
+        channelCv[i] = CvRead(i);
+        ONE_POLE(channelCv[i], oldChannelCv[i], CV_FILTER_COEFF);
     }
 }
 
@@ -153,14 +153,14 @@ inline float CvNorm(int ch) {
     if (ch < 0 || ch >= NUM_CV_INS) {
         return 0.0f;
     }
-    return CvNormFromMv(channelMv[ch]);
+    return CvUni(channelCv[ch]);
 }
 
 inline float CvBipolar(int ch) {
     if (ch < 0 || ch >= NUM_CV_INS) {
         return 0.0f;
     }
-    return CvBipolarFromMv(channelMv[ch]);
+    return CvBi(channelCv[ch]);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

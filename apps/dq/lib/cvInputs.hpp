@@ -7,7 +7,7 @@
 // third jack (TRIG) is the only modulation input, and it drives the gate/
 // envelope sync.
 //
-// Owns: channelMv[], HandleCVInputs(), and the TRIG
+// Owns: channelCv[], HandleCVInputs(), and the TRIG
 // input's ISR + edge queue.
 
 #include <Arduino.h>
@@ -32,13 +32,13 @@ static constexpr float CV_FILTER_COEFF = 0.2f;
 // fast gate would otherwise retrigger the envelope several times per note.
 static constexpr unsigned long TRIG_DEBOUNCE_US = 1000;
 
-// Calibrated, filtered pitch CV per channel, in MILLIVOLTS at the jack.
+// Calibrated, filtered pitch CV per channel, normalised (see core/cvInput.hpp).
 //
-// Millivolts rather than ADC counts so the reading survives the move to +/-5 V
-// hardware, where counts cannot express a negative CV. Consumers convert with
-// the core adapters — CvSemitonesFromMv() for pitch, CvNorm() for the
-// transpose control — rather than dividing by 4095 anywhere.
-float channelMv[NUM_CV_INS], oldChannelMv[NUM_CV_INS];
+// Normalised rather than ADC counts because presets store these values and a
+// count would change meaning if MAXADC or the CV range ever did. Consumers use
+// the core adapters — CvSemitones() for pitch, CvUni() for the transpose
+// control — rather than dividing by 4095 anywhere.
+float channelCv[NUM_CV_INS], oldChannelCv[NUM_CV_INS];
 
 // ── IN 2 routing ─────────────────────────────────────────────────────────────
 // IN 2 is normally channel 2's pitch input. It can instead be handed over to a
@@ -117,11 +117,11 @@ bool ConsumeTrigger() {
 // path every module uses.
 void HandleCVInputs() {
     for (int i = 0; i < NUM_CV_INS; i++) {
-        oldChannelMv[i] = channelMv[i];
-        channelMv[i] = CvReadMillivolts(i);
+        oldChannelCv[i] = channelCv[i];
+        channelCv[i] = CvRead(i);
         // ONE_POLE(out, in, coeff): out += coeff * (in - out)
         //   out = new raw reading, in = previous filtered value
-        ONE_POLE(channelMv[i], oldChannelMv[i], CV_FILTER_COEFF);
+        ONE_POLE(channelCv[i], oldChannelCv[i], CV_FILTER_COEFF);
     }
 }
 
@@ -141,7 +141,7 @@ void HandleTransposeInput() {
     int idx = constrain((int)transposeRange, 0, (int)TransposeRangeLength - 1);
     float low = (float)TransposeRangeLow[idx];
     float high = (float)TransposeRangeHigh[idx];
-    float degrees = low + CvNormFromMv(channelMv[1]) * (high - low);
+    float degrees = low + CvUni(channelCv[1]) * (high - low);
 
     // Only move once the reading has crossed the midpoint between the current
     // degree and the next by the hysteresis margin.
