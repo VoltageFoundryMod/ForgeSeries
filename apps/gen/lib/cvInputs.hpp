@@ -23,12 +23,13 @@
 
 #include "boardIO.hpp"
 #include "calibrationData.hpp"
+#include "cvInput.hpp" // shared acquisition + range adapters
 #include "params.hpp"
 #include "pinouts.hpp"
 #include "utils.hpp"
 
-// Oversampling per read — averages out RP2040 ADC noise.
-static constexpr int CV_OVERSAMPLE_SAMPLES = 8;
+// Oversampling per read (core/cvInput.hpp default is 8) — averages out RP2040
+// ADC noise. Must be a macro, not a constexpr, so core's #ifndef sees it.
 
 // One-pole smoothing. Heavier than NoteForge's: nothing here is pitch, so a
 // little lag costs nothing and keeps a noisy CV from making the physics jitter.
@@ -38,8 +39,14 @@ static constexpr float CV_FILTER_COEFF = 0.35f;
 // would otherwise fire several resets/kicks per pulse.
 static constexpr unsigned long TRIG_DEBOUNCE_US = 1000;
 
-// Calibrated, filtered CV per input (0..4095 == 0..5V).
-float channelADC[NUM_CV_INS], oldChannelADC[NUM_CV_INS];
+// Calibrated, filtered CV per input, in MILLIVOLTS at the jack.
+//
+// Millivolts rather than ADC counts because that is the one representation that
+// survives the move to +/-5 V hardware: counts cannot express a negative CV.
+// Nothing outside this file reads these directly — everything goes through
+// CvNorm()/CvBipolar() below, which is what makes the polarity switch a
+// build-flag change.
+float channelMv[NUM_CV_INS], oldChannelMv[NUM_CV_INS];
 
 extern CalibrationData cal;
 
@@ -125,32 +132,13 @@ bool ConsumeTrigger(unsigned long *edgeUs = nullptr) {
     return pending;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Read one ADC channel and apply linear calibration.
-// Raw ADC → millivolts via per-channel coefficients, then → 0–4095 (0–5V scale).
-// Falls back to nominal scaling when calibration data is not yet valid.
-// ─────────────────────────────────────────────────────────────────────────────
-void AdjustADCReadings(int CV_IN_PIN, int ch) {
-    int32_t sum = 0;
-    for (int i = 0; i < CV_OVERSAMPLE_SAMPLES; i++) {
-        sum += analogRead(CV_IN_PIN);
-    }
-    int raw = (int)(sum / CV_OVERSAMPLE_SAMPLES);
-
-    float mv;
-    if (cal.valid) {
-        mv = cal.cvScale[ch] * raw + cal.cvOffset[ch];
-    } else {
-        mv = (float)raw * 5000.0f / 4095.0f;
-    }
-    channelADC[ch] = constrain(mv * 4095.0f / 5000.0f, 0.0f, 4095.0f);
-}
-
 void HandleCVInputs() {
     for (int i = 0; i < NUM_CV_INS; i++) {
-        oldChannelADC[i] = channelADC[i];
-        AdjustADCReadings(CV_IN_PINS[i], i);
-        ONE_POLE(channelADC[i], oldChannelADC[i], CV_FILTER_COEFF);
+        oldChannelMv[i] = channelMv[i];
+        // Oversampling and calibration live in core/cvInput.hpp — the same
+        // acquisition path every module uses.
+        channelMv[i] = CvReadMillivolts(i);
+        ONE_POLE(channelMv[i], oldChannelMv[i], CV_FILTER_COEFF);
     }
 }
 
@@ -159,17 +147,20 @@ void HandleTriggerLevel() {
 }
 
 // ── The two range adapters (see the header comment) ──────────────────────────
+// Both now defer to core, so the 0..5 V -> -5..+5 V hardware change is the
+// -DFORGE_CV_BIPOLAR build flag and nothing else.
 inline float CvNorm(int ch) {
     if (ch < 0 || ch >= NUM_CV_INS) {
         return 0.0f;
     }
-    return constrain(channelADC[ch] / 4095.0f, 0.0f, 1.0f);
+    return CvNormFromMv(channelMv[ch]);
 }
 
 inline float CvBipolar(int ch) {
-    // Unipolar hardware: 0–5 V maps onto -1..1 about 2.5 V.
-    // Bipolar hardware: this becomes the direct reading.
-    return constrain(CvNorm(ch) * 2.0f - 1.0f, -1.0f, 1.0f);
+    if (ch < 0 || ch >= NUM_CV_INS) {
+        return 0.0f;
+    }
+    return CvBipolarFromMv(channelMv[ch]);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -45,7 +45,7 @@ CF_OBJECT (ModBus,           modBus)
 CF_OBJECT(Clock, clockEngine)
 
 // ── CV / IN 1 inputs (../lib/cvInputs.hpp) ───────────────────────────────────
-CF_ARRAY (float,         channelADC,    NUM_CV_INS)
+CF_ARRAY (float,         channelMv,     NUM_CV_INS)
 CF_ARRAY (float,         oldChannelADC, NUM_CV_INS)
 CF_SCALAR(unsigned char, in1Role)
 CF_ARRAY (unsigned char, cvTarget,      NUM_CV_INS)
