@@ -1,0 +1,15 @@
+# PlatformIO
+.pio/
+.vscode/c_cpp_properties.json
+
+# A literal "~" directory. PlatformIO writes into $HOME, and when HOME is unset
+# or mis-expanded (some msys/Git-Bash invocations) it creates ./~/ containing a
+# full package cache — 1400+ files, including embedded git repos. Never ours.
+~/
+
+# VCV Rack plugin build output
+**/vcv-plugin/build/
+**/vcv-plugin/dist/
+**/vcv-plugin/plugin.dll
+**/vcv-plugin/plugin.so
+**/vcv-plugin/plugin.dylib
