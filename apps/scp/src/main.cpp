@@ -17,6 +17,11 @@
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 
+// clang-format off
+// INCLUDE ORDER IS LOAD-BEARING — do not sort. shellObjects.hpp declares the
+// board-owned display/displayMgr/encoder/cal that several headers below use,
+// and menuDisplay.hpp must precede menuRender.hpp, which needs its MD_*
+// primitives. Alphabetical order breaks both.
 #include "boardIO.hpp"
 #include "encoder.hpp"
 #include "pinouts.hpp"
@@ -24,6 +29,7 @@
 #include "settings.hpp" // after scope.hpp: persists its globals to EEPROM
 #include "splash.hpp"
 #include "version.hpp"
+// clang-format on
 
 // OLED display (Wire / I2C1, owned by Core 1 at runtime)
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);

@@ -24,6 +24,20 @@
 // never anything pointing at the file that actually caused it.
 //
 // scope.hpp -> <math.h>, settings.hpp -> <cstring>.
+// clang-format off
+// INCLUDE ORDER IS LOAD-BEARING HERE — do not sort.
+//
+// Two separate reasons, both of which produce errors that point at the wrong
+// file:
+//   * everything third-party and core must be included at GLOBAL scope before
+//     the namespace opens, or the standard library ends up inside forge::<app>;
+//   * inside the namespace, an app's headers depend on each other (pinouts
+//     before anything using NUM_OUTPUTS, menuDisplay before menuRender, which
+//     needs its MD_* primitives).
+//
+// An editor that sorts includes alphabetically breaks the second one silently:
+// the app headers carry a ../../../ prefix, so they all sort ahead of any
+// bare-name core header and menuDisplay.hpp lands last.
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -60,11 +74,12 @@ namespace scp {
 #include "../../../apps/scp/lib/scope.hpp"    // #includes fixfft.cpp itself — no separate TU
 #include "../../../apps/scp/lib/settings.hpp" // after scope.hpp: persists its globals
 #include "../../../apps/scp/src/version.hpp"
+// clang-format on
 
 // ── 3. The shell contract ───────────────────────────────────────────────────
 class ScopeApp final : public IApp {
   public:
-    const char *Name() const override { return "SCOPE"; }
+    const char *Name() const override { return "ForgeView"; }
     const char *Version() const override { return VERSION; }
 
     void Begin() override {

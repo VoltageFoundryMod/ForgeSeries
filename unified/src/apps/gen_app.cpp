@@ -3,6 +3,20 @@
 // See scp_app.cpp for the pattern and the include-order rule.
 
 // ── 1. Global scope: standard library, third-party, core ────────────────────
+// clang-format off
+// INCLUDE ORDER IS LOAD-BEARING HERE — do not sort.
+//
+// Two separate reasons, both of which produce errors that point at the wrong
+// file:
+//   * everything third-party and core must be included at GLOBAL scope before
+//     the namespace opens, or the standard library ends up inside forge::<app>;
+//   * inside the namespace, an app's headers depend on each other (pinouts
+//     before anything using NUM_OUTPUTS, menuDisplay before menuRender, which
+//     needs its MD_* primitives).
+//
+// An editor that sorts includes alphabetically breaks the second one silently:
+// the app headers carry a ../../../ prefix, so they all sort ahead of any
+// bare-name core header and menuDisplay.hpp lands last.
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -68,6 +82,7 @@ static volatile bool _displayLocked = false;
 
 #include "../../../apps/gen/lib/calibration.hpp"
 #include "../../../apps/gen/src/version.hpp"
+// clang-format on
 
 // ── The instrument ──────────────────────────────────────────────────────────
 // physicsWorld is the simulation; channels[] turn its peg hits into notes;
@@ -211,7 +226,7 @@ void HandleOutputs() {
 // ── 3. The shell contract ───────────────────────────────────────────────────
 class GravityForgeApp final : public IApp {
   public:
-    const char *Name() const override { return "GRAVITY"; }
+    const char *Name() const override { return "GravityForge"; }
     const char *Version() const override { return VERSION; }
 
     void Begin() override {
