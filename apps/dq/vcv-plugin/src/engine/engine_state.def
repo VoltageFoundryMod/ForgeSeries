@@ -26,8 +26,8 @@
 CF_OBJARRAY(QuantizerChannel, channels, NUM_CHANNELS)
 
 // ── CV / TRIG inputs (../lib/cvInputs.hpp) ───────────────────────────────────
-CF_ARRAY (float,         channelADC,    NUM_CV_INS)
-CF_ARRAY (float,         oldChannelADC, NUM_CV_INS)
+CF_ARRAY (float,         channelMv,     NUM_CV_INS)
+CF_ARRAY (float,         oldChannelMv,  NUM_CV_INS)
 CF_SCALAR(bool,          trigPending)   // volatile global
 CF_SCALAR(unsigned long, lastTrigUs)    // volatile global
 CF_SCALAR(bool,          trigSeen)      // volatile global

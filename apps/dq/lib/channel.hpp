@@ -188,11 +188,21 @@ class QuantizerChannel {
     }
 
     // ── Per-iteration processing ─────────────────────────────────────────────
-    // adcCounts : calibrated, filtered pitch CV in 0..4095 (0–5V).
-    // trigEdge  : a rising edge arrived at the TRIG input this iteration.
-    // trigHigh  : current TRIG input level (used by Gate mode).
-    void Process(float adcCounts, unsigned long nowUs, bool trigEdge, bool trigHigh) {
-        _inputSemitone = CountsToSemitones(constrain(adcCounts, 0.0f, 4095.0f));
+    // pitchSemitones : calibrated, filtered pitch CV as fractional semitones at
+    //                  1 V/oct (see CvSemitonesFromMv()). Takes semitones rather
+    //                  than ADC counts because counts cannot express a negative
+    //                  CV, so a counts-based input would silently lose every
+    //                  note below 0 V on the +/-5 V hardware.
+    // trigEdge       : a rising edge arrived at the TRIG input this iteration.
+    // trigHigh       : current TRIG input level (used by Gate mode).
+    void Process(float pitchSemitones, unsigned long nowUs, bool trigEdge, bool trigHigh) {
+        // The quantizer's note table spans 0..QUANT_MAX_SEMITONE, so the input
+        // is clamped to that regardless of what the jack can deliver. On the
+        // bipolar hardware this means negative CV rests on the bottom note —
+        // whether -5..+5 V should instead span ten octaves is a musical
+        // decision for that hardware revision, not something to assume here.
+        _inputSemitone =
+            constrain(pitchSemitones, 0.0f, (float)QUANT_MAX_SEMITONE);
 
         int candidate = _quantizer.Quantize(_inputSemitone, _quantizedSemitone);
         const unsigned long settleUs = (unsigned long)_settleMs * 1000UL;

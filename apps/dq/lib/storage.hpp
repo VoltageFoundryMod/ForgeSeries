@@ -52,7 +52,7 @@ CalibrationData LoadCalibration() {
     EEPROM.get(EEPROM_CAL_BASE, cal);
     // Erased flash / freshly-initialised EEPROM reads as 0xFF bytes: that decodes
     // to a non-zero `valid` flag AND NaN coefficients, which would otherwise slip
-    // past a bare `if (!cal.valid)` check and make AdjustADCReadings() compute NaN
+    // past a bare `if (!cal.valid)` check and make CvReadMillivolts() return NaN
     // CV readings (both quantizers appear completely dead). Reject non-finite
     // coefficients too (NaN compares unequal to itself) so an uncalibrated module
     // always falls back to the nominal linear mapping. A magic/version mismatch

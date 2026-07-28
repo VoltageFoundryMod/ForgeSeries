@@ -128,9 +128,9 @@ void HandleOutputs() {
         // With IN 2 handed over to the transpose CV, channel 2 has no pitch
         // input of its own, so it quantizes IN 1 alongside channel 1: two
         // voicings of the same melody rather than a dead channel.
-        float pitchCV = (in2Role == In2Transpose) ? channelADC[0] : channelADC[i];
+        float pitchMv = (in2Role == In2Transpose) ? channelMv[0] : channelMv[i];
         channels[i].SetTransposeDegrees(transposeDegrees);
-        channels[i].Process(pitchCV, now, trigEdge, trigLevel);
+        channels[i].Process(CvSemitonesFromMv(pitchMv), now, trigEdge, trigLevel);
     }
 
     DACWriteAll(channels[0].GetCVOutput(), channels[1].GetCVOutput(),

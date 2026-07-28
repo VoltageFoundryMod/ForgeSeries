@@ -7,19 +7,21 @@
 // third jack (TRIG) is the only modulation input, and it drives the gate/
 // envelope sync.
 //
-// Owns: channelADC[], AdjustADCReadings(), HandleCVInputs(), and the TRIG
+// Owns: channelMv[], HandleCVInputs(), and the TRIG
 // input's ISR + edge queue.
 
 #include <Arduino.h>
 
 #include "boardIO.hpp"
 #include "calibrationData.hpp"
+#include "cvInput.hpp" // shared acquisition + range adapters
 #include "pinouts.hpp"
 #include "utils.hpp"
 
-// Oversampling count per read — averages out RP2040 ADC noise. Pitch accuracy
-// is the point of this module, so this is worth the ~8 µs it costs.
-static constexpr int CV_OVERSAMPLE_SAMPLES = 8;
+// Oversampling per read comes from core/cvInput.hpp (default 8) — averages out
+// RP2040 ADC noise. Pitch accuracy is the point of this module, so it is worth
+// the ~8 µs it costs. Must be a macro, not a constexpr, so core's #ifndef sees
+// it if this module ever wants a different value.
 
 // Weight of the previous filtered sample in the one-pole smoother. Kept light:
 // the quantizer's own hysteresis rejects boundary jitter, and heavy filtering
@@ -30,8 +32,13 @@ static constexpr float CV_FILTER_COEFF = 0.2f;
 // fast gate would otherwise retrigger the envelope several times per note.
 static constexpr unsigned long TRIG_DEBOUNCE_US = 1000;
 
-// Calibrated, filtered pitch CV per channel (0..4095 == 0..5V).
-float channelADC[NUM_CV_INS], oldChannelADC[NUM_CV_INS];
+// Calibrated, filtered pitch CV per channel, in MILLIVOLTS at the jack.
+//
+// Millivolts rather than ADC counts so the reading survives the move to +/-5 V
+// hardware, where counts cannot express a negative CV. Consumers convert with
+// the core adapters — CvSemitonesFromMv() for pitch, CvNorm() for the
+// transpose control — rather than dividing by 4095 anywhere.
+float channelMv[NUM_CV_INS], oldChannelMv[NUM_CV_INS];
 
 // ── IN 2 routing ─────────────────────────────────────────────────────────────
 // IN 2 is normally channel 2's pitch input. It can instead be handed over to a
@@ -105,36 +112,16 @@ bool ConsumeTrigger() {
     return pending;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Read one ADC channel and apply linear calibration.
-// Raw ADC → millivolts via per-channel coefficients (mv = scale*raw + offset),
-// then → 0–4095 (0–5V scale) so downstream code sees the same 12-bit range.
-// Falls back to nominal scaling when calibration data is not yet valid.
-// ─────────────────────────────────────────────────────────────────────────────
-void AdjustADCReadings(int CV_IN_PIN, int ch) {
-    int32_t sum = 0;
-    for (int i = 0; i < CV_OVERSAMPLE_SAMPLES; i++) {
-        sum += analogRead(CV_IN_PIN);
-    }
-    int raw = (int)(sum / CV_OVERSAMPLE_SAMPLES);
-
-    float mv;
-    if (cal.valid) {
-        mv = cal.cvScale[ch] * raw + cal.cvOffset[ch];
-    } else {
-        mv = (float)raw * 5000.0f / 4095.0f;
-    }
-    channelADC[ch] = constrain(mv * 4095.0f / 5000.0f, 0.0f, 4095.0f);
-}
-
 // Poll both pitch CV inputs and smooth them.
+// Oversampling and calibration live in core/cvInput.hpp — the same acquisition
+// path every module uses.
 void HandleCVInputs() {
     for (int i = 0; i < NUM_CV_INS; i++) {
-        oldChannelADC[i] = channelADC[i];
-        AdjustADCReadings(CV_IN_PINS[i], i);
+        oldChannelMv[i] = channelMv[i];
+        channelMv[i] = CvReadMillivolts(i);
         // ONE_POLE(out, in, coeff): out += coeff * (in - out)
         //   out = new raw reading, in = previous filtered value
-        ONE_POLE(channelADC[i], oldChannelADC[i], CV_FILTER_COEFF);
+        ONE_POLE(channelMv[i], oldChannelMv[i], CV_FILTER_COEFF);
     }
 }
 
@@ -154,7 +141,7 @@ void HandleTransposeInput() {
     int idx = constrain((int)transposeRange, 0, (int)TransposeRangeLength - 1);
     float low = (float)TransposeRangeLow[idx];
     float high = (float)TransposeRangeHigh[idx];
-    float degrees = low + (channelADC[1] / 4095.0f) * (high - low);
+    float degrees = low + CvNormFromMv(channelMv[1]) * (high - low);
 
     // Only move once the reading has crossed the midpoint between the current
     // degree and the next by the hysteresis margin.

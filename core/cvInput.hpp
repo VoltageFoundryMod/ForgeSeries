@@ -95,6 +95,15 @@ inline float CvBipolarFromMv(float mv) {
     return constrain(CvNormFromMv(mv) * 2.0f - 1.0f, -1.0f, 1.0f);
 }
 
+// Volt-per-octave pitch, in (fractional) semitones. 1 V = 12 semitones, and 0 V
+// is semitone 0 on both hardware revisions.
+//
+// Unlike the normalised adapters this needs no polarity term at all: it is a
+// straight scaling of millivolts, so negative CV simply yields negative
+// semitones on the bipolar hardware. Deliberately NOT clamped here — how far a
+// module's pitch range extends is the module's decision, not the CV layer's.
+inline float CvSemitonesFromMv(float mv) { return mv * (12.0f / 1000.0f); }
+
 // Legacy 0..MAXADC counts, for code that still works in ADC units. Prefer the
 // float adapters in new code - this one cannot represent negative CV and so
 // clamps at zero on bipolar hardware.
