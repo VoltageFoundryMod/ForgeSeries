@@ -14,6 +14,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <EEPROM.h>
+#include <LittleFS.h>
 #include <Wire.h>
 
 #include "IApp.hpp"
@@ -22,6 +23,9 @@
 #include "calibrationData.hpp"
 #include "cvInput.hpp"
 #include "displayManager.hpp"
+// fsStore.hpp here at global scope: storage.hpp includes it from inside the
+// namespace, and it reaches <LittleFS.h> and the standard library.
+#include "fsStore.hpp"
 #include "encoder.hpp"
 #include "envelope.hpp"
 #include "scales.hpp"

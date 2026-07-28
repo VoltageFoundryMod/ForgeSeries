@@ -8,6 +8,53 @@
 // Swap this file for a new platform (e.g. std::fstream for VCVRack) without
 // touching any other module.
 
+// ── Backend selection ────────────────────────────────────────────────────────
+// -DFORGE_USE_FS picks the LittleFS backend (core/fsStore.hpp), which the
+// unified firmware uses: four apps cannot share the 4096-byte emulated EEPROM
+// sector, since each would write its presets from offset 0 and clobber the
+// others on every app switch.
+//
+// Without the flag this keeps the EEPROM backend, which is what the standalone
+// firmwares and — importantly — the VCV Rack port build against. The Rack shim
+// provides a byte-buffer EEPROM and has no filesystem, so the FS path must stay
+// opt-in rather than replace this outright.
+#ifdef FORGE_USE_FS
+
+#include "fsStore.hpp"
+#include "presetManager.hpp"
+
+#define FORGE_APP_SLUG "clk"
+
+// The shell mounts the filesystem before any app starts, so there is nothing
+// to initialise here.
+inline void EEPROMInit() {}
+
+inline void Save(const LoadSaveParams &p, int slot) {
+    if (slot < 0 || slot >= NUM_SLOTS)
+        return;
+    LoadSaveParams ps = p;
+    ps.valid = VALID_MAGIC;
+    forge::fs::SavePreset(FORGE_APP_SLUG, slot, ps);
+}
+
+inline LoadSaveParams Load(int slot) {
+    LoadSaveParams p;
+    if (slot < 0 || slot >= NUM_SLOTS || !forge::fs::LoadPreset(FORGE_APP_SLUG, slot, p))
+        return LoadDefaultParams();
+    // VALID_MAGIC still guards the payload: the filesystem verifies the blob
+    // arrived intact, not that this firmware wrote its schema.
+    return (p.valid == VALID_MAGIC) ? p : LoadDefaultParams();
+}
+
+// Calibration is board-level and shared by every app — one file, owned by the
+// shell. An app's wizard writes it; every other app picks it up at next boot.
+inline void SaveCalibration(const CalibrationData &c) {
+    forge::fs::SaveCalibrationFs(c);
+}
+inline CalibrationData LoadCalibration() { return forge::fs::LoadCalibrationFs(); }
+
+#else // ── EEPROM backend (standalone firmware + VCV Rack) ──────────────────
+
 #include "boardIO.hpp"
 #include "presetManager.hpp"
 #include <EEPROM.h>
@@ -98,3 +145,5 @@ CalibrationData LoadCalibration() {
     }
     return cal;
 }
+
+#endif // FORGE_USE_FS

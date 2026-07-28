@@ -194,11 +194,35 @@ inline uint8_t LoadBootApp(uint8_t fallback) {
     return b.appIndex;
 }
 
-// ── Per-app preset blobs ────────────────────────────────────────────────────
-// Each app owns one file holding all its slots, so slot count and layout are
-// entirely the app's business and no app can reach another's data.
-inline void PresetPath(char *out, size_t n, const char *app) {
-    snprintf(out, n, "/%s.pre", app);
+// ── Per-app preset slots ────────────────────────────────────────────────────
+// One file per slot, e.g. /clk3.pre.
+//
+// Per slot rather than one file holding an array, for two reasons: writing a
+// slot stays a whole-file atomic replace (no seeking into a file that a partial
+// write could tear), and no slot has to be read into RAM to update a
+// neighbour — ClockForge's seven slots are 4 KB in total, which is not
+// something to put on the stack.
+//
+// It also removes the slot-count ceiling entirely. NUM_SLOTS was pinned at 7 by
+// the 4096-byte EEPROM sector; here each slot is an independent file, so an app
+// can have as many as it likes.
+inline void PresetPath(char *out, size_t n, const char *app, int slot) {
+    snprintf(out, n, "/%s%d.pre", app, slot);
+}
+
+template <typename T>
+inline bool SavePreset(const char *app, int slot, const T &v) {
+    char path[32];
+    PresetPath(path, sizeof(path), app, slot);
+    return Write(path, v);
+}
+
+// False when the slot has never been written (or fails validation), which the
+// caller turns into factory defaults.
+template <typename T> inline bool LoadPreset(const char *app, int slot, T &v) {
+    char path[32];
+    PresetPath(path, sizeof(path), app, slot);
+    return Read(path, v);
 }
 
 } // namespace fs
