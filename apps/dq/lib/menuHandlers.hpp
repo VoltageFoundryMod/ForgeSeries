@@ -71,7 +71,10 @@ static inline void MarkUnsaved() {
 
 // Reduce an encoder delta to a direction. Used where a single step per detent is
 // the only sensible behaviour (enums, octaves) regardless of spin speed.
-static inline int Dir(int delta) { return delta > 0 ? 1 : -1; }
+// Named StepDir, not Dir: the RP2040 core's filesystem API exports a global
+// `class Dir`, and appStorage.hpp now reaches it, so the short name is
+// ambiguous at every call site.
+static inline int StepDir(int delta) { return delta > 0 ? 1 : -1; }
 
 // ── Scale / root ─────────────────────────────────────────────
 template <int CH>
@@ -83,7 +86,7 @@ static String getScaleName() { return String(scaleNames[channels[CH].GetScaleInd
 // scale or root is touched, which is the behaviour the encoder implies anyway.
 template <int CH>
 static void setScale(int d) {
-    channels[CH].SelectScale(channels[CH].GetScaleIndex() + Dir(d));
+    channels[CH].SelectScale(channels[CH].GetScaleIndex() + StepDir(d));
     MarkUnsaved();
 }
 
@@ -92,7 +95,7 @@ static String getRootName() { return String(noteNames[channels[CH].GetRootIndex(
 
 template <int CH>
 static void setRoot(int d) {
-    channels[CH].SelectRoot(channels[CH].GetRootIndex() + Dir(d));
+    channels[CH].SelectRoot(channels[CH].GetRootIndex() + StepDir(d));
     MarkUnsaved();
 }
 
@@ -105,7 +108,7 @@ static String getOctave() {
 
 template <int CH>
 static void setOctave(int d) {
-    channels[CH].SetOctave(channels[CH].GetOctave() + Dir(d));
+    channels[CH].SetOctave(channels[CH].GetOctave() + StepDir(d));
     MarkUnsaved();
 }
 
@@ -114,7 +117,7 @@ static String getPitchMode() { return String(channels[CH].GetPitchModeName()); }
 
 template <int CH>
 static void setPitchMode(int d) {
-    channels[CH].SetPitchMode(channels[CH].GetPitchMode() + Dir(d));
+    channels[CH].SetPitchMode(channels[CH].GetPitchMode() + StepDir(d));
     MarkUnsaved();
 }
 
@@ -146,7 +149,7 @@ static String getGateMode() { return String(channels[CH].envelope.GetModeName())
 
 template <int CH>
 static void setGateMode(int d) {
-    channels[CH].envelope.SetMode(channels[CH].envelope.GetMode() + Dir(d));
+    channels[CH].envelope.SetMode(channels[CH].envelope.GetMode() + StepDir(d));
     MarkUnsaved();
 }
 
@@ -176,7 +179,7 @@ static String getSyncMode() { return String(channels[CH].GetSyncModeName()); }
 
 template <int CH>
 static void setSyncMode(int d) {
-    channels[CH].SetSyncMode(channels[CH].GetSyncMode() + Dir(d));
+    channels[CH].SetSyncMode(channels[CH].GetSyncMode() + StepDir(d));
     MarkUnsaved();
 }
 
@@ -203,7 +206,7 @@ static void toggleNote() {
 static String getIn2Role() { return String(In2RoleNames[constrain((int)in2Role, 0, (int)In2RoleLength - 1)]); }
 
 static void setIn2Role(int d) {
-    in2Role = (uint8_t)constrain((int)in2Role + Dir(d), 0, (int)In2RoleLength - 1);
+    in2Role = (uint8_t)constrain((int)in2Role + StepDir(d), 0, (int)In2RoleLength - 1);
     MarkUnsaved();
 }
 
@@ -212,7 +215,7 @@ static String getTransposeRange() {
 }
 
 static void setTransposeRange(int d) {
-    transposeRange = (uint8_t)constrain((int)transposeRange + Dir(d), 0, (int)TransposeRangeLength - 1);
+    transposeRange = (uint8_t)constrain((int)transposeRange + StepDir(d), 0, (int)TransposeRangeLength - 1);
     MarkUnsaved();
 }
 
@@ -232,7 +235,7 @@ static const int screenTimeoutCount = 5;
 static String getTimeout() { return String(screenTimeoutOptions[constrain(menuScreenTimeout, 0, screenTimeoutCount - 1)]); }
 
 static void setTimeout(int d) {
-    menuScreenTimeout = constrain(menuScreenTimeout + Dir(d), 0, screenTimeoutCount - 1);
+    menuScreenTimeout = constrain(menuScreenTimeout + StepDir(d), 0, screenTimeoutCount - 1);
     static const unsigned long kTimeoutOpts[] = {0, 2000, 5000, 10000, 20000};
     displayMgr.SetMenuTimeout(kTimeoutOpts[menuScreenTimeout]);
     MarkUnsaved();
@@ -241,7 +244,7 @@ static void setTimeout(int d) {
 static String getSaveSlot() { return String(saveSlot); }
 
 static void setSaveSlot(int d) {
-    saveSlot = constrain(saveSlot + Dir(d), 0, NUM_SLOTS - 1);
+    saveSlot = constrain(saveSlot + StepDir(d), 0, NUM_SLOTS - 1);
 }
 
 static void doSave() {

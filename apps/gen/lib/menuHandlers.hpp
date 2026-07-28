@@ -113,7 +113,10 @@ static inline void MarkUnsaved() {
 
 // Reduce an encoder delta to a direction. Used where a single step per detent is
 // the only sensible behaviour (enums, toggles) regardless of spin speed.
-static inline int Dir(int delta) { return delta > 0 ? 1 : -1; }
+// Named StepDir, not Dir: the RP2040 core's filesystem API exports a global
+// `class Dir`, and appStorage.hpp now reaches it, so the short name is
+// ambiguous at every call site.
+static inline int StepDir(int delta) { return delta > 0 ? 1 : -1; }
 
 static inline String Pct(float v01) { return String((int)lroundf(v01 * 100.0f)) + "%"; }
 
@@ -135,19 +138,19 @@ static void setBpm(int d) {
 
 static String getPpqn() { return String(ClockPPQNNames[clockEngine.GetPpqn()]); }
 static void setPpqn(int d) {
-    clockEngine.SetPpqn(clockEngine.GetPpqn() + Dir(d));
+    clockEngine.SetPpqn(clockEngine.GetPpqn() + StepDir(d));
     MarkUnsaved();
 }
 
 static String getQuantize() { return String(QuantizeDivNames[clockEngine.GetQuantize()]); }
 static void setQuantize(int d) {
-    clockEngine.SetQuantize(clockEngine.GetQuantize() + Dir(d));
+    clockEngine.SetQuantize(clockEngine.GetQuantize() + StepDir(d));
     MarkUnsaved();
 }
 
 static String getIn1Role() { return String(In1RoleNames[in1Role]); }
 static void setIn1Role(int d) {
-    in1Role = (uint8_t)constrain((int)in1Role + Dir(d), 0, (int)In1RoleLength - 1);
+    in1Role = (uint8_t)constrain((int)in1Role + StepDir(d), 0, (int)In1RoleLength - 1);
     // The clock only follows the jack while the jack is a clock; anything else
     // has to hand tempo back to the internal setting or the containers would
     // keep turning at a tempo nothing is driving any more.
@@ -172,7 +175,7 @@ static void setLoopBeats(int d) {
 
 static String getLoopWake() { return String(worldParams.loopWake); }
 static void setLoopWake(int d) {
-    worldParams.loopWake = (uint8_t)constrain((int)worldParams.loopWake + Dir(d),
+    worldParams.loopWake = (uint8_t)constrain((int)worldParams.loopWake + StepDir(d),
                                               PARAM_LOOP_WAKE_MIN, PARAM_LOOP_WAKE_MAX);
     MarkUnsaved();
 }
@@ -182,7 +185,7 @@ static String getLoopNap() {
 }
 static void setLoopNap(int d) {
     worldParams.loopNap =
-        (uint8_t)constrain((int)worldParams.loopNap + Dir(d), 0, PARAM_LOOP_NAP_MAX);
+        (uint8_t)constrain((int)worldParams.loopNap + StepDir(d), 0, PARAM_LOOP_NAP_MAX);
     MarkUnsaved();
 }
 
@@ -194,7 +197,7 @@ static String getLoopShift() { return String(worldParams.loopShift[C]); }
 template <int C>
 static void setLoopShift(int d) {
     worldParams.loopShift[C] =
-        (uint8_t)constrain((int)worldParams.loopShift[C] + Dir(d), 0, PARAM_LOOP_SHIFT_MAX);
+        (uint8_t)constrain((int)worldParams.loopShift[C] + StepDir(d), 0, PARAM_LOOP_SHIFT_MAX);
     MarkUnsaved();
 }
 
@@ -265,7 +268,7 @@ static void setSpin(int d) {
     // and there is no seventh row free on this page — it is reachable from the
     // Rack context menu when the VCV port lands.
     containerParams[C].spin =
-        (uint8_t)constrain((int)containerParams[C].spin + Dir(d), 0, (int)Spin16);
+        (uint8_t)constrain((int)containerParams[C].spin + StepDir(d), 0, (int)Spin16);
     MarkUnsaved();
 }
 
@@ -282,7 +285,7 @@ static String getBalls() { return String(containerParams[C].balls); }
 template <int C>
 static void setBalls(int d) {
     containerParams[C].balls =
-        (uint8_t)constrain((int)containerParams[C].balls + Dir(d), PHYS_MIN_BALLS, PHYS_MAX_BALLS);
+        (uint8_t)constrain((int)containerParams[C].balls + StepDir(d), PHYS_MIN_BALLS, PHYS_MAX_BALLS);
     MarkUnsaved();
 }
 
@@ -291,7 +294,7 @@ template <int C>
 static String getScaleName() { return String(scaleNames[channels[C].GetScaleIndex()]); }
 template <int C>
 static void setScale(int d) {
-    channels[C].SelectScale(channels[C].GetScaleIndex() + Dir(d));
+    channels[C].SelectScale(channels[C].GetScaleIndex() + StepDir(d));
     MarkUnsaved();
 }
 
@@ -299,7 +302,7 @@ template <int C>
 static String getRootName() { return String(noteNames[channels[C].GetRootIndex()]); }
 template <int C>
 static void setRoot(int d) {
-    channels[C].SelectRoot(channels[C].GetRootIndex() + Dir(d));
+    channels[C].SelectRoot(channels[C].GetRootIndex() + StepDir(d));
     MarkUnsaved();
 }
 
@@ -309,7 +312,7 @@ template <int C>
 static String getSpread() { return String(channels[C].GetSpread()) + "oct"; }
 template <int C>
 static void setSpread(int d) {
-    channels[C].SetSpread(channels[C].GetSpread() + Dir(d));
+    channels[C].SetSpread(channels[C].GetSpread() + StepDir(d));
     MarkUnsaved();
 }
 
@@ -334,7 +337,7 @@ static String getPegs() { return String(containerParams[C].pegs); }
 template <int C>
 static void setPegs(int d) {
     containerParams[C].pegs =
-        (uint8_t)constrain((int)containerParams[C].pegs + Dir(d), PHYS_MIN_PEGS, PHYS_MAX_PEGS);
+        (uint8_t)constrain((int)containerParams[C].pegs + StepDir(d), PHYS_MIN_PEGS, PHYS_MAX_PEGS);
     MarkUnsaved();
 }
 
@@ -343,7 +346,7 @@ template <int C>
 static String getGateMode() { return String(channels[C].envelope.GetModeName()); }
 template <int C>
 static void setGateMode(int d) {
-    channels[C].envelope.SetMode(channels[C].envelope.GetMode() + Dir(d));
+    channels[C].envelope.SetMode(channels[C].envelope.GetMode() + StepDir(d));
     MarkUnsaved();
 }
 
@@ -384,7 +387,7 @@ template <int I>
 static String getCvTarget() { return String(CVTargetNames[cvTarget[I]]); }
 template <int I>
 static void setCvTarget(int d) {
-    cvTarget[I] = (uint8_t)constrain((int)cvTarget[I] + Dir(d), 0, (int)CVTargetLength - 1);
+    cvTarget[I] = (uint8_t)constrain((int)cvTarget[I] + StepDir(d), 0, (int)CVTargetLength - 1);
     MarkUnsaved();
 }
 
@@ -399,7 +402,7 @@ static void setCvDepth(int d) {
 // ── SETTINGS ─────────────────────────────────────────────────
 static String getSlot() { return String(saveSlot); }
 static void setSlot(int d) {
-    saveSlot = constrain(saveSlot + Dir(d), 0, NUM_SLOTS - 1);
+    saveSlot = constrain(saveSlot + StepDir(d), 0, NUM_SLOTS - 1);
     REQUEST_DISPLAY_REFRESH();
 }
 
@@ -430,7 +433,7 @@ static void actRandom() {
 static const char *const screenTimeoutNames[] = {"OFF", "2s", "5s", "10s", "20s"};
 static String getTimeout() { return String(screenTimeoutNames[constrain(menuScreenTimeout, 0, 4)]); }
 static void setTimeout(int d) {
-    menuScreenTimeout = constrain(menuScreenTimeout + Dir(d), 0, 4);
+    menuScreenTimeout = constrain(menuScreenTimeout + StepDir(d), 0, 4);
     static const unsigned long kTimeoutOpts[] = {0, 2000, 5000, 10000, 20000};
     displayMgr.SetMenuTimeout(kTimeoutOpts[menuScreenTimeout]);
     MarkUnsaved();

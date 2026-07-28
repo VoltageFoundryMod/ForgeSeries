@@ -36,7 +36,7 @@ extern int menuScreenTimeout;     // defined in src/main.cpp
 // CalibrationData sat at offset 5720 — entirely outside the clamp — so the
 // calibration wizard wrote nothing and the module was permanently uncalibrated.
 // storage.hpp static_asserts the budget so this cannot regress silently again.
-#define NUM_SLOTS 7
+#define NUM_SLOTS 10
 // Bump this whenever the LoadSaveParams layout changes so older (incompatible)
 // presets are treated as invalid and fall back to defaults instead of loading
 // garbage into the new fields.  0xA6: cross-op fields.  0xA7: loop + invert fields.
