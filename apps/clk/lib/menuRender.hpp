@@ -26,8 +26,19 @@ extern int euclideanOutputSelect;
 extern Output outputs[];
 
 // ── Thin display helpers ─────────────────────────────────────
+// ClockForge's home screen is the transport view — menu items 1 and 2 (BPM and
+// Play/Stop), drawn together by a custom full-width renderer. It suppresses the
+// scroll indicator, and it is what the screen timeout returns to, so it never
+// times out itself.
+//
+// Naming this rather than repeating `menuItem == 1 || menuItem == 2` is what
+// lets CLK share core/displayManager.hpp with the other modules: they each have
+// a differently-shaped home screen (NoteForge a keyboard, GravityForge a live
+// physics view) and the shared code only needs the yes/no answer.
+static inline bool OnHomePage() { return menuItem == 1 || menuItem == 2; }
+
 inline void MenuIndicator() {
-    displayMgr.DrawMenuIndicator(menuItem, MENU_ITEM_COUNT);
+    displayMgr.DrawMenuIndicator(menuItem, MENU_ITEM_COUNT, OnHomePage());
 }
 
 inline void MenuHeader(const char *header) {
@@ -39,8 +50,8 @@ void HandleDisplay() {
     // Sync unsaved changes state to display manager
     displayMgr.SetUnsavedChanges(unsavedChanges);
 
-    // Check for timeout to main screen
-    if (displayMgr.ShouldTimeout(menuItem, menuMode)) {
+    // Check for timeout back to the home (transport) screen
+    if (displayMgr.ShouldTimeout(OnHomePage(), menuMode)) {
         menuItem = 2;
         menuMode = 0;
         REQUEST_DISPLAY_REFRESH();
