@@ -28,8 +28,10 @@
 //   This approach is independent of the module's own DAC/outputs, so any
 //   trimmer error from Step 1 does not propagate into CV calibration.
 //
-// CalibrationData lives at EEPROM_CAL_BASE (past all preset slots) and survives
-// firmware flashes — EEPROM.commit() is the only thing that writes to flash.
+// CalibrationData is persisted by storage.hpp's SaveCalibration(), whose
+// backend depends on the build: the shared /cal.bin on the filesystem
+// (FORGE_USE_FS, the unified firmware), or past the preset slots in the
+// emulated EEPROM sector standalone. Either survives a firmware flash.
 
 #include <Adafruit_SSD1306.h>
 #include <Arduino.h>

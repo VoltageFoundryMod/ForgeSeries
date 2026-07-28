@@ -30,8 +30,10 @@
 //   Two readings per channel (1V + 3V) define a linear mapping:
 //       mv = cvScale * raw_adc + cvOffset
 //
-// CalibrationData lives at EEPROM_CAL_BASE (past all preset slots) and survives
-// firmware flashes — EEPROM.commit() is the only thing that writes to flash.
+// CalibrationData is persisted by storage.hpp's SaveCalibration(), whose
+// backend depends on the build: the shared /cal.bin on the filesystem
+// (FORGE_USE_FS, the unified firmware), or past the preset slots in the
+// emulated EEPROM sector standalone. Either survives a firmware flash.
 
 #include <Adafruit_SSD1306.h>
 #include <Arduino.h>
