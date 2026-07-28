@@ -1,0 +1,14 @@
+.pio
+.vscode/.browse.c_cpp.db*
+.vscode/c_cpp_properties.json
+.vscode/launch.json
+.vscode/ipch
+CURRENT.UF2
+
+# VCV Rack plugin build artifacts
+vcv-plugin/build/
+vcv-plugin/dist/
+vcv-plugin/dep/
+vcv-plugin/plugin.dll
+vcv-plugin/plugin.so
+vcv-plugin/plugin.dylib

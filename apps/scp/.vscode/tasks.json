@@ -1,0 +1,46 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build PlatformIO Project",
+      "type": "shell",
+      "command": "platformio",
+      "args": [
+        "run"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Convert ELF to UF2 Firmware for SAMD21",
+      "type": "shell",
+      "command": "./scripts/convertFirmwareUF2.sh",
+      "args": [
+        "${workspaceFolder}/.pio/build/seeed_xiao/firmware.bin",
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "problemMatcher": [],
+      "dependsOn": "Build PlatformIO Project"
+    },
+    {
+      "label": "Upload Firmware to Seeeduino XIAO",
+      "type": "shell",
+      "command": "./scripts/uploadFirmware.sh",
+      "args": [
+        "${workspaceFolder}/.pio/build/seeed_xiao/firmware.uf2"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "problemMatcher": [],
+      "dependsOn": "Convert ELF to UF2 Firmware for SAMD21"
+    }
+  ]
+}

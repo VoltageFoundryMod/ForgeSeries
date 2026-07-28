@@ -1,0 +1,75 @@
+// engine_state.def — THE registry of per-instance ForgeView scope state.
+//
+// Every mutable file-scope global in lib/scope.hpp is listed here exactly once.
+// The list is expanded by fw_engine.cpp to (a) declare the EngineState mirror
+// struct, (b) swap globals<->state, and (c) copy globals->state.  Adding a scope
+// global means adding ONE line here.
+//
+// Macros (defined by the includer; all #undef'd afterwards):
+//   CF_SCALAR(type, name)        a scalar global.
+//   CF_ARRAY(type, name, count)  a C array global.
+//
+// The scope carries no default-constructed objects or Strings, so unlike
+// ClockForge there is no CF_OBJECT here.
+
+// ── Menu / mode state ────────────────────────────────────────────────────────
+CF_SCALAR(int,   menuMode)
+CF_SCALAR(int,   oldMenuMode)
+CF_SCALAR(int,   param)
+CF_SCALAR(int,   param_select)
+CF_SCALAR(int,   param1)
+CF_SCALAR(int,   param2)
+CF_SCALAR(float, scale)
+CF_SCALAR(int,   offset0)
+CF_SCALAR(int,   offset1)
+CF_SCALAR(int,   trigMode)
+CF_SCALAR(bool,  frozen)
+CF_SCALAR(bool,  showLabels)
+CF_SCALAR(float, scopeInputSpanV)
+
+// ── Encoder / overlay ────────────────────────────────────────────────────────
+CF_SCALAR(bool,          switchState)
+CF_SCALAR(bool,          oldSwitchState)
+CF_SCALAR(unsigned long, pressStartMs)
+CF_SCALAR(unsigned long, hideTimer)
+CF_SCALAR(bool,          overlayOn)
+
+// ── Acquisition ──────────────────────────────────────────────────────────────
+CF_SCALAR(bool, trig)
+CF_SCALAR(bool, old_trig)
+CF_SCALAR(int,  rfrs)
+CF_SCALAR(int,  _decimCount)
+CF_SCALAR(bool, _shotCapturing)
+CF_SCALAR(int,  _shotIdx)
+CF_SCALAR(int,  _capIdx)
+CF_SCALAR(int,  specPeakBin)
+CF_SCALAR(int,  specChan)
+
+// ── Engine clock (shim, fw_engine.cpp) — per-instance so N modules don't share ─
+CF_SCALAR(unsigned long, g_engineMicros)
+CF_SCALAR(double,        g_engineMicrosFrac)
+
+// ── Tuner + timing ───────────────────────────────────────────────────────────
+CF_SCALAR(int,           tunerChan)
+CF_SCALAR(float,         tunerHz)
+CF_SCALAR(float,         tunerAmp)
+CF_SCALAR(int,           tunerPrevSign)
+CF_SCALAR(float,         tunerPrevV)
+CF_SCALAR(float,         tunerLastCrossUs)
+CF_SCALAR(unsigned long, lastCrossUs)
+CF_SCALAR(unsigned long, lastFeedUs)
+CF_SCALAR(float,         feedIntervalUs)
+
+// ── Trace + spectrum buffers ─────────────────────────────────────────────────
+CF_ARRAY(int8_t,        cv0,    128)
+CF_ARRAY(int8_t,        cv1,    128)
+CF_ARRAY(int8_t,        fftCap, 128)
+CF_ARRAY(unsigned char, spec,   64)
+
+// ── X-Y persistence ring ─────────────────────────────────────────────────────
+CF_SCALAR(int,  xyPersist)
+CF_SCALAR(int,  xyHead)
+CF_SCALAR(int,  xyCount)
+CF_SCALAR(int,  xyDecimCount)
+CF_ARRAY(int8_t, xyx, 256)
+CF_ARRAY(int8_t, xyy, 256)
