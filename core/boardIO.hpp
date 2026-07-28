@@ -1,9 +1,9 @@
 #pragma once
 
-// DAC/ADC resolution constants — shared across all platforms
-#define DAC_RESOLUTION (12)
-#define MAXDAC 4095 // Maximum value for a 12-bit DAC: 2^12 - 1
-#define MAXADC 4095 // Maximum value for the RP2040's 12-bit ADC
+// Converter resolutions (DAC_RESOLUTION / MAXDAC / MAXADC) are board facts and
+// live in boardPinouts.hpp, pulled in via pinouts.hpp below, so code that only
+// needs to scale a reading does not have to include the whole DAC driver.
+
 // MCP4728 I2C address (all 4 outputs go through this DAC)
 #define MCP4728_ADDR 0x60
 
