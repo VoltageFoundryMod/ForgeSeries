@@ -29,19 +29,23 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.x"
-          cache: pip
+          # Deliberately no `cache: pip`. It keys the cache on a dependency
+          # manifest and errors out when it finds none — this project has no
+          # requirements.txt or pyproject.toml, since its one Python dependency
+          # is the `pip install platformio` below. The download that would save
+          # is a few MB; what is actually worth caching is ~/.platformio, next.
 
       # Toolchains and library dependencies, keyed on the project files that
       # decide them. ~/.platformio is where the RP2040 toolchain (~200 MB) and
       # googletest/ArduinoFake land.
       - name: Cache PlatformIO
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.platformio
           key: pio-${{ runner.os }}-${{ hashFiles('**/platformio.ini') }}
@@ -65,14 +69,17 @@ jobs:
         # which release is on the board. Every other build — main, a PR, a local
         # one — keeps the "dev" fallback in core/fwVersion.hpp.
         env:
+          # Folded onto one line by YAML: the continuation lines are at the same
+          # indent as the first, which is what makes >- join them with spaces
+          # instead of keeping the newlines inside the expression.
           FORGE_EXTRA_BUILD_FLAGS: >-
             ${{ startsWith(github.ref, 'refs/tags/v')
-                && format('-DFORGE_FW_VERSION={0}', github.ref_name)
-                || '' }}
+            && format('-DFORGE_FW_VERSION={0}', github.ref_name)
+            || '' }}
         run: make unified
 
       - name: Upload firmware
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: forgeseries-firmware-uf2
           path: .pio/build/xiao_rp2040/firmware.uf2
@@ -84,7 +91,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Host compiler only. No Rack SDK is needed: fw_engine.cpp never includes
       # rack.hpp, and the shim plus the forgevcv headers live in vcvlib/ in this
@@ -102,7 +109,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # plugin.mk shells out to jq (reads SLUG from plugin.json) and, for dist,
       # to zstd — a .vcvplugin is a zstd-compressed tar, not a zip.
@@ -125,7 +132,7 @@ jobs:
         run: make vcv-dist RACK_DIR=$GITHUB_WORKSPACE/Rack-SDK
 
       - name: Upload plugin package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: VoltageFoundryMod-plugin-lin-x64
           path: vcv/dist/*.vcvplugin
@@ -160,14 +167,14 @@ jobs:
       # --generate-notes diffs the tag against its predecessor, so the shallow
       # default checkout is not enough — it needs the tag history.
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       # The exact image CI built and tested, rather than a second build of the
       # same commit.
       - name: Download firmware
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: forgeseries-firmware-uf2
           path: dist
