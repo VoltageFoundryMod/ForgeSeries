@@ -105,14 +105,8 @@ unsigned long lastEncoderUpdate = 0;
 void HandleOutputs(); // defined inline in lib/engine.hpp, included below
 
 
-#include "tempMessage.hpp" // core: shared SAVED/LOADED overlay
+#include "appDisplay.hpp" // core: RedrawDisplay + SAVED/LOADED overlay
 
-// Core 0 prepares the buffer (no I2C) and signals Core 1 to flush it.
-void RedrawDisplay() {
-    displayMgr.PrepareFrame();
-    displayRefresh = 0;
-    _displayFrameReady = true;
-}
 
 
 #include "../../../apps/dq/lib/engine.hpp" // HandleOutputs()

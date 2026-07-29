@@ -107,13 +107,8 @@ unsigned long lastEncoderUpdate = 0;
 void HandleOutputs();
 
 
-#include "tempMessage.hpp" // core: shared SAVED/LOADED overlay
+#include "appDisplay.hpp" // core: RedrawDisplay + SAVED/LOADED overlay
 
-void RedrawDisplay() {
-    displayMgr.PrepareFrame();
-    displayRefresh = 0;
-    _displayFrameReady = true;
-}
 
 // What IN 1 does with a rising edge, per the menu-selected role.
 static void HandleTriggerRole(unsigned long edgeUs) {

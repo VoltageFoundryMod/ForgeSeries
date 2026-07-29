@@ -50,6 +50,14 @@ static volatile bool _core1Enabled = false;
 #include "storage.hpp" // includes presetManager.hpp transitively
 #include "utils.hpp"
 
+// appDisplay.hpp defines RedrawDisplay()/ShowTemporaryMessage() inline, and the
+// menu headers below call both, so it must precede them. It needs these two
+// declared first; the definitions come later in this file.
+extern bool displayRefresh;
+void HandleCVInputs();
+void HandleOutputs();
+#include "appDisplay.hpp" // core: RedrawDisplay + SAVED/LOADED overlay
+
 #include "menuDefinitions.hpp" // MenuItem struct
 #include "menuHandlers.hpp"    // MENU_ITEMS[] + setter/action implementations
 #include "menuDisplay.hpp"     // MD_* display primitives
@@ -102,7 +110,6 @@ CalibrationData cal;
 void HandleIO();
 void HandleEncoderPosition();
 void HandleOutputs(); // defined inline in lib/engine.hpp, included below
-void ShowTemporaryMessage(const char *msg, uint32_t durationMs);
 
 // ----------------------------------------------
 
@@ -130,7 +137,6 @@ void HandleEncoderClick() {
     }
 }
 
-
 void HandleEncoderPosition() {
     newPosition = encoder.read();
 
@@ -157,16 +163,6 @@ void HandleEncoderPosition() {
                 MENU_ITEMS[menuMode - 1].setter(+(int)speedFactor);
         }
     }
-}
-
-#include "tempMessage.hpp" // core: shared SAVED/LOADED overlay
-
-// Redraw the display.
-// RP2040: Core 0 prepares the buffer (no I2C) and signals Core 1 to flush via Wire.
-void RedrawDisplay() {
-    displayMgr.PrepareFrame(); // DrawOverlays + CommitFrame, no display.display()
-    displayRefresh = 0;
-    _displayFrameReady = true; // Signal Core 1 to call display.display() over Wire
 }
 
 

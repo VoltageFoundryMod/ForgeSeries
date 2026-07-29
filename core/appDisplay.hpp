@@ -1,6 +1,8 @@
 #pragma once
 
-// tempMessage.hpp — the brief full-screen overlay ("SAVED", "LOADED").
+// appDisplay.hpp — the display helpers every module shares.
+//
+// RedrawDisplay() and the brief full-screen overlay ("SAVED", "LOADED").
 //
 // Identical in NoteForge and GravityForge; ClockForge's differed only by
 // missing an x clamp and not polling CV during the wait. This is that shared
@@ -23,6 +25,18 @@
 
 #include <Arduino.h>
 #include <cstring>
+
+#include "metrics.hpp"
+
+// Prepare a frame on Core 0 and hand it to Core 1 to flush.
+// Core 0 never touches Wire; PrepareFrame() is GFX only, no I2C.
+inline void RedrawDisplay() {
+    metrics.BeginDisplayMeasurement();
+    displayMgr.PrepareFrame(); // DrawOverlays + CommitFrame
+    metrics.EndDisplayMeasurement();
+    displayRefresh = 0;
+    _displayFrameReady = true; // Core 1 calls display.display() over Wire
+}
 
 inline void ShowTemporaryMessage(const char *msg, uint32_t durationMs) {
     _displayLocked = true;

@@ -50,10 +50,19 @@ static volatile bool _core1Enabled = false;
 #include "cvInputs.hpp"
 #include "displayManager.hpp"
 #include "encoder.hpp"
+// appDisplay.hpp defines RedrawDisplay()/ShowTemporaryMessage() inline, and the
+// menu headers below call both, so it must precede them. It needs these two
+// declared first; the definitions come later in this file.
+extern bool displayRefresh;
+void HandleCVInputs();
+void HandleOutputs();
+#include "appDisplay.hpp" // core: RedrawDisplay + SAVED/LOADED overlay
+
 #include "menuDefinitions.hpp" // MenuItem struct
 #include "menuDisplay.hpp"     // MD_* display primitives (depends on menuHandlers.hpp)
 #include "menuHandlers.hpp"    // MENU_ITEMS[] + setter/action implementations
 #include "menuRender.hpp"      // MenuIndicator, MenuHeader, HandleDisplay
+
 #include "metrics.hpp"
 #include "outputs.hpp"
 #include "splash.hpp"
@@ -73,8 +82,6 @@ Encoder encoder(ENC_PIN_1, ENC_PIN_2); // rotary encoder library setting
 float oldPosition = 0;                 // last acted-on raw encoder count
 float newPosition = 0;                 // current raw encoder count
 
-// Performance metrics
-PerformanceMetrics metrics;
 
 // Output objects
 Output outputs[NUM_OUTPUTS] = {
@@ -120,7 +127,7 @@ void ToggleMasterState();
 void HandleEncoderPosition();
 void HandleCVInputs();
 void HandleOutputs();
-void ShowTemporaryMessage(const char *msg, uint32_t durationMs);
+
 
 // ----------------------------------------------
 
@@ -162,7 +169,6 @@ void HandleEncoderClick() {
     }
 }
 
-
 void HandleEncoderPosition() {
     metrics.BeginEncoderMeasurement();
     newPosition = encoder.read();
@@ -193,18 +199,6 @@ void HandleEncoderPosition() {
     metrics.EndEncoderMeasurement();
 }
 
-#include "tempMessage.hpp" // core: shared SAVED/LOADED overlay
-
-// Redraw the display.
-// RP2040: Core 0 prepares the buffer (no I2C) and signals Core 1 to flush via Wire.
-// Core 0 then returns immediately and keeps calling HandleOutputs() via Wire1 unblocked.
-void RedrawDisplay() {
-    metrics.BeginDisplayMeasurement();
-    displayMgr.PrepareFrame(); // DrawOverlays + CommitFrame, no display.display()
-    metrics.EndDisplayMeasurement();
-    displayRefresh = 0;
-    _displayFrameReady = true; // Signal Core 1 to call display.display() over Wire
-}
 
 // Toggle the master state and update all outputs
 void ToggleMasterState() {

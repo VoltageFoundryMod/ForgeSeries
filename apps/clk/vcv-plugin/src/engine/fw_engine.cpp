@@ -96,7 +96,7 @@ void attachInterrupt(int, void (*isr)(), int) { _clkIsr = isr; }
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 DisplayManager displayMgr(display);
 
-PerformanceMetrics metrics;
+// metrics lives in core/metrics.hpp now, one shared instance.
 
 Output outputs[NUM_OUTPUTS] = {
     Output(1, OutputType::DACOut),

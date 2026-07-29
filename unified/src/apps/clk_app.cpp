@@ -83,8 +83,6 @@ static volatile bool _displayLocked = false;
 #include "../../../apps/clk/src/version.hpp"
 // clang-format on
 
-// ── App state (was main.cpp's file-scope globals) ───────────────────────────
-PerformanceMetrics metrics;
 
 Output outputs[NUM_OUTPUTS] = {
     Output(1, OutputType::DACOut), // all outputs go through the MCP4728
@@ -163,13 +161,8 @@ void HandleOutputs() {
     }
 }
 
-#include "tempMessage.hpp" // core: shared SAVED/LOADED overlay
+#include "appDisplay.hpp" // core: RedrawDisplay + SAVED/LOADED overlay
 
-void RedrawDisplay() {
-    displayMgr.PrepareFrame();
-    displayRefresh = 0;
-    _displayFrameReady = true;
-}
 
 // ── 3. The shell contract ───────────────────────────────────────────────────
 class ClockForgeApp final : public IApp {

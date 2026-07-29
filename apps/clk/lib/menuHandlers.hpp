@@ -934,7 +934,7 @@ const MenuItem MENU_ITEMS[] = {
     {"OUT 4:", getCrossOp3, getCrossSrc3, 48, 92, 14, ROW_HIDDEN, MENU_EDIT, setCrossSrc3, nullptr}, // 74
 
     // ── Group 15: Loops (output selector + params) ──────────── items 75–79
-    {"OUTPUT:", getLoopSel, nullptr, 80, 0, 15, ROW_SINGLE, MENU_EDIT, setLoopOutputSel, nullptr}, // 75
+    {"OUTPUT:", getLoopSel, nullptr, 80, 0, 15, ROW_SINGLE, MENU_EDIT, setLoopOutputSel, nullptr},   // 75
     {"LOOP BEATS:", getLoopBeats, nullptr, 80, 0, 15, ROW_SINGLE, MENU_EDIT, setLoopBeats, nullptr}, // 76
     {"WAKE:", getLoopWake, nullptr, 80, 0, 15, ROW_SINGLE, MENU_EDIT, setLoopWake, nullptr},         // 77
     {"NAP:", getLoopNap, nullptr, 80, 0, 15, ROW_SINGLE, MENU_EDIT, setLoopNap, nullptr},            // 78

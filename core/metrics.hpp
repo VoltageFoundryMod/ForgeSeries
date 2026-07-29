@@ -397,4 +397,14 @@ class PerformanceMetrics {
     }
 };
 
+
+// The one instance, shared by every module.
+//
+// `inline`, not a per-TU definition: the unified firmware links a TU per app
+// plus the shell, and there is one board to measure. ClockForge is the only
+// module that reports these today, but RedrawDisplay() is shared, so every
+// module needs the symbol to exist.
+inline PerformanceMetrics metrics;
+
 #endif // METRICS_HPP
+
