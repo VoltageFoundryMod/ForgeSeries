@@ -100,13 +100,37 @@ static void PollEncoder(forge::IApp *app) {
 
     app->EncoderButton(pressed);
 
+    // ── Detent detection ────────────────────────────────────────────────────
+    // The quadrature decoder counts all four transitions, so one detent is
+    // COUNTS_PER_DETENT counts. Consume whole detents out of the accumulated
+    // delta rather than snapping oldPosition to wherever the encoder happens to
+    // be.
+    //
+    // The previous form — a +/-3 deadband against (newPosition +/- 3) / 4, then
+    // oldPosition = newPosition — was asymmetric. From an aligned position it
+    // took one detent to register in the decreasing direction and two in the
+    // increasing one, because integer division truncates and the snap threw
+    // away the remainder. That is the "reversing needs two clicks" symptom.
+    // Truncation toward zero also flipped which direction was penalised once
+    // the count went negative.
+    //
+    // Subtracting a whole detent keeps the remainder, so direction changes cost
+    // exactly one detent either way, and the loop catches up if several arrive
+    // between polls.
+    static constexpr long COUNTS_PER_DETENT = 4;
+
     newPosition = encoder.read();
-    if ((newPosition - 3) / 4 > oldPosition / 4) { // counter-clockwise
-        oldPosition = newPosition;
-        app->EncoderTurn(-1);
-    } else if ((newPosition + 3) / 4 < oldPosition / 4) { // clockwise
-        oldPosition = newPosition;
-        app->EncoderTurn(+1);
+    long delta = newPosition - oldPosition;
+
+    while (delta >= COUNTS_PER_DETENT) {
+        delta -= COUNTS_PER_DETENT;
+        oldPosition += COUNTS_PER_DETENT;
+        app->EncoderTurn(-1); // increasing counts = counter-clockwise
+    }
+    while (delta <= -COUNTS_PER_DETENT) {
+        delta += COUNTS_PER_DETENT;
+        oldPosition -= COUNTS_PER_DETENT;
+        app->EncoderTurn(+1); // decreasing counts = clockwise
     }
 }
 
@@ -160,14 +184,16 @@ static int RunBootMenu(int initial) {
     DrawMenu(sel, top);
 
     for (;;) {
+        // Whole-detent consumption, same as PollEncoder — see the note there
+        // for why snapping to newPos made direction changes cost two detents.
         const long newPos = encoder.read();
         int dir = 0;
-        if ((newPos - 3) / 4 > oldPos / 4) {
+        if (newPos - oldPos >= 4) {
+            oldPos += 4;
             dir = -1;
-            oldPos = newPos;
-        } else if ((newPos + 3) / 4 < oldPos / 4) {
+        } else if (newPos - oldPos <= -4) {
+            oldPos -= 4;
             dir = +1;
-            oldPos = newPos;
         }
         if (dir != 0) {
             sel += dir;
