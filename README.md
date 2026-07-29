@@ -7,20 +7,33 @@ also shipping as a VCV Rack plugin built from the same sources.
 ## Layout
 
 ```
-core/      The board. Shared by every app and by the shell.
+core/      The board, and everything every module shares (21 files)
 apps/
   clk/     ClockForge    — clock generator / modulation source
   dq/      NoteForge     — dual quantizer
   gen/     GravityForge  — physics-based generative sequencer
   scp/     ForgeView     — oscilloscope / spectrum analyser
-unified/   Shell + one TU per app: all firmwares in one image
+unified/   The shell. The only firmware built for the board.
 vcvlib/    Shared VCV Rack layer (Arduino shim, ForgeModule, IEngine, widgets)
+tools/     env.ps1 — optional PATH helper for Windows
 ```
 
-Each `apps/<app>/` is a self-contained PlatformIO project: `platformio.ini`,
-`src/`, `lib/`, `vcv-plugin/`, docs. Nothing copies app sources — the unified
-build pulls them in by include path, so each app directory stays the single
-source of truth and its standalone firmware and Rack plugin keep working.
+A module runs on two hosts, and its code lives in one place per host:
+
+```
+apps/gen/
+  src/gen_app.cpp   the module as the shell sees it (forge::IApp)
+  src/gen_app.hpp   its factory — the only thing the shell includes
+  lib/              the module's own headers, including engine.hpp
+  vcv-plugin/       the same module as a Rack plugin
+  test/             native unit tests (googletest + ArduinoFake)
+  platformio.ini    those tests only — there is no per-module firmware
+```
+
+`lib/engine.hpp` is the piece that keeps the two honest: the module's
+per-iteration engine step lives there and both hosts include it, rather than
+each carrying a copy. That duplication is how GravityForge's Rack port silently
+lost its LOOP▸NAP muting.
 
 ### What belongs in `core/`
 
@@ -28,26 +41,40 @@ Every ForgeSeries module is the *same board*: XIAO RP2040, SSD1306 on Wire,
 MCP4728 on Wire1, one encoder, 3 in / 4 out. Anything that follows from that is
 shared:
 
-| file | |
-|------|--|
+| | |
+|---|---|
 | `boardPinouts.hpp` | wiring, converter resolution (`MAXDAC`/`MAXADC`) |
 | `boardIO.hpp` | I2C bring-up, DAC writes + output calibration |
 | `cvInput.hpp` | CV acquisition, calibration, range adapters |
-| `calibrationData.hpp` | the calibration blob — one struct, one magic, all apps |
-| `encoder.hpp` `displayManager.hpp` `menuDisplay.hpp` `splash.hpp` | UI plumbing |
-| `envelope.hpp` `scales.hpp` `utils.hpp` | shared DSP/theory helpers |
+| `calibrationData.hpp` `calibration.hpp` | the blob, and the wizard that fills it |
+| `fsStore.hpp` `appStorage.hpp` | LittleFS storage; presets and calibration |
+| `shellObjects.hpp` | the board-owned `display` / `displayMgr` / `encoder` / `cal` |
+| `displayManager.hpp` `menuDisplay.hpp` `appDisplay.hpp` `splash.hpp` | UI plumbing |
+| `encoder.hpp` `encoderAccel.hpp` `encoderMenu.hpp` | encoder, acceleration, menu driver |
+| `envelope.hpp` `scales.hpp` `quantizer.hpp` `utils.hpp` `metrics.hpp` | shared DSP/theory |
 | `IApp.hpp` | the shell↔app contract |
 
-What stays in an app's `lib/` is genuinely its own: menu definitions, preset
-schema, and the DSP that makes it that module. Jack *semantics* are app-level
-too — each app's `lib/pinouts.hpp` includes `core/boardPinouts.hpp` and adds its
-own (`NUM_CHANNELS`, `OUT_CV`/`OUT_GATE`), which is why every consumer can keep
-including `"pinouts.hpp"` unchanged.
+What stays in a module's `lib/` is genuinely its own: menu definitions, preset
+schema, `engine.hpp`, and the DSP that makes it that module. Jack *semantics*
+are module-level too — `lib/jacks.hpp` layers `NUM_CHANNELS`, `OUT_CV`/`OUT_GATE`
+and the calibration wizard's jack names on top of `core/boardPinouts.hpp`.
 
-Two headers are still per-app but shouldn't be: `calibration.hpp` and
-`storage.hpp` are identical between DQ and GEN but `#include "presetManager.hpp"`,
-the app-specific preset schema. They move to `core/` when the shell takes over
-calibration and storage moves to LittleFS.
+ClockForge's quantizer is deliberately not shared: it is a separate
+implementation reached through `Output` rather than a channel, so folding it in
+would be a port rather than a merge.
+
+Two rules govern anything living here, and both have bitten:
+
+**Anything `core/` defines must be `inline`** (C++17 inline variables included).
+The unified image links the shell plus one TU per module; without it you get a
+duplicate symbol, or worse a file-scope `static` gives each TU a private copy of
+what should be shared hardware state.
+
+**`core/` must never include an app header.** `boardIO.hpp` once included the
+module-level `pinouts.hpp` and made `core/` unbuildable without a module on the
+include path. Where a shared header genuinely needs module-specific data —
+`calibration.hpp` needs `CAL_OUT_NAMES` — it requires the caller to have defined
+it rather than reaching for it.
 
 ### CV, and the ±5 V hardware
 
@@ -78,103 +105,123 @@ something implied by the hardware.
 
 ### The unified firmware
 
-`unified/` compiles the shell plus one translation unit per app. The shell owns
-the board — display, encoder, calibration are single instances — and drives one
-app at a time through `forge::IApp` (`Begin`/`Tick0`/`Tick1`/encoder events),
-keeping the existing core split: Core 0 does ADC/DAC/encoder, Core 1 renders.
+`unified/` is the shell and nothing else. It owns the board — one `display`,
+one `encoder`, one `cal` — brings the hardware up, mounts the filesystem, runs
+the module selector, then drives exactly one module through `forge::IApp`
+(`Begin`/`Tick0`/`Tick1` + encoder events). The core split is the one every
+firmware already used: Core 0 does ADC/DAC/encoder, Core 1 renders.
 
-Each app TU wraps its module in `namespace forge::<app>`, which is what lets
-several firmwares share one binary: they all define `menuMode`, `switchState`,
-`param` and friends at file scope.
+**Using it.** Hold the encoder at power-on to choose a module; the choice
+persists, so it boots straight into it afterwards. Hold the encoder for two
+seconds while running to return to the selector. The switch reboots rather than
+unwinding in place — a running module owns interrupts, a hardware timer and
+Core 1 work — so `End()` is called first and a flag survives the reset.
 
-> **The include order in an app TU is not negotiable.** Standard library,
-> third-party and `core/` headers go at *global* scope first, so their include
-> guards are already satisfied; only then the app's own headers, inside the
-> namespace. Miss one — `<cstring>`, say — and libstdc++ ends up inside the
-> namespace, producing hundreds of errors in `stringfwd.h` that never name the
-> file responsible. See the header comment in `unified/src/apps/scp_app.cpp`.
+The held-encoder check happens before any module code runs, so a module that
+hangs in its own `Begin()` can still be escaped by holding the encoder and
+power-cycling.
 
-Anything defined in a `core/` header must be `inline` (C++17 inline variables
-included). The per-app builds include each header from exactly one TU and get
-away without it; the unified image has a shell TU plus one per app and will not
-link — or worse, a file-scope `static` gives each TU a private copy of what
-should be shared hardware state.
+**Storage** is LittleFS, not the emulated EEPROM. That sector is a single 4096
+bytes and its `begin()` clamps silently — which is how ClockForge shipped with
+permanently broken calibration and three dead preset slots. Four modules could
+never have shared it.
 
-Status: the shell hosts ForgeView. App selection is still a stub that boots the
-first app — a boot-slot byte would collide with ForgeView's EEPROM sector, and
-the whole layout moves to LittleFS, so the boot menu and persistence land with
-that work.
+```
+/cal.bin      CalibrationData, shared by every module
+/boot         which module to start, and a return-to-menu flag
+/<app><n>.pre one preset slot
+```
 
-## Building firmware
+One file per slot, so a write is a whole-file atomic replace and the slot count
+is no longer capped by a sector. Every write goes via a temp file and a rename;
+every read checks a magic and an exact length, and anything that fails reads as
+absent so the caller falls back to defaults.
 
-Each app builds independently — there is no root PlatformIO project, because
-PlatformIO scopes `src_dir`/`lib_dir` per *project*, not per environment.
+**Namespaces.** Each module TU wraps itself in `namespace forge::<app>`, which
+is what lets four firmwares share one binary — they all define `menuMode`,
+`switchState`, `param` and friends at file scope.
+
+> **Include order in a module TU is load-bearing.** Standard library,
+> third-party and `core/` headers go at *global* scope first, so their guards
+> are already satisfied; only then the module's own headers, inside the
+> namespace. Miss one — `<cstring>`, say — and libstdc++ lands inside
+> `forge::<app>`, producing hundreds of errors in `stringfwd.h` that never name
+> the file responsible. The blocks are bracketed with `clang-format off/on`
+> because an editor that sorts includes will break this silently. See the header
+> comment in `apps/scp/src/scp_app.cpp`.
+
+A few `core/` headers are included *late*, after the module's state exists,
+because they close over it: `engine.hpp` (the module's globals),
+`appDisplay.hpp` (`HandleOutputs`, the display flags) and `encoderMenu.hpp`
+(the five hooks). That is the price of sharing code that calls back into
+per-module state.
+
+## Building
+
+There is one firmware for the board — `unified/` — and one Rack plugin per
+module. `apps/<app>/platformio.ini` is a native test project only.
 
 ```sh
-make                # the firmware: unified/ (shell + every module)
-make upload-unified # build + flash
-make test           # native unit tests for every app
-make plugins        # every VCV Rack plugin (needs jq + mingw64 g++)
+make                # the firmware
+make upload         # build + flash
+make upload-monitor # ...and open the serial monitor
+make test           # native unit tests for every module
+make plugins        # every VCV Rack plugin
 make everything     # firmware + all plugins
 ```
 
-There is ONE hardware build: `unified/`, and it contains only the shell.
-Everything belonging to a module lives under `apps/<app>/`:
+**Run `make everything` before committing.** It is the only thing that builds
+both hosts. PlatformIO does not compile `vcv-plugin/`, so a green firmware
+build says nothing about the Rack ports — and every bug found while this
+structure was being built was caught by building all targets and missed by
+building one.
 
-```
-apps/clk/
-  src/clk_app.cpp   the module as the shell sees it (forge::IApp)
-  src/clk_app.hpp   its factory — the only thing the shell includes
-  lib/              the module's own headers
-  vcv-plugin/       the same module as a Rack plugin
-  test/             native unit tests
-```
+`unified/platformio.ini` pulls each module TU in through `build_src_filter`,
+so sources stay with their module rather than being copied. Only each module's
+`src/` is on the include path: it holds nothing but the uniquely-named
+`<app>_app.hpp`, so unlike putting the `lib/` dirs there it cannot shadow a
+sibling's header. (It once did — GravityForge resolved `quantizer.hpp` to
+NoteForge's copy purely because `dq` came first in the include path.)
 
-`unified/platformio.ini` pulls each app TU in through `build_src_filter`, so
-the sources stay with their module rather than being copied or symlinked. Only
-each module's `src/` is on the include path — it holds nothing but the
-uniquely-named `<app>_app.hpp`, so unlike putting the `lib/` dirs there it
-cannot shadow a sibling's header.
+Current size, all four modules in one image:
 
-Current sizes on `xiao_rp2040` (release):
+| | RAM | Flash |
+|---|---|---|
+| unified | 28888 (11.0 %) | 239628 (13.1 %) |
 
-| build | RAM | Flash |
-|-------|-----|-------|
-| clk | 25356 (9.7%) | 163792 (7.8%) |
-| dq  | 18760 (7.2%) | 132448 (6.3%) |
-| gen | 19952 (7.6%) | 143528 (6.9%) |
-| scp | 19124 (7.3%) | 127384 (6.1%) |
-| unified (shell + scp) | 19144 (7.3%) | 127500 (6.1%) |
+Flash is measured against 1830912 bytes — 256 KB of the 2 MB part is reserved
+for the LittleFS region, and that size must stay fixed across releases or the
+region moves and stored files are lost.
 
-### How the unified image scales with app count
+### How the image scales with module count
 
-Only one app *runs* at a time, but all of them are *linked*, so static RAM is
-the sum of every app's state rather than the maximum. The per-app totals above
-badly overstate that, though: most of each is the Arduino/TinyUSB framework
-baseline, which is paid once. What an app actually adds is its own translation
-unit's `data+bss`:
+Only one module *runs* at a time, but all of them are *linked*, so static RAM is
+the sum of every module's state rather than the maximum. That sounds worse than
+it is: most of a module's apparent footprint is the Arduino/TinyUSB baseline,
+which is paid once. What a module actually adds is its own translation unit's
+`data+bss`:
 
-| app | RAM added | flash added |
-|-----|-----------|-------------|
-| clk | 7066 | 46325 |
-| gen | 1860 | 27562 |
-| scp | 1177 | 14182 |
-| dq  |  661 | 18582 |
-| shell | 189 | 1928 |
+| module | RAM added | flash added |
+|--------|-----------|-------------|
+| clk | ~7 KB | ~46 KB |
+| gen | ~1.9 KB | ~28 KB |
+| scp | ~1.2 KB | ~14 KB |
+| dq  | ~0.7 KB | ~19 KB |
+| shell | ~0.2 KB | ~2 KB |
 
-Baseline is ~17.8 KB (SCP standalone is 19124 total, its own TU 1338). The
-unified image checks out against that: 17.8 KB + 189 + 1177 = 19144.
+Baseline is ~17.8 KB. Four modules is ~11 % of RAM, so ten ClockForge-weight
+ones would be ~34 % and ten typical ones ~15 %. Flash is looser still.
 
-So four apps is ~28.7 KB, 11 % of RAM. Ten CLK-weight apps would be ~88 KB
-(34 %); ten typical ones ~38 KB (15 %). Flash is looser still — 14-46 KB per
-app against 2 MB.
+ClockForge is the outlier at 10× NoteForge — if RAM ever gets tight, that one
+module is the lever, not the module count.
 
-If it ever does get tight, the escape hatch is already half-built: each app's
-`vcv-plugin/src/engine/engine_state.def` enumerates every mutable global it
-owns, because the Rack port needs per-instance state. The same X-macro could
-place app state in a shared arena sized to the largest app, making RAM
-max(app) instead of sum(app). Not needed at four apps, and probably not at
-ten — but the enumeration exists if it is.
+If it did get tight, the escape hatch is half-built: each module's
+`vcv-plugin/src/engine/engine_state.def` already enumerates every mutable global
+it owns, because the Rack port needs per-instance state. The same X-macro could
+size a shared arena and make RAM `max(module)` rather than `sum(modules)`. Not
+needed at four, probably not at ten — but the enumeration exists, and it is
+worth keeping accurate as modules are added, since only the Rack build catches a
+stale entry.
 
 ## Building the VCV Rack plugins
 
