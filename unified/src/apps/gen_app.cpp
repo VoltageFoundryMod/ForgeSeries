@@ -107,26 +107,7 @@ unsigned long lastEncoderUpdate = 0;
 void HandleOutputs();
 
 
-void ShowTemporaryMessage(const char *msg, uint32_t durationMs) {
-    _displayLocked = true;
-    delay(10);
-
-    display.clearDisplay();
-    display.setTextSize(2);
-    const int x = (SCREEN_WIDTH - (int)strlen(msg) * 12) / 2;
-    display.setCursor(x < 0 ? 0 : x, SCREEN_HEIGHT / 2 - 8);
-    display.print(msg);
-    _displayFrameReady = true;
-
-    const uint32_t start = millis();
-    while (millis() - start < durationMs) {
-        HandleCVInputs();
-        HandleOutputs();
-    }
-
-    _displayLocked = false;
-    REQUEST_DISPLAY_REFRESH();
-}
+#include "tempMessage.hpp" // core: shared SAVED/LOADED overlay
 
 void RedrawDisplay() {
     displayMgr.PrepareFrame();

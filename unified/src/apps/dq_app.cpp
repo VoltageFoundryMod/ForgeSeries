@@ -105,29 +105,7 @@ unsigned long lastEncoderUpdate = 0;
 void HandleOutputs(); // defined inline in lib/engine.hpp, included below
 
 
-// Brief full-screen message ("SAVED", "LOADED"). Core 0 never touches Wire, so
-// it prepares the buffer and lets Core 1 flush. Keeps the quantizers running
-// throughout so held notes do not drop out.
-void ShowTemporaryMessage(const char *msg, uint32_t durationMs) {
-    _displayLocked = true;
-    delay(10); // let Core 1 finish any in-flight HandleDisplay()
-
-    display.clearDisplay();
-    display.setTextSize(2);
-    const int x = (SCREEN_WIDTH - (int)strlen(msg) * 12) / 2;
-    display.setCursor(x < 0 ? 0 : x, SCREEN_HEIGHT / 2 - 8);
-    display.print(msg);
-    _displayFrameReady = true;
-
-    const uint32_t start = millis();
-    while (millis() - start < durationMs) {
-        HandleCVInputs();
-        HandleOutputs();
-    }
-
-    _displayLocked = false;
-    REQUEST_DISPLAY_REFRESH();
-}
+#include "tempMessage.hpp" // core: shared SAVED/LOADED overlay
 
 // Core 0 prepares the buffer (no I2C) and signals Core 1 to flush it.
 void RedrawDisplay() {

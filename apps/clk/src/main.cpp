@@ -193,30 +193,7 @@ void HandleEncoderPosition() {
     metrics.EndEncoderMeasurement();
 }
 
-// Show a brief full-screen message (e.g. "SAVED", "LOADED") then return.
-// On RP2040: signals Core 1 to flush via Wire — Core 0 never touches the Wire bus.
-// Uses delay() instead of a HandleIO() loop to avoid re-entrant HandleEncoderClick().
-void ShowTemporaryMessage(const char *msg, uint32_t durationMs) {
-    // Pause Core 1's GFX rendering so it can't overwrite the buffer.
-    // Use _displayLocked rather than touching Wire from Core 0.
-    _displayLocked = true;
-    delay(10); // Let Core 1 finish any in-flight HandleDisplay() call (~1ms max)
-
-    display.clearDisplay();
-    display.setTextSize(2);
-    int x = (SCREEN_WIDTH - (int)(strlen(msg)) * 12) / 2;
-    display.setCursor(x, SCREEN_HEIGHT / 2 - 8);
-    display.print(msg);
-    _displayFrameReady = true; // Core 1 flushes over Wire — no Wire call from Core 0
-    // Keep DAC outputs running during the message — only skip encoder/display work.
-    uint32_t _msgStart = millis();
-    while (millis() - _msgStart < durationMs) {
-        HandleOutputs();
-    }
-
-    _displayLocked = false;    // Resume normal Core 1 rendering
-    REQUEST_DISPLAY_REFRESH(); // Force a clean redraw after returning
-}
+#include "tempMessage.hpp" // core: shared SAVED/LOADED overlay
 
 // Redraw the display.
 // RP2040: Core 0 prepares the buffer (no I2C) and signals Core 1 to flush via Wire.

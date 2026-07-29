@@ -179,29 +179,7 @@ void HandleEncoderPosition() {
     }
 }
 
-// Show a brief full-screen message (e.g. "SAVED", "KICK") then return.
-// On RP2040: signals Core 1 to flush via Wire — Core 0 never touches the Wire bus.
-// Keeps the simulation running throughout so the balls do not freeze mid-flight.
-void ShowTemporaryMessage(const char *msg, uint32_t durationMs) {
-    _displayLocked = true;
-    delay(10); // Let Core 1 finish any in-flight HandleDisplay() call
-
-    display.clearDisplay();
-    display.setTextSize(2);
-    int x = (SCREEN_WIDTH - (int)(strlen(msg)) * 12) / 2;
-    display.setCursor(x < 0 ? 0 : x, SCREEN_HEIGHT / 2 - 8);
-    display.print(msg);
-    _displayFrameReady = true; // Core 1 flushes over Wire
-
-    uint32_t _msgStart = millis();
-    while (millis() - _msgStart < durationMs) {
-        HandleCVInputs();
-        HandleOutputs();
-    }
-
-    _displayLocked = false;
-    REQUEST_DISPLAY_REFRESH();
-}
+#include "tempMessage.hpp" // core: shared SAVED/LOADED overlay
 
 // Redraw the display.
 // RP2040: Core 0 prepares the buffer (no I2C) and signals Core 1 to flush via Wire.

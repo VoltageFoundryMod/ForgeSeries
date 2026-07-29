@@ -72,7 +72,7 @@ static volatile bool _displayLocked = false;
 #include "../../../apps/clk/lib/clockEngine.hpp"
 #include "../../../apps/clk/lib/cvInputs.hpp"
 #include "../../../apps/clk/lib/storage.hpp"
-#include "../../../apps/clk/lib/metrics.hpp"
+#include "metrics.hpp" // core: performance counters, shared by all modules
 
 #include "../../../apps/clk/lib/menuDefinitions.hpp"
 #include "menuDisplay.hpp" // core header, namespaced for its app hooks
@@ -163,26 +163,7 @@ void HandleOutputs() {
     }
 }
 
-void ShowTemporaryMessage(const char *msg, uint32_t durationMs) {
-    _displayLocked = true;
-    delay(10);
-
-    display.clearDisplay();
-    display.setTextSize(2);
-    const int x = (SCREEN_WIDTH - (int)strlen(msg) * 12) / 2;
-    display.setCursor(x < 0 ? 0 : x, SCREEN_HEIGHT / 2 - 8);
-    display.print(msg);
-    _displayFrameReady = true;
-
-    const uint32_t start = millis();
-    while (millis() - start < durationMs) {
-        HandleOutputs();
-        HandleCVInputs();
-    }
-
-    _displayLocked = false;
-    REQUEST_DISPLAY_REFRESH();
-}
+#include "tempMessage.hpp" // core: shared SAVED/LOADED overlay
 
 void RedrawDisplay() {
     displayMgr.PrepareFrame();
