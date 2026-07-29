@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - main
+    # A v* tag runs the same checks and then publishes a release. The tag names
+    # the UF2, not any single module: the image is one indivisible artifact, so
+    # it carries its own version while each app's lib/version.hpp keeps the
+    # per-module number shown in the boot menu.
+    tags:
+      - "v*"
   pull_request:
     branches:
       - main
@@ -55,6 +61,14 @@ jobs:
       # plus every app. The per-app hardware environments are gone, so this is
       # the only firmware build there is.
       - name: Build unified firmware
+        # On a v* tag the image is stamped with it, so the boot menu tells you
+        # which release is on the board. Every other build — main, a PR, a local
+        # one — keeps the "dev" fallback in core/fwVersion.hpp.
+        env:
+          FORGE_EXTRA_BUILD_FLAGS: >-
+            ${{ startsWith(github.ref, 'refs/tags/v')
+                && format('-DFORGE_FW_VERSION={0}', github.ref_name)
+                || '' }}
         run: make unified
 
       - name: Upload firmware
@@ -122,3 +136,52 @@ jobs:
       # is cheap; it only catches a stale per-module Makefile.
       - name: Build standalone plugins
         run: make plugins RACK_DIR=$GITHUB_WORKSPACE/Rack-SDK
+
+  # ── Release ──────────────────────────────────────────────────────────────────
+  # Publishes the flashable image. Only a v* tag gets here; a push to main stops
+  # at the build artifact above.
+  release:
+    name: Release (UF2)
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+
+    # Gated on the whole matrix, not just the firmware build. The Rack ports
+    # compile the same lib/ sources, so a green firmware with a red
+    # vcv-isolation means a firmware global changed behind engine_state.def —
+    # not something to publish an image for.
+    needs: [firmware, vcv-isolation, vcv-plugin]
+
+    # The default token is read-only for repository contents, which is not
+    # enough to cut a release or attach an asset to it.
+    permissions:
+      contents: write
+
+    steps:
+      # --generate-notes diffs the tag against its predecessor, so the shallow
+      # default checkout is not enough — it needs the tag history.
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # The exact image CI built and tested, rather than a second build of the
+      # same commit.
+      - name: Download firmware
+        uses: actions/download-artifact@v4
+        with:
+          name: forgeseries-firmware-uf2
+          path: dist
+
+      # A bare firmware.uf2 is unidentifiable once it is in a downloads folder
+      # beside older ones, and the RP2040 bootloader takes any filename.
+      - name: Name the asset after the tag
+        run: mv dist/firmware.uf2 "dist/ForgeSeries-${GITHUB_REF_NAME}.uf2"
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "ForgeSeries $GITHUB_REF_NAME" \
+            --generate-notes \
+            "dist/ForgeSeries-${GITHUB_REF_NAME}.uf2"

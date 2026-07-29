@@ -65,7 +65,53 @@ inline void InitIO() {
 // Wire  (GPIO6/7, I2C1) → SSD1306 display only.
 // Wire1 (GPIO0/1, I2C0) → MCP4728 DAC only.
 // Independent hardware blocks — can run simultaneously, no conflicts.
+// Free a slave left mid-byte by the previous run.
+//
+// A reset can land in the middle of a display transaction — the reset button, or
+// the reboot that returns to the module selector. Neither the SSD1306 nor the
+// MCP4728 has a reset line on this board, so the slave survives with its state
+// intact: if it was in the middle of a byte it keeps SDA pulled low, waiting for
+// the clocks that would finish it. The RP2040 then cannot issue a START, so
+// display.begin() gets nowhere and the panel sits on its old frame until power
+// is removed — pressing reset again does not help, which is the tell.
+//
+// Up to nine bit-banged clocks let the slave finish that byte and release SDA,
+// and a STOP then leaves the bus idle. Must run BEFORE Wire.begin() takes the
+// pins. Costs nothing when the bus is already free, which is the normal case.
+//
+// Pins are driven open-drain, as I2C requires: LOW is actively driven, HIGH is
+// released to the pull-up. Never drive SCL or SDA high.
+inline void RecoverI2CBus(uint8_t sda, uint8_t scl) {
+    pinMode(sda, INPUT_PULLUP);
+    pinMode(scl, INPUT_PULLUP);
+    delayMicroseconds(5);
+
+    if (digitalRead(sda) == HIGH)
+        return; // bus idle — nothing to recover
+
+    for (int i = 0; i < 9 && digitalRead(sda) == LOW; i++) {
+        pinMode(scl, OUTPUT);
+        digitalWrite(scl, LOW);
+        delayMicroseconds(5);
+        pinMode(scl, INPUT_PULLUP); // release; the pull-up raises it
+        delayMicroseconds(5);
+    }
+
+    // STOP: SDA rising while SCL is high.
+    pinMode(sda, OUTPUT);
+    digitalWrite(sda, LOW);
+    delayMicroseconds(5);
+    pinMode(scl, INPUT_PULLUP);
+    delayMicroseconds(5);
+    pinMode(sda, INPUT_PULLUP); // the rise
+    delayMicroseconds(5);
+}
+
 inline void InitWire() {
+    // Before either bus is claimed: a previous run may have been reset mid-byte.
+    RecoverI2CBus(I2C_SDA_PIN, I2C_SCL_PIN);
+    RecoverI2CBus(I2C_DAC_SDA_PIN, I2C_DAC_SCL_PIN);
+
     Wire.setSDA(I2C_SDA_PIN);
     Wire.setSCL(I2C_SCL_PIN);
     Wire.begin();

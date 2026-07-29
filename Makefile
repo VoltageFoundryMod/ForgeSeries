@@ -101,19 +101,24 @@ list:
 # `all` is the firmware you flash.
 all: unified
 
-# Native unit tests (env:native, googletest + ArduinoFake).
+# Native unit tests (googletest + ArduinoFake), one env:native_<app> each.
+#
+# These moved into the root project when the per-app platformio.ini files were
+# removed: the suites still live in apps/<app>/test/test_native, but the project
+# that builds them is this one (test_dir = apps).
 #
 # Only the apps that actually have a suite: `pio test` fails outright ("Nothing
 # to build. Please put your test suites to the 'test' folder") on an app whose
-# test/ holds just a README, which is scp today. Asking the filesystem means
-# adding a suite is enough to get it run — there is no second list to update.
+# test/ holds just a README, which is scp today. Asking the filesystem keeps this
+# honest if a suite is added or removed — though a new suite now also needs its
+# env:native_<app> in platformio.ini, since each one may only see its own lib/.
 TEST_APPS := $(foreach a,$(APPS),$(if $(wildcard apps/$(a)/test/test_native),$(a)))
 
 .PHONY: test $(addprefix test-,$(APPS))
 test: $(addprefix test-,$(TEST_APPS))
 
 $(addprefix test-,$(APPS)): test-%:
-	$(PIO) test -d apps/$* -e native
+	$(PIO) test -e native_$*
 
 # ── VCV engine isolation tests ───────────────────────────────────────────────
 # Each module's fw_engine.cpp is compiled twice into one binary to prove two

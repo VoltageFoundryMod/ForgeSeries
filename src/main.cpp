@@ -26,6 +26,7 @@
 #include "calibrationData.hpp"
 #include "encoder.hpp"
 #include "fsStore.hpp"
+#include "fwVersion.hpp"
 #include "shellObjects.hpp"
 #include "splash.hpp"
 // calibration.hpp is included further down: it needs `display` and
@@ -76,6 +77,34 @@ void SaveCalibration(const CalibrationData &c) { forge::fs::SaveCalibrationFs(c)
 // initialising the panel — corrupting the init command stream and wiping the
 // splash. Core 1 idles until Core 0 raises it.
 static volatile bool g_setupDone = false;
+
+// ── Taking the display back from Core 1 ─────────────────────────────────────
+// Core 1 owns the display once it is released (see shellObjects.hpp), so Core 0
+// must not draw on it. SwitchToMenu has to: it puts a message up and reboots.
+//
+// Doing that unsynchronised is what makes the return-to-menu gesture unreliable.
+// Two cores interleaving writes on Wire corrupt each other's transactions, and
+// the reboot landing mid-byte is worse than a garbled frame: the panel keeps SDA
+// low waiting for the rest of that byte, and the bus is still held when the MCU
+// comes back up. RecoverI2CBus() in InitWire() now clears that, but not starting
+// it is better than recovering from it — a reset arriving on its own is the case
+// that cannot be prevented, this one can.
+//
+// So Core 0 asks, and waits for Core 1 to confirm it is off the bus.
+static volatile bool g_renderStop = false;
+static volatile bool g_renderStopped = false;
+
+// Returns with Core 1 off the display bus and out of Tick1.
+//
+// Bounded: a wedged Core 1 must not take the menu gesture down with it, and the
+// worst case is the garbled frame we are about to reboot away from anyway. The
+// budget covers a whole flush at 1 MHz (1 KB frame, ~10 ms) many times over.
+static void TakeDisplayFromCore1() {
+    g_renderStop = true;
+    const uint32_t t = millis();
+    while (!g_renderStopped && (millis() - t) < 100)
+        delay(1);
+}
 
 // ── Encoder ─────────────────────────────────────────────────────────────────
 // The shell polls the encoder and forwards events, rather than letting apps read
@@ -166,6 +195,22 @@ static void DrawMenu(int sel, int top) {
     display.setTextSize(1);
     display.setCursor(2, 2);
     display.print("SELECT MODULE");
+
+    // The image version, right-aligned on the header row: one number for the
+    // whole UF2, above the per-module versions in the list. 6px per character at
+    // text size 1, and "SELECT MODULE" is 13 of them from x=2, so it ends at 80.
+    {
+        const int len = (int)strlen(forge::kFirmwareVersion);
+        int x = SCREEN_WIDTH - len * 6 - 2;
+        if (x < 80) {
+            x = 80; // a long tag gives up alignment rather than the header
+        }
+        // An over-long tag clips at the right edge rather than wrapping down
+        // into the first list row — setup() turns wrap off firmware-wide.
+        display.setCursor(x, 2);
+        display.print(forge::kFirmwareVersion);
+    }
+
     display.drawFastHLine(0, 11, SCREEN_WIDTH, WHITE);
 
     // Four visible rows at 13px; the list scrolls when there are more entries.
@@ -199,14 +244,24 @@ static int RunBootMenu(int initial) {
     int sel = (initial >= 0 && initial < kMenuEntries) ? initial : 0;
     int top = 0;
 
-    // The gesture that got us here is the button being held. Wait for release
-    // first, or that same press is read as the selection click immediately.
+    // Draw before waiting on the button, not after.
+    //
+    // The gesture that gets here is the encoder being *held* — at power-on, or
+    // for two seconds inside an app. Drawing only once it was released left the
+    // screen on the splash for as long as the hold lasted, so the module looked
+    // like it had ignored the gesture and you let go to check.
+    DrawMenu(sel, top);
+
+    // Now let that press go before the loop starts, or the very same press is
+    // read as the selection click and the menu closes on whatever was
+    // preselected.
     while (digitalRead(ENCODER_SW) == LOW)
         delay(10);
     delay(50); // contact settle
 
+    // Baselined after the release, so a nudge of the shaft while holding does
+    // not arrive as a detent the moment the loop opens.
     long oldPos = encoder.read();
-    DrawMenu(sel, top);
 
     for (;;) {
         // Whole-detent consumption, same as PollEncoder — see the note there
@@ -267,7 +322,7 @@ static forge::IApp *SelectApp() {
             // Keep `stored` as the pre-selection so the list opens where it was.
             forge::fs::SaveBootApp(stored, /*showMenu=*/true);
             RunCalibration(); // saves and reboots
-            for (;;) { /* not reached */
+            for (;;) {        /* not reached */
             }
         }
 
@@ -278,6 +333,59 @@ static forge::IApp *SelectApp() {
         stored = (uint8_t)chosen;
     }
     return kApps[stored];
+}
+
+// ── Module splash ───────────────────────────────────────────────────────────
+// The chosen module's name, shown once between the logo and the app starting.
+//
+// It is drawn on two lines because at text size 2 a character is 12px wide, so
+// from x=4 only ten fit across the 128px display: "GravityForge" ran to 148px
+// and lost its last character and a half. "ClockForge" fit with 4px to spare, so
+// the next name of any length would have hit this too.
+//
+// Every module name is Forge plus one word, which gives a natural break —
+// Gravity/Forge, Forge/View — and the longest half ("Gravity", 84px) then has
+// room to spare. Both lines are centred, so the split is not visible as one.
+
+// `len` characters of `s`, horizontally centred, at row `y`. Takes a length
+// because the two halves of a name are one buffer, not two strings.
+static void DrawCentered(const char *s, int len, int y, int charWidth) {
+    const int x = (SCREEN_WIDTH - len * charWidth) / 2;
+    display.setCursor(x < 0 ? 0 : x, y);
+    for (int i = 0; i < len; i++)
+        display.write(s[i]);
+}
+
+static void DrawModuleSplash(const forge::IApp *app) {
+    const char *name = app->Name();
+    const int len = (int)strlen(name);
+
+    // Split so "Forge" survives whole: after it when the name opens with it,
+    // before it otherwise. A name without "Forge" stays on one line.
+    const char *forge = strstr(name, "Forge");
+    int cut = 0;
+    if (forge == name && len > 5) {
+        cut = 5; // Forge + suffix, e.g. ForgeView
+    } else if (forge != nullptr) {
+        cut = (int)(forge - name); // prefix + Forge, e.g. GravityForge
+    }
+
+    display.clearDisplay();
+    display.setTextColor(WHITE);
+    display.setTextSize(2);
+
+    if (cut > 0) {
+        DrawCentered(name, cut, 14, 12);
+        DrawCentered(name + cut, len - cut, 32, 12);
+    } else {
+        DrawCentered(name, len, 23, 12); // single line, vertically centred
+    }
+
+    display.setTextSize(1);
+    display.setCursor(80, 54);
+    display.print("V");
+    display.print(app->Version());
+    display.display();
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -305,7 +413,19 @@ void setup() {
             delay(200);
         }
     }
+    // Blank the panel before anything can be seen on it.
+    //
+    // begin() clears the frame buffer but never pushes it, and its init sequence
+    // ends with DISPLAYON — so the panel lights up showing whatever is still in
+    // its GDDRAM: random bytes on a cold boot, the previous app's last frame
+    // after the reboot that comes back here. Without this flush that garbage
+    // stays up through InitDAC, the LittleFS mount and the calibration load,
+    // which is the "garbled characters until the boot menu appears" window.
     display.clearDisplay();
+    display.display();
+
+    // Wrap off for the whole firmware: every screen here is laid out to fit, and
+    // a wrapped glyph corrupts the line below rather than being clipped away.
     display.setTextWrap(false);
     display.cp437(true);
 
@@ -330,16 +450,7 @@ void setup() {
 
     g_app = SelectApp();
 
-    display.clearDisplay();
-    display.setTextSize(2);
-    display.setTextColor(WHITE);
-    display.setCursor(4, 20);
-    display.print(g_app->Name());
-    display.setTextSize(1);
-    display.setCursor(80, 54);
-    display.print("V");
-    display.print(g_app->Version());
-    display.display();
+    DrawModuleSplash(g_app);
     delay(1000);
 
     Serial.printf("Starting app: %s v%s\n", g_app->Name(), g_app->Version());
@@ -364,6 +475,10 @@ void setup() {
 // app owns interrupts, hardware timers and Core 1 work, and restarting is both
 // simpler and more reliable than tearing that down live.
 static void SwitchToMenu() {
+    // First: get Core 1 off the display, so the message below and the reboot
+    // that follows do not collide with a frame flush.
+    TakeDisplayFromCore1();
+
     g_app->End(); // let the app flush anything it owes to storage
 
     // Keep the current app as the pre-selection so the menu opens on it.
@@ -402,5 +517,13 @@ void setup1() {
 }
 
 void loop1() {
+    // Checked between frames, never inside one: Core 0 waits for this
+    // acknowledgement, so seeing it means the last flush has fully completed and
+    // no further one will start.
+    if (g_renderStop) {
+        g_renderStopped = true;
+        delay(1);
+        return;
+    }
     g_app->Tick1(display);
 }
