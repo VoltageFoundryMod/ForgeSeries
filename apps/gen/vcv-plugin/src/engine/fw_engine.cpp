@@ -87,7 +87,7 @@ void attachInterrupt(int, void (*isr)(), int) { _trigIsr = isr; }
 #include "displayManager.hpp"
 #include "params.hpp"
 #include "physics.hpp"
-#include "pinouts.hpp"
+#include "jacks.hpp"
 #include "presetManager.hpp"
 #include "randomize.hpp" // RandomizeParams() — shared with the hardware menu
 #include "sequencer.hpp"

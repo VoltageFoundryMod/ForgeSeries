@@ -66,7 +66,6 @@ static volatile bool _displayLocked = false;
     } while (0)
 
 // ── 2. ClockForge's own headers ─────────────────────────────────────────────
-#include "../../../apps/clk/lib/pinouts.hpp"
 #include "../../../apps/clk/lib/euclidean.hpp"
 #include "../../../apps/clk/lib/outputs.hpp"
 #include "../../../apps/clk/lib/clockEngine.hpp"

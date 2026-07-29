@@ -24,7 +24,7 @@
 // primitives. Alphabetical order breaks both.
 #include "boardIO.hpp"
 #include "encoder.hpp"
-#include "pinouts.hpp"
+#include "boardPinouts.hpp"
 #include "scope.hpp"
 #include "settings.hpp" // after scope.hpp: persists its globals to EEPROM
 #include "splash.hpp"

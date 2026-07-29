@@ -80,7 +80,7 @@ void attachInterrupt(int, void (*isr)(), int) { _trigIsr = isr; }
 #include "channel.hpp"
 #include "cvInputs.hpp"
 #include "displayManager.hpp"
-#include "pinouts.hpp"
+#include "jacks.hpp"
 #include "presetManager.hpp"
 #include "splash.hpp"
 #include "storage.hpp"

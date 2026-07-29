@@ -45,7 +45,7 @@
 // wizard — which is board-level, not module-level — out of core/.
 // REQUIRES: the including translation unit must already have defined
 // CAL_OUT_NAMES[NUM_OUTPUTS] — what this module calls its output jacks. It
-// lives in each app's lib/pinouts.hpp, because jack naming is module
+// lives in each app's lib/jacks.hpp, because jack naming is module
 // semantics. core/ must not include that header itself: it is app-level, and
 // depending on it makes core/ unbuildable without an app on the include path
 // (the same trap core/boardIO.hpp fell into with pinouts vs boardPinouts).

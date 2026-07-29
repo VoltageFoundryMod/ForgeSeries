@@ -66,7 +66,6 @@ static volatile bool _displayLocked = false;
     } while (0)
 
 // ── 2. GravityForge's own headers ───────────────────────────────────────────
-#include "../../../apps/gen/lib/pinouts.hpp"
 #include "../../../apps/gen/lib/params.hpp"
 #include "../../../apps/gen/lib/physics.hpp"
 #include "../../../apps/gen/lib/clock.hpp"

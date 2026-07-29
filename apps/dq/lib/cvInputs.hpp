@@ -15,7 +15,7 @@
 #include "boardIO.hpp"
 #include "calibrationData.hpp"
 #include "cvInput.hpp" // shared acquisition + range adapters
-#include "pinouts.hpp"
+#include "jacks.hpp"
 #include "utils.hpp"
 
 // Oversampling per read comes from core/cvInput.hpp (default 8) — averages out

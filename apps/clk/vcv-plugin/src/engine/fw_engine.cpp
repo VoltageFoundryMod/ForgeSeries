@@ -86,7 +86,7 @@ void attachInterrupt(int, void (*isr)(), int) { _clkIsr = isr; }
 #include "menuRender.hpp"
 #include "metrics.hpp"
 #include "outputs.hpp"
-#include "pinouts.hpp"
+#include "jacks.hpp"
 #include "presetManager.hpp"
 #include "splash.hpp"
 #include "storage.hpp"

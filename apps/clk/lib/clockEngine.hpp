@@ -10,7 +10,7 @@
 #include "boardIO.hpp"
 #include "metrics.hpp"
 #include "outputs.hpp"
-#include "pinouts.hpp"
+#include "jacks.hpp"
 #include <Arduino.h>
 #include <hardware/timer.h>
 

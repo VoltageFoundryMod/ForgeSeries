@@ -43,7 +43,7 @@ static volatile bool _core1Enabled = false;
 #include "shellObjects.hpp"
 
 #include "boardIO.hpp"
-#include "pinouts.hpp"     // CAL_OUT_NAMES, needed by calibration.hpp
+#include "jacks.hpp" // module jack semantics + core/boardPinouts.hpp
 #include "calibration.hpp" // RunCalibration() — output trim + CV LUT capture
 #include "clockEngine.hpp"
 #include "cvInputs.hpp"
@@ -55,7 +55,6 @@ static volatile bool _core1Enabled = false;
 #include "menuRender.hpp"      // MenuIndicator, MenuHeader, HandleDisplay
 #include "metrics.hpp"
 #include "outputs.hpp"
-#include "pinouts.hpp"
 #include "splash.hpp"
 #include "storage.hpp" // includes presetManager.hpp transitively
 #include "utils.hpp"
@@ -82,6 +81,10 @@ Output outputs[NUM_OUTPUTS] = {
     Output(2, OutputType::DACOut),
     Output(3, OutputType::DACOut),
     Output(4, OutputType::DACOut)};
+
+// What this module calls its output jacks, used by the calibration wizard
+// (core/calibration.hpp). Jack naming is module semantics, so it lives here
+// with NUM_CHANNELS and OUT_CV/OUT_GATE rather than in the shared wizard.
 
 // ---- Global variables ----
 // Play/Stop state

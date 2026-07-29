@@ -47,7 +47,7 @@ static volatile bool _core1Enabled = false;
 #include "encoder.hpp"
 #include "params.hpp"
 #include "physics.hpp"
-#include "pinouts.hpp"
+#include "jacks.hpp" // module jack semantics + core/boardPinouts.hpp
 #include "randomize.hpp" // RandomizeParams() — shared with the VCV plugin
 #include "sequencer.hpp"
 #include "storage.hpp" // includes presetManager.hpp transitively
@@ -85,8 +85,19 @@ WorldParams worldParams;
 Clock clockEngine;
 ModBus modBus;
 
+// Two independent voices. NoteForge calls them quantizer channels and
+// GravityForge calls them containers, but the jack layout is the same, and
+// deliberately so: patch cables carry over between the two firmwares.
+
+// Output jack assignment (index into the DAC/output arrays).
+// Jack 1 = CV 1, Jack 2 = CV 2, Jack 3 = GATE 1, Jack 4 = GATE 2.
+
+// What this module calls its output jacks, used by the calibration wizard
+// (core/calibration.hpp). Jack naming is module semantics, so it lives here
+// with NUM_CHANNELS and OUT_CV/OUT_GATE rather than in the shared wizard.
+
 // ---- Global variables ----
-int menuItem = 1;                    // 1-based; item 1 is the physics home screen
+int menuItem = 1; // 1-based; item 1 is the physics home screen
 bool switchState = 1;
 bool oldSwitchState = 1;
 int menuMode = 0;                    // 0 = navigating, else the item being edited
@@ -132,8 +143,8 @@ void HandleEncoderClick() {
                 }
             }
         } else {
-            menuMode = 0;      // commit and leave edit mode
-            LiveViewClear();   // …and land back on the page, not on the animation
+            menuMode = 0;    // commit and leave edit mode
+            LiveViewClear(); // …and land back on the page, not on the animation
         }
     }
 }

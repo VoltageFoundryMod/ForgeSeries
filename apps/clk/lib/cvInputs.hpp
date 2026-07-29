@@ -16,7 +16,7 @@
 #include "cvInput.hpp"         // shared acquisition + range adapters
 #include "clockEngine.hpp"
 #include "outputs.hpp"
-#include "pinouts.hpp"
+#include "jacks.hpp"
 #include "utils.hpp"
 
 // ── CV modulation target enum

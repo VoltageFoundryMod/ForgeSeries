@@ -75,7 +75,6 @@ static volatile bool _displayLocked = false;
     } while (0)
 
 // ── 2. NoteForge's own headers ──────────────────────────────────────────────
-#include "../../../apps/dq/lib/pinouts.hpp"
 #include "../../../apps/dq/lib/channel.hpp"
 #include "../../../apps/dq/lib/cvInputs.hpp"
 #include "../../../apps/dq/lib/storage.hpp" // pulls in presetManager.hpp

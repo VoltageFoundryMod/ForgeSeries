@@ -19,7 +19,7 @@
 #include "cvInputs.hpp"
 #include "displayManager.hpp"
 #include "outputs.hpp"
-#include "pinouts.hpp"
+#include "jacks.hpp"
 
 extern int menuScreenTimeout;     // defined in src/main.cpp
 

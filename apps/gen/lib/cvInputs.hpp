@@ -25,7 +25,7 @@
 #include "calibrationData.hpp"
 #include "cvInput.hpp" // shared acquisition + range adapters
 #include "params.hpp"
-#include "pinouts.hpp"
+#include "jacks.hpp"
 #include "utils.hpp"
 
 // Oversampling per read (core/cvInput.hpp default is 8) — averages out RP2040

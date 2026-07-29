@@ -19,7 +19,7 @@
 #include "clock.hpp"
 #include "displayManager.hpp"
 #include "params.hpp"
-#include "pinouts.hpp"
+#include "jacks.hpp"
 #include "sequencer.hpp"
 
 extern GravityChannel channels[NUM_CHANNELS]; // src/main.cpp
