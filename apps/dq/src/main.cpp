@@ -100,7 +100,7 @@ CalibrationData cal;
 // Function prototypes
 void HandleIO();
 void HandleEncoderPosition();
-void HandleOutputs();
+void HandleOutputs(); // defined inline in lib/engine.hpp, included below
 void ShowTemporaryMessage(const char *msg, uint32_t durationMs);
 
 // ----------------------------------------------
@@ -218,33 +218,8 @@ void RedrawDisplay() {
     _displayFrameReady = true; // Signal Core 1 to call display.display() over Wire
 }
 
-// Advance both quantizer channels and push all four DAC outputs.
-// Jack map: 1 = CV 1, 2 = CV 2, 3 = GATE 1, 4 = GATE 2.
-void HandleOutputs() {
-    unsigned long now = micros();
-    bool trigEdge = ConsumeTrigger();
-    HandleTriggerLevel();
-    HandleTransposeInput();
 
-    for (int i = 0; i < NUM_CHANNELS; i++) {
-        // With IN 2 handed over to the transpose CV, channel 2 has no pitch
-        // input of its own, so it quantizes IN 1 alongside channel 1: two
-        // voicings of the same melody rather than a dead channel.
-        float pitchCv = (in2Role == In2Transpose) ? channelCv[0] : channelCv[i];
-        channels[i].SetTransposeDegrees(transposeDegrees);
-        channels[i].Process(CvSemitones(pitchCv), now, trigEdge, trigLevel);
-    }
-
-    DACWriteAll(channels[0].GetCVOutput(), channels[1].GetCVOutput(),
-                channels[0].GetGateOutput(), channels[1].GetGateOutput());
-
-    // A note change is the one thing that makes the keyboard screen stale.
-    for (int i = 0; i < NUM_CHANNELS; i++) {
-        if (channels[i].ConsumeNoteChanged()) {
-            displayRefresh = 1;
-        }
-    }
-}
+#include "engine.hpp" // HandleOutputs() — after the globals it references
 
 void setup() {
     Serial.begin(115200);
