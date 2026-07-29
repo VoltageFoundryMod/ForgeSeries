@@ -1,5 +1,15 @@
 #pragma once
 
+// Shared by NoteForge and GravityForge. The two copies this replaces were
+// identical apart from GravityForge's DegreesPerOctave() and SemitoneAt(),
+// which NoteForge simply does not call — so this is GravityForge's version,
+// unchanged.
+//
+// ClockForge is NOT a consumer: its quantizer is a separate implementation in
+// apps/clk/lib/quantizer.cpp, reached through Output rather than a channel, and
+// folding it in would be a port rather than a merge.
+
+
 // quantizer.hpp — Pitch quantization.
 //
 // Everything here works in *semitones* rather than raw DAC counts. The hardware
