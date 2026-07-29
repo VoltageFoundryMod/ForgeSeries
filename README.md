@@ -118,10 +118,11 @@ make plugins        # every VCV Rack plugin (needs jq + mingw64 g++)
 make everything     # firmware + all plugins
 ```
 
-There is ONE hardware build: `unified/`. Each `apps/<app>/` is now a native
-test project only — its hardware environment is gone, and `src/main.cpp` is
-kept for reference until the unified image has been verified on hardware for
-every module. Nothing compiles it.
+There is ONE hardware build: `unified/`. Each `apps/<app>/` is a native test
+project plus the module's `lib/` and its VCV Rack plugin — no `src/`, no
+hardware environment. A module's firmware logic lives in exactly one place per
+host: `unified/src/apps/<app>_app.cpp` for the board, and
+`apps/<app>/vcv-plugin/src/engine/fw_engine.cpp` for Rack.
 
 Current sizes on `xiao_rp2040` (release):
 
