@@ -9,8 +9,7 @@
 //
 // What jacks *mean* is a per-app decision and deliberately NOT in this file:
 // apps layer their own jack semantics (channel counts, CV/gate assignment) on
-// top in their own lib/pinouts.hpp, which includes this header. Everything
-// downstream keeps including "pinouts.hpp" and is unaffected.
+// top in their own lib/jacks.hpp, which includes this header.
 
 // Needed for A0/A1/A2 below. This used to be left to the caller, which happened
 // to work only because main.cpp included <Arduino.h> first; including a pinout
