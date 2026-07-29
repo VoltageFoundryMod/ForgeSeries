@@ -29,10 +29,10 @@
 #include "shellObjects.hpp"
 #include "splash.hpp"
 
-#include "apps/clk_app.hpp"
-#include "apps/dq_app.hpp"
-#include "apps/gen_app.hpp"
-#include "apps/scp_app.hpp"
+#include "clk_app.hpp"
+#include "dq_app.hpp"
+#include "gen_app.hpp"
+#include "scp_app.hpp"
 
 // ── Board-owned singletons ──────────────────────────────────────────────────
 // One display, one encoder, one calibration for the whole module, rather than a

@@ -70,10 +70,10 @@
 namespace forge {
 namespace scp {
 
-#include "../../../apps/scp/lib/definitions.hpp"
-#include "../../../apps/scp/lib/scope.hpp"    // #includes fixfft.cpp itself — no separate TU
-#include "../../../apps/scp/lib/settings.hpp" // after scope.hpp: persists its globals
-#include "../../../apps/scp/lib/version.hpp"
+#include "../lib/definitions.hpp"
+#include "../lib/scope.hpp"    // #includes fixfft.cpp itself — no separate TU
+#include "../lib/settings.hpp" // after scope.hpp: persists its globals
+#include "../lib/version.hpp"
 // clang-format on
 
 // ── 3. The shell contract ───────────────────────────────────────────────────

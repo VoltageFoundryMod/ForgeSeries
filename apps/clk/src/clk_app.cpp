@@ -67,20 +67,20 @@ static volatile bool _displayLocked = false;
     } while (0)
 
 // ── 2. ClockForge's own headers ─────────────────────────────────────────────
-#include "../../../apps/clk/lib/euclidean.hpp"
-#include "../../../apps/clk/lib/outputs.hpp"
-#include "../../../apps/clk/lib/clockEngine.hpp"
-#include "../../../apps/clk/lib/cvInputs.hpp"
-#include "../../../apps/clk/lib/storage.hpp"
+#include "../lib/euclidean.hpp"
+#include "../lib/outputs.hpp"
+#include "../lib/clockEngine.hpp"
+#include "../lib/cvInputs.hpp"
+#include "../lib/storage.hpp"
 #include "metrics.hpp" // core: performance counters, shared by all modules
 
-#include "../../../apps/clk/lib/menuDefinitions.hpp"
+#include "../lib/menuDefinitions.hpp"
 #include "menuDisplay.hpp" // core header, namespaced for its app hooks
-#include "../../../apps/clk/lib/menuHandlers.hpp"
-#include "../../../apps/clk/lib/menuRender.hpp"
+#include "../lib/menuHandlers.hpp"
+#include "../lib/menuRender.hpp"
 
 #include "calibration.hpp" // core: the shared wizard
-#include "../../../apps/clk/lib/version.hpp"
+#include "../lib/version.hpp"
 // clang-format on
 
 

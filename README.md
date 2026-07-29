@@ -118,11 +118,23 @@ make plugins        # every VCV Rack plugin (needs jq + mingw64 g++)
 make everything     # firmware + all plugins
 ```
 
-There is ONE hardware build: `unified/`. Each `apps/<app>/` is a native test
-project plus the module's `lib/` and its VCV Rack plugin — no `src/`, no
-hardware environment. A module's firmware logic lives in exactly one place per
-host: `unified/src/apps/<app>_app.cpp` for the board, and
-`apps/<app>/vcv-plugin/src/engine/fw_engine.cpp` for Rack.
+There is ONE hardware build: `unified/`, and it contains only the shell.
+Everything belonging to a module lives under `apps/<app>/`:
+
+```
+apps/clk/
+  src/clk_app.cpp   the module as the shell sees it (forge::IApp)
+  src/clk_app.hpp   its factory — the only thing the shell includes
+  lib/              the module's own headers
+  vcv-plugin/       the same module as a Rack plugin
+  test/             native unit tests
+```
+
+`unified/platformio.ini` pulls each app TU in through `build_src_filter`, so
+the sources stay with their module rather than being copied or symlinked. Only
+each module's `src/` is on the include path — it holds nothing but the
+uniquely-named `<app>_app.hpp`, so unlike putting the `lib/` dirs there it
+cannot shadow a sibling's header.
 
 Current sizes on `xiao_rp2040` (release):
 
