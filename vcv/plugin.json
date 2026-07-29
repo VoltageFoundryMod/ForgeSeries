@@ -1,0 +1,68 @@
+{
+  "slug": "VoltageFoundryMod",
+  "name": "Voltage Foundry Modular",
+  "version": "2.0.0",
+  "license": "VCV Rack EULA",
+  "brand": "Voltage Foundry Modular",
+  "author": "Carlos Eduardo de Paula",
+  "authorEmail": "me@carlosedp.com",
+  "authorUrl": "",
+  "pluginUrl": "https://github.com/VoltageFoundryMod/VFM-Modules",
+  "manualUrl": "https://github.com/VoltageFoundryMod/VFM-Modules/blob/main/Readme.md",
+  "sourceUrl": "https://github.com/VoltageFoundryMod/VFM-Modules",
+  "donateUrl": "https://patreon.com/carlosedp",
+  "changelogUrl": "",
+  "modules": [
+    {
+      "slug": "ClockForge",
+      "name": "Clock Forge",
+      "description": "Advanced Clock Generator and Modulator",
+      "manualUrl": "https://github.com/VoltageFoundryMod/ForgeSeries-CLK/blob/main/Readme.md",
+      "tags": [
+        "Clock modulator",
+        "Clock generator",
+        "Digital",
+        "Hardware clone"
+      ]
+    },
+    {
+      "slug": "NoteForge",
+      "name": "Note Forge",
+      "description": "Dual CV Quantizer with per-channel scales and envelopes",
+      "manualUrl": "https://github.com/VoltageFoundryMod/ForgeSeries-DQ/blob/main/Readme.md",
+      "tags": [
+        "Quantizer",
+        "Polyphonic",
+        "Digital",
+        "Hardware clone",
+        "Dual",
+        "Utility"
+      ]
+    },
+    {
+      "slug": "ForgeView",
+      "name": "Forge View",
+      "description": "Oscilloscope and spectrum analyzer",
+      "manualUrl": "https://github.com/VoltageFoundryMod/ForgeSeries-SCP/blob/main/Readme.md",
+      "tags": [
+        "Visual",
+        "Digital",
+        "Polyphonic",
+        "Utility",
+        "Hardware clone"
+      ]
+    },
+    {
+      "slug": "GravityForge",
+      "name": "Gravity Forge",
+      "description": "Dual physics-based generative sequencer with proximity coupling",
+      "tags": [
+        "Sequencer",
+        "Random",
+        "Digital",
+        "Hardware clone",
+        "Dual"
+      ]
+    }
+  ]
+}

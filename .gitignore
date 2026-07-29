@@ -1,11 +1,16 @@
-# PlatformIO
-.pio/
-.vscode/c_cpp_properties.json
-.vscode/.browse.c_cpp.db*
-.vscode/launch.json
-.vscode/ipch
 
-# A literal "~" directory. PlatformIO writes into $HOME, and when HOME is unset
+# Aggregate VCV plugin: staged panels and build output.
+# vcv/apps/ is generated too: Rack's compile.mk derives object paths from source
+# paths, and the sources are ../apps/..., so build/../apps/... normalises to
+# vcv/apps/... rather than staying under build/.
+vcv/res/
+vcv/build/
+vcv/apps/
+vcv/dist/
+vcv/plugin.dll
+vcv/plugin.so
+vcv/plugin.dylib
+ry. PlatformIO writes into $HOME, and when HOME is unset
 # or mis-expanded (some msys/Git-Bash invocations) it creates ./~/ containing a
 # full package cache — 1400+ files, including embedded git repos. Never ours.
 ~/
