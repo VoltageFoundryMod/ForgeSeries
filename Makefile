@@ -5,6 +5,25 @@
 # are gone, and src/main.cpp is kept for reference until the unified image has
 # been verified on hardware for every module.
 
+# ── Windows: find the toolchain ourselves ────────────────────────────────────
+# Rack's plugin.mk is POSIX, and the usual Windows trap is Chocolatey's make
+# arriving first on PATH: it drives cmd.exe as SHELL and cannot run those
+# recipes, failing with an opaque "SLUG could not be found in manifest".
+#
+# We cannot repair the PATH of the shell that invoked us, but we can pick the
+# shell and PATH our own recipes use, which is what actually matters. Override
+# MSYS if msys2 lives elsewhere.
+ifeq ($(OS),Windows_NT)
+  MSYS ?= C:/msys64
+  ifneq ($(wildcard $(MSYS)/usr/bin/sh.exe),)
+    SHELL := $(MSYS)/usr/bin/sh.exe
+    .SHELLFLAGS := -c
+    # PlatformIO too, so `make` works the same way as `make plugins`.
+    PIO_BIN ?= $(USERPROFILE)/.platformio/penv/Scripts
+    export PATH := $(MSYS)/usr/bin:$(MSYS)/mingw64/bin:$(PIO_BIN):$(PATH)
+  endif
+endif
+
 APPS  := clk dq gen scp
 PIO   ?= pio
 ENV   ?= xiao_rp2040

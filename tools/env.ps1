@@ -1,3 +1,11 @@
+# OPTIONAL. The Makefile finds the toolchain itself on Windows, so plain
+# `make` / `make plugins` work from PowerShell without this.
+#
+# Source it (note the leading dot) when you want the tools on PATH for the
+# session too — running clang-format, jq, or a plugin's make by hand:
+#
+#     . .	ools\env.ps1
+#
 # Put the toolchain on PATH for this PowerShell session, then build normally:
 #
 #     . .\tools\env.ps1
