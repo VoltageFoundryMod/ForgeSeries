@@ -306,6 +306,18 @@ void setup() {
     Serial.printf("Starting app: %s v%s\n", g_app->Name(), g_app->Version());
     g_app->Begin();
 
+    // Re-baseline the encoder before the app sees it.
+    //
+    // Anything turned during boot is on the counter by now — most obviously the
+    // scrolling done in the module selector, which tracks its own position and
+    // leaves this one at zero. Without this, PollEncoder's first call reads a
+    // delta covering the whole menu rotation and fires that many detents
+    // straight into the app: the module came up with its cursor moved by
+    // exactly as far as you had scrolled to select it, and only after selecting
+    // it from the menu — a plain power-cycle looked fine.
+    oldPosition = encoder.read();
+    newPosition = oldPosition;
+
     g_setupDone = true; // release Core 1
 }
 
