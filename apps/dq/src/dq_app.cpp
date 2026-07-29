@@ -85,6 +85,14 @@ static volatile bool _displayLocked = false;
 #include "menuDisplay.hpp" // core header, namespaced for its app hooks
 #include "../lib/menuRender.hpp"
 
+// engine.hpp first: it defines HandleOutputs(), which appDisplay.hpp calls
+// from ShowTemporaryMessage(). It externs the globals it needs, so it does
+// not care that they are defined further down. Ordering them this way
+// removes the forward declaration that used to bridge the gap - one that
+// silently went missing and only showed up as an error inside appDisplay.
+#include "../lib/engine.hpp" // the module engine step
+#include "appDisplay.hpp"    // core: RedrawDisplay + SAVED/LOADED
+
 #include "calibration.hpp" // core: the shared wizard
 #include "../lib/version.hpp"
 // clang-format on
@@ -102,14 +110,11 @@ int menuScreenTimeout = 2; // index into screenTimeoutOptions[]
 unsigned long lastEncoderUpdate = 0;
 
 
-void HandleOutputs(); // defined inline in lib/engine.hpp, included below
-
-
-#include "appDisplay.hpp" // core: RedrawDisplay + SAVED/LOADED overlay
 
 
 
-#include "../lib/engine.hpp" // HandleOutputs()
+
+
 
 
 // ── core/encoderMenu.hpp hooks ───────────────────────────────────────────────
