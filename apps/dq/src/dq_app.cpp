@@ -111,6 +111,18 @@ void HandleOutputs(); // defined inline in lib/engine.hpp, included below
 
 #include "../lib/engine.hpp" // HandleOutputs()
 
+
+// ── core/encoderMenu.hpp hooks ───────────────────────────────────────────────
+// NoteForge edits straight through the item's setter and has nothing to drop
+// when the cursor moves.
+static inline void MenuApplyEdit(int item, int delta) {
+    if (MENU_ITEMS[item - 1].setter)
+        MENU_ITEMS[item - 1].setter(delta);
+}
+static inline void OnMenuNavigate() {}
+
+#include "encoderMenu.hpp"
+
 // ── 3. The shell contract ───────────────────────────────────────────────────
 class NoteForgeApp final : public IApp {
   public:
@@ -179,25 +191,10 @@ class NoteForgeApp final : public IApp {
     //
     // If a turn ever feels backwards, the quarter-step test in the shell's
     // PollEncoder() is the single place to flip it, for every app at once.
-    void EncoderTurn(int detents) override {
-        if (detents == 0)
-            return;
-        const int dir = (detents > 0) ? 1 : -1;
-        UpdateSpeedFactor(dir);
-        REQUEST_DISPLAY_REFRESH();
-        lastEncoderUpdate = millis();
-
-        if (menuMode == 0) {
-            menuItem += dir;
-            if (menuItem < 1)
-                menuItem = MENU_ITEM_COUNT;
-            else if (menuItem > MENU_ITEM_COUNT)
-                menuItem = 1;
-        } else if (menuMode >= 1 && menuMode <= MENU_ITEM_COUNT) {
-            if (MENU_ITEMS[menuMode - 1].setter)
-                MENU_ITEMS[menuMode - 1].setter(dir * (int)speedFactor);
-        }
-    }
+    // Navigate/edit lives in core/encoderMenu.hpp; MenuApplyEdit() and
+    // OnMenuNavigate() above are this module's half of it. Direction is
+    // unchanged from the standalone firmware — the shell sends -1/+1.
+    void EncoderTurn(int detents) override { MenuEncoderTurn(detents); }
 };
 
 inline NoteForgeApp g_app;

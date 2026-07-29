@@ -114,6 +114,14 @@ void HandleOutputs(); // defined inline in ../lib/engine.hpp, included below
 
 #include "../lib/engine.hpp"
 
+
+// ── core/encoderMenu.hpp hooks ───────────────────────────────────────────────
+// GravityForge already has MenuApplyEdit in menuHandlers.hpp. Navigating away
+// drops a toggle-armed physics preview.
+static inline void OnMenuNavigate() { LiveViewClear(); }
+
+#include "encoderMenu.hpp"
+
 // ── 3. The shell contract ───────────────────────────────────────────────────
 class GravityForgeApp final : public IApp {
   public:
@@ -176,27 +184,10 @@ class GravityForgeApp final : public IApp {
         }
     }
 
-    // Direction matches the standalone firmware exactly; only the control flow
-    // changed. See the note in dq_app.cpp.
-    void EncoderTurn(int detents) override {
-        if (detents == 0)
-            return;
-        const int dir = (detents > 0) ? 1 : -1;
-        UpdateSpeedFactor(dir);
-        REQUEST_DISPLAY_REFRESH();
-        lastEncoderUpdate = millis();
-
-        if (menuMode == 0) {
-            menuItem += dir;
-            if (menuItem < 1)
-                menuItem = MENU_ITEM_COUNT;
-            else if (menuItem > MENU_ITEM_COUNT)
-                menuItem = 1;
-            LiveViewClear(); // navigating away drops any toggle-armed preview
-        } else if (menuMode >= 1 && menuMode <= MENU_ITEM_COUNT) {
-            MenuApplyEdit(menuMode, dir * (int)speedFactor);
-        }
-    }
+    // Navigate/edit lives in core/encoderMenu.hpp; MenuApplyEdit() and
+    // OnMenuNavigate() above are this module's half of it. Direction is
+    // unchanged from the standalone firmware — the shell sends -1/+1.
+    void EncoderTurn(int detents) override { MenuEncoderTurn(detents); }
 };
 
 inline GravityForgeApp g_app;
