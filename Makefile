@@ -134,6 +134,41 @@ everything: all plugins
 #     PowerShell:  . .\tools\env.ps1
 #     Git Bash:    export PATH="/c/msys64/usr/bin:/c/msys64/mingw64/bin:$PATH"
 
+# ── Rack plugins: build and install ──────────────────────────────────────────
+# `make clk` builds one module's STANDALONE plugin and installs it into Rack's
+# user plugin directory. Handy while working on a single module.
+#
+# `make vcv` builds the consolidated plugin — every module in one binary, which
+# is what ships. `make vcv-install` installs that instead.
+#
+# CAUTION: do not leave both installed. The standalone plugins have their own
+# slugs (ClockForge, NoteForge, ...) and the consolidated one is
+# VoltageFoundryMod, so Rack loads them all happily — and every module then
+# appears twice in the browser, from two different plugins. Delete the
+# standalone ones from Rack's plugin directory before installing the
+# consolidated build - see the note below it.
+.PHONY: $(APPS) vcv vcv-install
+
+$(APPS): %:
+	$(MAKE) -C apps/$*/vcv-plugin install $(if $(RACK_DIR),RACK_DIR=$(RACK_DIR),)
+
+vcv:
+	$(MAKE) -C vcv $(if $(RACK_DIR),RACK_DIR=$(RACK_DIR),)
+
+vcv-install:
+	$(MAKE) -C vcv install $(if $(RACK_DIR),RACK_DIR=$(RACK_DIR),)
+
+# Remove the standalone plugins from Rack's user directory, leaving the
+# consolidated one alone.
+# Removing the standalone plugins again is a manual step: Rack's plugin
+# directory is platform- and arch-specific (LOCALAPPDATA/Rack2/plugins-<os>-<cpu>
+# on Windows), and resolving it needs a working compiler, so auto-detecting it
+# to drive an rm -rf is not worth it. `make -C vcv print-plugins-dir` prints the
+# path when the toolchain is available.
+#
+#   ClockForge  NoteForge  GravityForge  ForgeView   <- the standalone slugs
+#   VoltageFoundryMod                                <- the consolidated one
+
 # ── Unified firmware ─────────────────────────────────────────────────────────
 # One image hosting the shell plus every app. Separate PlatformIO project (see
 # unified/platformio.ini for why), so it is not part of `make all`.

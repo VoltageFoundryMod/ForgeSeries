@@ -117,3 +117,10 @@ clean: clean-stray
 .PHONY: clean-stray
 clean-stray:
 	rm -rf apps
+
+# Where Rack loads user plugins from. plugin.mk works this out per platform
+# (LOCALAPPDATA on Windows, XDG on Linux, Application Support on macOS) and
+# appends the arch; the root Makefile asks for it rather than guessing.
+.PHONY: print-plugins-dir
+print-plugins-dir:
+	@echo "$(PLUGINS_DIR)"
