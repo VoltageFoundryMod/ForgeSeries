@@ -1,0 +1,15 @@
+# Ignore all dotfiles except git dotfiles
+.*
+!.git*
+
+# Binaries and build targets
+*.a
+*.so
+*.dylib
+*.dll
+/build
+/dep
+/dist
+
+# Panels staged from each submodule's vcv-plugin/res by the Makefile
+/res
