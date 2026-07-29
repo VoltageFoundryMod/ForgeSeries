@@ -350,8 +350,8 @@ void HandleDisplay() {
             display.println("OP");
             display.setCursor(92, _md_rowY);
             display.println("SRC");
-            // Column indicator arrow (even item → OP column, odd → SRC column)
-            if (menuItem % 2 == 0) {
+            // Column indicator arrow (odd item → OP column, even → SRC column)
+            if (menuItem % 2 != 0) {
                 display.fillTriangle(42, _md_rowY, 42, _md_rowY + 6, 45, _md_rowY + 3, 1);
             } else {
                 display.fillTriangle(86, _md_rowY, 86, _md_rowY + 6, 89, _md_rowY + 3, 1);
