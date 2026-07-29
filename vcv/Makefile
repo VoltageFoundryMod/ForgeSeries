@@ -35,9 +35,6 @@ ifeq ($(wildcard $(FORGEVCV)/forgevcv.mk),)
 $(error ForgeSeries VCV layer not found in $(FORGEVCV))
 endif
 
-$(foreach d,$(VFM_DIRS),$(if $(wildcard $(d)/vcv-plugin/Makefile),,\
-  $(error Submodule $(d) is not checked out — run `git submodule update --init --recursive`)))
-
 include $(FORGEVCV)/forgevcv.mk
 
 # ── Sources ──────────────────────────────────────────────────────────────────
@@ -107,3 +104,16 @@ clean-res:
 
 .PHONY: stage-res clean-res
 
+# ── Stray objects ────────────────────────────────────────────────────────────
+# Rack derives object paths as build/<source>.o (compile.mk). Our sources live
+# outside this directory, so build/../apps/... cancels down to ./apps/... and
+# the objects land beside the modules instead of under build/.
+#
+# plugin.mk's clean only removes build, dist and the target, so those objects
+# would survive it and be silently reused — a "clean" build that is not one.
+# Adding a prerequisite rather than redefining clean keeps Rack's recipe.
+clean: clean-stray
+
+.PHONY: clean-stray
+clean-stray:
+	rm -rf apps
