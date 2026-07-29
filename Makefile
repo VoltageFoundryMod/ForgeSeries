@@ -58,7 +58,9 @@ everything: all plugins
 .PHONY: unified upload-unified clean-unified
 unified:
 	$(PIO) run -d unified -e $(ENV)
-upload-unified:
+upload:
 	$(PIO) run -d unified -e $(ENV) -t upload
-clean-unified:
+clean:
 	$(PIO) run -d unified -e $(ENV) -t clean
+upload-monitor:
+	$(PIO) run -d unified -e $(ENV) -t upload -t monitor
