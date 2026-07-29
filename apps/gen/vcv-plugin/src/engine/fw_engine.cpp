@@ -82,12 +82,12 @@ void attachInterrupt(int, void (*isr)(), int) { _trigIsr = isr; }
 #include "shellObjects.hpp"
 
 #include "boardIO.hpp"
+#include "boardPinouts.hpp"
 #include "clock.hpp"
 #include "cvInputs.hpp" // must precede presetManager.hpp (In1Role/CVTarget types)
 #include "displayManager.hpp"
 #include "params.hpp"
 #include "physics.hpp"
-#include "jacks.hpp"
 #include "presetManager.hpp"
 #include "randomize.hpp" // RandomizeParams() — shared with the hardware menu
 #include "sequencer.hpp"
@@ -96,8 +96,8 @@ void attachInterrupt(int, void (*isr)(), int) { _trigIsr = isr; }
 #include "utils.hpp"
 
 #include "menuDefinitions.hpp"
-#include "menuHandlers.hpp"
 #include "menuDisplay.hpp"
+#include "menuHandlers.hpp"
 #include "menuRender.hpp"
 
 // ── Global objects (mirror main.cpp, minus hardware/dual-core bits) ───────────
@@ -134,8 +134,6 @@ void RedrawDisplay() {
     display.display(); // pack into the HostBridge framebuffer
 }
 
-
-
 // Non-blocking: stash the message + expiry; the renderer draws it as an overlay.
 void ShowTemporaryMessage(const char *msg, uint32_t durationMs) {
     strncpy(_tempMsg, msg, sizeof(_tempMsg) - 1);
@@ -148,7 +146,7 @@ void ShowTemporaryMessage(const char *msg, uint32_t durationMs) {
 // written out again here. Included after the globals they reference.
 #include "engine.hpp"
 
-} // namespace — end of the private firmware translation unit
+} // namespace
 
 // ── Touch points used by the engine entry layer (below) ───────────────────────
 #include "fw_engine.hpp"
@@ -209,11 +207,13 @@ struct EngineState {
     // which a default-constructed EngineState would not have.
     void copyFromGlobals() {
 #define CF_SCALAR(T, n) this->n = (T)::n;
-#define CF_ARRAY(T, n, N) \
-    for (int _i = 0; _i < (N); ++_i) this->n[_i] = (T)::n[_i];
+#define CF_ARRAY(T, n, N)            \
+    for (int _i = 0; _i < (N); ++_i) \
+        this->n[_i] = (T)::n[_i];
 #define CF_OBJECT(T, n) this->n = ::n;
-#define CF_OBJARRAY(T, n, N) \
-    for (int _i = 0; _i < (N); ++_i) this->n[_i] = ::n[_i];
+#define CF_OBJARRAY(T, n, N)         \
+    for (int _i = 0; _i < (N); ++_i) \
+        this->n[_i] = ::n[_i];
 #include "engine_state.def"
 #undef CF_SCALAR
 #undef CF_ARRAY

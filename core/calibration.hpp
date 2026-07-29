@@ -7,7 +7,7 @@
 // the one place it belongs: calibration describes the board's analog front and
 // back ends, not any one module, and the same /cal.bin then serves every app.
 //
-// It runs on Core 0 with Core 1 still parked (see unified/src/main.cpp), so it
+// It runs on Core 0 with Core 1 still parked (see src/main.cpp), so it
 // owns the display outright and calls display.display() itself — there is no
 // frame-ready handshake to observe here, and no app is running to fight over it.
 //
@@ -46,7 +46,7 @@
 #include "boardIO.hpp"
 #include "encoder.hpp"
 
-// Forward declaration from the shell (unified/src/main.cpp).
+// Forward declaration from the shell (src/main.cpp).
 extern void SaveCalibration(const CalibrationData &);
 
 // ── Calibration constants ────────────────────────────────────────────────────
@@ -60,9 +60,7 @@ static const int CAL_DAC_LOW_CODE = MAXDAC * CAL_DAC_LOW_MV / 5000; // = 819 cou
 
 // Jack names for the prompts. Physical, not module-flavoured: the wizard runs
 // from the module selector, before an app has been chosen, so "OUT 3" is the
-// only name that is true whichever one you go on to boot. (They used to come
-// from each app's lib/jacks.hpp, back when every firmware carried its own copy
-// of the wizard.)
+// only name that is true whichever one you go on to boot.
 static const char *const CAL_OUT_NAMES[NUM_OUTPUTS] = {"OUT 1", "OUT 2", "OUT 3", "OUT 4"};
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

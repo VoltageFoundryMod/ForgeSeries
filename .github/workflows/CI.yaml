@@ -51,9 +51,9 @@ jobs:
       - name: Unit tests
         run: make test
 
-      # The single image that ships: unified/ hosts the shell plus every app.
-      # The per-app hardware environments are gone, so this is the only firmware
-      # build there is.
+      # The single image that ships: the root PlatformIO project hosts the shell
+      # plus every app. The per-app hardware environments are gone, so this is
+      # the only firmware build there is.
       - name: Build unified firmware
         run: make unified
 
@@ -61,7 +61,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: forgeseries-firmware-uf2
-          path: unified/.pio/build/xiao_rp2040/firmware.uf2
+          path: .pio/build/xiao_rp2040/firmware.uf2
           if-no-files-found: error
 
   vcv-isolation:

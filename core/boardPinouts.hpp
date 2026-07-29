@@ -7,9 +7,6 @@
 // jacks and four output jacks. That wiring is fixed and identical across every
 // firmware, so it lives here exactly once.
 //
-// What jacks *mean* is a per-app decision and deliberately NOT in this file:
-// apps layer their own jack semantics (channel counts, CV/gate assignment) on
-// top in their own lib/jacks.hpp, which includes this header.
 
 // Needed for A0/A1/A2 below. This used to be left to the caller, which happened
 // to work only because main.cpp included <Arduino.h> first; including a pinout

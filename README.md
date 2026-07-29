@@ -31,7 +31,7 @@ is nothing but firmware.
 
 This repository holds all of it:
 
-- **The firmware** — one image (`unified/`) that contains _every_ module. Hold
+- **The firmware** — one image (`src/`) that contains _every_ module. Hold
   the encoder at power-on to pick which one boots; the choice persists.
 - **The VCV Rack plugin** — not a reimplementation. The actual firmware runs
   inside Rack against a hardware shim, with the OLED emulated pixel for pixel,
@@ -111,13 +111,14 @@ flash gets you any of them — and a new module is a new firmware, not a new PCB
 ## Repository layout
 
 ```text
+platformio.ini  the firmware project — the repo root IS the PlatformIO project
+src/            the shell. The only firmware built for the board
 core/      the board, and everything every module shares
 apps/
   clk/     ClockForge    — clock generator / modulation source
   dq/      NoteForge     — dual quantizer
   gen/     GravityForge  — physics-based generative sequencer
   scp/     ForgeView     — oscilloscope / spectrum analyser
-unified/   the shell. The only firmware built for the board
 vcv/       the consolidated VCV Rack plugin (all modules, one binary)
 vcvlib/    shared VCV Rack layer (Arduino shim, ForgeModule, IEngine, widgets)
 tools/     env.ps1 — optional PATH helper for Windows
@@ -240,9 +241,7 @@ shared:
 | `IApp.hpp`                                                            | the shell↔app contract                                       |
 
 What stays in a module's `lib/` is genuinely its own: menu definitions, preset
-schema, `engine.hpp`, and the DSP that makes it that module. Jack _semantics_
-are module-level too — `lib/jacks.hpp` layers `NUM_CHANNELS` and
-`OUT_CV`/`OUT_GATE` on top of `core/boardPinouts.hpp`.
+schema, `engine.hpp`, and the DSP that makes it that module.
 
 ClockForge's quantizer is deliberately not shared: it is a separate
 implementation reached through `Output` rather than a channel, so folding it in
@@ -290,7 +289,7 @@ something implied by the hardware.
 
 ## The unified firmware
 
-`unified/` is the shell and nothing else. It owns the board — one `display`,
+`src/` is the shell and nothing else. It owns the board — one `display`,
 one `encoder`, one `cal` — brings the hardware up, mounts the filesystem, runs
 the module selector, then drives exactly one module through `forge::IApp`
 (`Begin`/`Tick0`/`Tick1` + encoder events). The core split is the one every
@@ -350,7 +349,7 @@ per-module state.
 
 ## Image size, and how it scales
 
-`unified/platformio.ini` pulls each module TU in through `build_src_filter`, so
+The root `platformio.ini` pulls each module TU in through `build_src_filter`, so
 sources stay with their module rather than being copied. Only each module's
 `src/` is on the include path: it holds nothing but the uniquely-named
 `<app>_app.hpp`, so unlike putting the `lib/` dirs there it cannot shadow a

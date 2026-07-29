@@ -24,3 +24,10 @@ vcv/plugin.dylib
 
 .pio
 CURRENT.UF2
+
+# PlatformIO regenerates both of these into the project root, which is now the
+# repo root. They hold absolute toolchain and home-directory paths, so they are
+# per-machine and must not be committed. tasks.json and extensions.json are
+# hand-written and stay tracked.
+.vscode/c_cpp_properties.json
+.vscode/launch.json

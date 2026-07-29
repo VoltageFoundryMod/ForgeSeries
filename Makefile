@@ -1,9 +1,10 @@
 # ForgeSeries build wrapper.
 #
-# One firmware is built for the board: unified/, the shell plus every module.
-# apps/<app>/ are now native-test projects only — their hardware environments
-# are gone, and src/main.cpp is kept for reference until the unified image has
-# been verified on hardware for every module.
+# One firmware is built for the board: the unified image at the repository root
+# (platformio.ini + src/), the shell plus every module. apps/<app>/ are now
+# native-test projects only — their hardware environments are gone, and their
+# src/main.cpp is kept for reference until the unified image has been verified
+# on hardware for every module.
 
 # ── Windows: find the toolchain ourselves ────────────────────────────────────
 # Rack's plugin.mk is POSIX, and the usual Windows trap is Chocolatey's make
@@ -196,14 +197,15 @@ vcv-dist:
 #   VoltageFoundryMod                                <- the consolidated one
 
 # ── Unified firmware ─────────────────────────────────────────────────────────
-# One image hosting the shell plus every app. Separate PlatformIO project (see
-# unified/platformio.ini for why), so it is not part of `make all`.
+# One image hosting the shell plus every app, and the only thing `make all`
+# builds. Its PlatformIO project is the repository root — see ./platformio.ini
+# for why it cannot just be another environment under apps/<app>/.
 .PHONY: unified upload clean upload-monitor
 unified:
-	$(PIO) run -d unified -e $(ENV)
+	$(PIO) run -e $(ENV)
 upload:
-	$(PIO) run -d unified -e $(ENV) -t upload
+	$(PIO) run -e $(ENV) -t upload
 clean:
-	$(PIO) run -d unified -e $(ENV) -t clean
+	$(PIO) run -e $(ENV) -t clean
 upload-monitor:
-	$(PIO) run -d unified -e $(ENV) -t upload -t monitor
+	$(PIO) run -e $(ENV) -t upload -t monitor
