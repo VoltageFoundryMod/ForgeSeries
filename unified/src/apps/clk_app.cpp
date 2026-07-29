@@ -80,7 +80,7 @@ static volatile bool _displayLocked = false;
 #include "../../../apps/clk/lib/menuRender.hpp"
 
 #include "calibration.hpp" // core: the shared wizard
-#include "../../../apps/clk/src/version.hpp"
+#include "../../../apps/clk/lib/version.hpp"
 // clang-format on
 
 

@@ -111,14 +111,17 @@ Each app builds independently — there is no root PlatformIO project, because
 PlatformIO scopes `src_dir`/`lib_dir` per *project*, not per environment.
 
 ```sh
-make clk            # or: pio run -d apps/clk -e xiao_rp2040
-make all            # every app, standalone
-make unified        # the combined shell + apps image
-make upload-clk     # build + flash
+make                # the firmware: unified/ (shell + every module)
+make upload-unified # build + flash
+make test           # native unit tests for every app
 make plugins        # every VCV Rack plugin (needs jq + mingw64 g++)
-make everything     # all firmware + all plugins
-make clean
+make everything     # firmware + all plugins
 ```
+
+There is ONE hardware build: `unified/`. Each `apps/<app>/` is now a native
+test project only — its hardware environment is gone, and `src/main.cpp` is
+kept for reference until the unified image has been verified on hardware for
+every module. Nothing compiles it.
 
 Current sizes on `xiao_rp2040` (release):
 

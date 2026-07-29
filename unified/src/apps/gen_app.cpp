@@ -81,7 +81,7 @@ static volatile bool _displayLocked = false;
 #include "../../../apps/gen/lib/menuRender.hpp"
 
 #include "calibration.hpp" // core: the shared wizard
-#include "../../../apps/gen/src/version.hpp"
+#include "../../../apps/gen/lib/version.hpp"
 // clang-format on
 
 // ── The instrument ──────────────────────────────────────────────────────────

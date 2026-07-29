@@ -86,7 +86,7 @@ static volatile bool _displayLocked = false;
 #include "../../../apps/dq/lib/menuRender.hpp"
 
 #include "calibration.hpp" // core: the shared wizard
-#include "../../../apps/dq/src/version.hpp"
+#include "../../../apps/dq/lib/version.hpp"
 // clang-format on
 
 // ── App state (was main.cpp's file-scope globals) ───────────────────────────

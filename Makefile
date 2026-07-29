@@ -1,30 +1,24 @@
-# ForgeSeries — convenience wrapper around the per-app PlatformIO projects.
+# ForgeSeries build wrapper.
 #
-# Each app under apps/ is its own PlatformIO project (PlatformIO scopes
-# src_dir/lib_dir per project, not per environment), so everything here is just
-# `pio run -d apps/<app>`.
+# One firmware is built for the board: unified/, the shell plus every module.
+# apps/<app>/ are now native-test projects only — their hardware environments
+# are gone, and src/main.cpp is kept for reference until the unified image has
+# been verified on hardware for every module.
 
 APPS  := clk dq gen scp
 PIO   ?= pio
 ENV   ?= xiao_rp2040
 
-.PHONY: all clean list $(APPS) $(addprefix upload-,$(APPS)) $(addprefix clean-,$(APPS))
-
-all: $(APPS)
+.PHONY: all list clean
+.DEFAULT_GOAL := all
 
 list:
 	@echo "apps: $(APPS)"
 
-$(APPS):
-	$(PIO) run -d apps/$@ -e $(ENV)
+# `all` is the firmware you flash.
+all: unified
 
-$(addprefix upload-,$(APPS)): upload-%:
-	$(PIO) run -d apps/$* -e $(ENV) -t upload
-
-$(addprefix clean-,$(APPS)): clean-%:
-	$(PIO) run -d apps/$* -e $(ENV) -t clean
-
-clean: $(addprefix clean-,$(APPS))
+clean: clean-unified
 
 # Native unit tests (env:native, googletest + ArduinoFake).
 .PHONY: test
