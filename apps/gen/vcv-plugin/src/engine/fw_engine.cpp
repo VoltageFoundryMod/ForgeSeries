@@ -184,6 +184,9 @@ void HandleOutputs() {
 
     for (int i = 0; i < NUM_CHANNELS; i++) {
         channels[i].SetGateHigh(trigLevel);
+        // LOOP > NAP silences the voice while the simulation keeps running, so
+        // the phrase stays in phase across the rest.
+        channels[i].SetMuted(physicsWorld.LoopMuted(i));
         channels[i].Process(physicsWorld.Get(i), now, clockEngine, boundary);
     }
 
