@@ -22,5 +22,5 @@ ry. PlatformIO writes into $HOME, and when HOME is unset
 **/vcv-plugin/plugin.so
 **/vcv-plugin/plugin.dylib
 
-
+.pio
 CURRENT.UF2
