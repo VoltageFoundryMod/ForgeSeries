@@ -104,72 +104,15 @@ bool unsavedChanges = false;
 int menuScreenTimeout = 2;
 unsigned long lastEncoderUpdate = 0;
 
-void HandleOutputs();
 
 
+void HandleOutputs(); // defined inline in ../lib/engine.hpp, included below
 #include "appDisplay.hpp" // core: RedrawDisplay + SAVED/LOADED overlay
 
 
-// What IN 1 does with a rising edge, per the menu-selected role.
-static void HandleTriggerRole(unsigned long edgeUs) {
-    switch (in1Role) {
-    case In1Clock:
-        clockEngine.ExternalEdge(edgeUs);
-        break;
-    case In1Reset:
-        physicsWorld.Reset();
-        break;
-    case In1Kick:
-        physicsWorld.Kick(180.0f);
-        break;
-    case In1Spawn:
-        // Wraps back to the minimum rather than saturating: a spawn input that
-        // silently stops doing anything after eight pulses reads as broken.
-        for (int i = 0; i < 2; i++) {
-            int n = containerParams[i].balls + 1;
-            containerParams[i].balls =
-                (uint8_t)(n > PHYS_MAX_BALLS ? PHYS_MIN_BALLS : n);
-        }
-        MarkUnsaved();
-        REQUEST_DISPLAY_REFRESH();
-        break;
-    default:
-        break;
-    }
-}
 
-void HandleOutputs() {
-    const unsigned long now = micros();
 
-    unsigned long edgeUs = now;
-    if (ConsumeTrigger(&edgeUs)) {
-        HandleTriggerRole(edgeUs);
-    }
-    HandleTriggerLevel();
-
-    clockEngine.Update(now);
-
-    // Base parameters + this loop's CV modulation → the live simulation.
-    BuildModBus(modBus);
-    ApplyParams(physicsWorld, clockEngine, containerParams, worldParams, modBus);
-
-    physicsWorld.Advance(now);
-
-    // Consumed once and handed to both channels: two calls would give the
-    // boundary to channel A and nothing to channel B.
-    const bool boundary = clockEngine.ConsumeBoundary();
-
-    for (int i = 0; i < NUM_CHANNELS; i++) {
-        channels[i].SetGateHigh(trigLevel);
-        // LOOP ▸ NAP silences the voice while the simulation keeps running, so
-        // the phrase stays in phase across the rest.
-        channels[i].SetMuted(physicsWorld.LoopMuted(i));
-        channels[i].Process(physicsWorld.Get(i), now, clockEngine, boundary);
-    }
-
-    DACWriteAll(channels[0].GetCVOutput(), channels[1].GetCVOutput(),
-                channels[0].GetGateOutput(), channels[1].GetGateOutput());
-}
+#include "../lib/engine.hpp"
 
 // ── 3. The shell contract ───────────────────────────────────────────────────
 class GravityForgeApp final : public IApp {

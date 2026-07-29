@@ -134,65 +134,7 @@ void RedrawDisplay() {
     display.display(); // pack into the HostBridge framebuffer
 }
 
-// Act on an IN 1 edge according to the jack's configured role.
-static void HandleTriggerRole(unsigned long edgeUs) {
-    switch (in1Role) {
-    case In1Clock:
-        clockEngine.ExternalEdge(edgeUs);
-        break;
-    case In1Reset:
-        physicsWorld.Reset();
-        break;
-    case In1Kick:
-        physicsWorld.Kick(180.0f);
-        break;
-    case In1Spawn:
-        for (int i = 0; i < 2; i++) {
-            int n = containerParams[i].balls + 1;
-            containerParams[i].balls =
-                (unsigned char)(n > PHYS_MAX_BALLS ? PHYS_MIN_BALLS : n);
-        }
-        MarkUnsaved();
-        REQUEST_DISPLAY_REFRESH();
-        break;
-    default:
-        break;
-    }
-}
 
-// Advance the whole instrument and push all four DAC outputs.
-// Jack map: 1 = CV A, 2 = CV B, 3 = GATE A, 4 = GATE B.
-void HandleOutputs() {
-    unsigned long now = micros();
-
-    unsigned long edgeUs = now;
-    if (ConsumeTrigger(&edgeUs)) {
-        HandleTriggerRole(edgeUs);
-    }
-    HandleTriggerLevel();
-
-    clockEngine.Update(now);
-
-    BuildModBus(modBus);
-    ApplyParams(physicsWorld, clockEngine, containerParams, worldParams, modBus);
-
-    physicsWorld.Advance(now);
-
-    // Consumed once and handed to both channels: two calls would give the
-    // boundary to channel A and nothing to channel B.
-    bool boundary = clockEngine.ConsumeBoundary();
-
-    for (int i = 0; i < NUM_CHANNELS; i++) {
-        channels[i].SetGateHigh(trigLevel);
-        // LOOP > NAP silences the voice while the simulation keeps running, so
-        // the phrase stays in phase across the rest.
-        channels[i].SetMuted(physicsWorld.LoopMuted(i));
-        channels[i].Process(physicsWorld.Get(i), now, clockEngine, boundary);
-    }
-
-    DACWriteAll(channels[0].GetCVOutput(), channels[1].GetCVOutput(),
-                channels[0].GetGateOutput(), channels[1].GetGateOutput());
-}
 
 // Non-blocking: stash the message + expiry; the renderer draws it as an overlay.
 void ShowTemporaryMessage(const char *msg, uint32_t durationMs) {
@@ -201,6 +143,10 @@ void ShowTemporaryMessage(const char *msg, uint32_t durationMs) {
     _tempMsgUntil = millis() + durationMs;
     REQUEST_DISPLAY_REFRESH();
 }
+
+// HandleOutputs()/HandleTriggerRole() — shared with the firmware rather than
+// written out again here. Included after the globals they reference.
+#include "engine.hpp"
 
 } // namespace — end of the private firmware translation unit
 

@@ -106,62 +106,12 @@ int menuScreenTimeout = 2;
 unsigned long lastEncoderUpdate = 0;
 
 
-// Global play/stop. Declared by cvInputs.hpp (a CV target can drive it) and
-// referenced from MENU_ITEMS, so both live here rather than in a lib header.
-void SetMasterState(bool state) {
-    // Coming back from stopped restarts the count rather than resuming mid-bar.
-    if (!masterState && state) {
-        tickCounter = 0;
-        externalTickCounter = 0;
-    }
-    masterState = state;
-    for (int i = 0; i < NUM_OUTPUTS; i++) {
-        outputs[i].SetMasterState(state);
-    }
-}
 
-void ToggleMasterState() { SetMasterState(!masterState); }
 
-// Drive all four outputs for one iteration.
-void HandleOutputs() {
-    // Pass 1: each output's raw (pre-quantisation) value plus a normalised
-    // snapshot. Cross operations read the frozen snapshot so results are
-    // order-independent — no feedback when two outputs cross-modulate.
-    float raw[NUM_OUTPUTS];
-    float norm[NUM_OUTPUTS];
-    for (int i = 0; i < NUM_OUTPUTS; i++) {
-        raw[i] = outputs[i].ComputeRawOutput();
-        norm[i] = raw[i] / (float)MAXDAC;
-    }
 
-    // Pass 2: apply cross operations against the snapshot, then quantise/clamp.
-    uint16_t v[NUM_OUTPUTS];
-    for (int i = 0; i < NUM_OUTPUTS; i++) {
-        float r = raw[i];
-        if (outputs[i].HasCrossOp()) {
-            const int src = outputs[i].GetCrossSourceIndex();
-            float srcNorm;
-            if (src < NUM_OUTPUTS) {
-                srcNorm = norm[src]; // another output's pre-cross value
-            } else {
-                // IN1 / IN2 sampled CV, normalised 0..1 by the core adapter
-                srcNorm = CvUni(channelCv[src - NUM_OUTPUTS]);
-            }
-            r = outputs[i].ApplyCrossOp(raw[i], srcNorm);
-        }
-        v[i] = (uint16_t)outputs[i].FinalizeOutput(r);
-    }
-
-    metrics.BeginDACMeasurement();
-    DACWriteAll(v[0], v[1], v[2], v[3]);
-    metrics.EndDACMeasurement();
-
-    for (int i = 0; i < NUM_OUTPUTS; i++) {
-        outputs[i].GenEnvelope();
-    }
-}
-
+void HandleOutputs(); // defined inline in ../lib/engine.hpp, included below
 #include "appDisplay.hpp" // core: RedrawDisplay + SAVED/LOADED overlay
+#include "../lib/engine.hpp" // HandleOutputs, SetMasterState, transport
 
 
 // ── 3. The shell contract ───────────────────────────────────────────────────

@@ -133,42 +133,7 @@ void RedrawDisplay() {
     display.display(); // pack into HostBridge framebuffer
 }
 
-void SetMasterState(bool state) {
-    if (!masterState && state) {
-        tickCounter = 0;
-        externalTickCounter = 0;
-    }
-    masterState = state;
-    for (int i = 0; i < NUM_OUTPUTS; i++)
-        outputs[i].SetMasterState(state);
-}
-void ToggleMasterState() { SetMasterState(!masterState); }
 
-void HandleOutputs() {
-    float raw[NUM_OUTPUTS];
-    float norm[NUM_OUTPUTS];
-    for (int i = 0; i < NUM_OUTPUTS; i++) {
-        raw[i] = outputs[i].ComputeRawOutput();
-        norm[i] = raw[i] / (float)MAXDAC;
-    }
-    uint16_t v[NUM_OUTPUTS];
-    for (int i = 0; i < NUM_OUTPUTS; i++) {
-        float r = raw[i];
-        if (outputs[i].HasCrossOp()) {
-            int src = outputs[i].GetCrossSourceIndex();
-            float srcNorm;
-            if (src < NUM_OUTPUTS)
-                srcNorm = norm[src];
-            else
-                srcNorm = CvUni(channelCv[src - NUM_OUTPUTS]);
-            r = outputs[i].ApplyCrossOp(raw[i], srcNorm);
-        }
-        v[i] = (uint16_t)outputs[i].FinalizeOutput(r);
-    }
-    DACWriteAll(v[0], v[1], v[2], v[3]);
-    for (int i = 0; i < NUM_OUTPUTS; i++)
-        outputs[i].GenEnvelope();
-}
 
 // Non-blocking: stash the message + expiry; the renderer draws it as an overlay.
 void ShowTemporaryMessage(const char *msg, uint32_t durationMs) {
@@ -177,6 +142,10 @@ void ShowTemporaryMessage(const char *msg, uint32_t durationMs) {
     _tempMsgUntil = millis() + durationMs;
     REQUEST_DISPLAY_REFRESH();
 }
+
+// HandleOutputs() and the transport — shared with the firmware rather than
+// written out again here. Included after the globals they reference.
+#include "engine.hpp"
 
 // Hardware calibration wizard is meaningless in Rack — outputs/inputs are ideal.
 void RunCalibration() {
