@@ -49,8 +49,10 @@ everything: all plugins
 
 # NOTE: Rack's plugin.mk shells out to `jq` to read SLUG from plugin.json, and
 # the compiler must be mingw64 g++ (not the arm-none-eabi one PlatformIO uses).
-# On Windows both live in msys64:
-#     export PATH="/c/msys64/usr/bin:/c/msys64/mingw64/bin:$PATH"
+# An msys2 *shell* is not needed — only its tools on PATH; make finds sh.exe
+# itself. On Windows:
+#     PowerShell:  . .\tools\env.ps1
+#     Git Bash:    export PATH="/c/msys64/usr/bin:/c/msys64/mingw64/bin:$PATH"
 
 # ── Unified firmware ─────────────────────────────────────────────────────────
 # One image hosting the shell plus every app. Separate PlatformIO project (see

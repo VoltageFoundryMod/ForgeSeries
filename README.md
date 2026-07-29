@@ -189,6 +189,24 @@ make RACK_DIR=/path/to/Rack-SDK         # out-of-tree SDK
 `FORGEVCV` defaults to `../../../vcvlib` (in-repo). It no longer needs a
 sibling `ForgeSeries-VCVLib` checkout.
 
+### Windows toolchain
+
+Everything builds from PowerShell — an msys2 *shell* is not required. Rack's
+`plugin.mk` shells out to POSIX tools, but GNU make picks up msys2's `sh.exe`
+as SHELL once it is on PATH, so PowerShell only has to be the parent shell.
+
+```powershell
+. .\tools\env.ps1   # puts the three toolchain dirs on PATH, reports what it found
+make everything
+```
+
+The plugin compiler must be **mingw64 g++** — the Rack SDK for Windows is
+mingw-w64 built and MSVC will not link against it. `jq` is needed too, since
+`plugin.mk` uses it to read `SLUG` out of `plugin.json`.
+
+Neither missing tool gives a useful error: no `jq` surfaces as "SLUG could not
+be found in manifest", and no `pio` surfaces as `make ... Error 127`.
+
 ## History
 
 This repo was assembled from five separate repositories with `git subtree`, so
