@@ -122,6 +122,21 @@ static inline void MenuApplyEdit(int item, int delta) {
     if (MENU_ITEMS[item - 1].setter)
         MENU_ITEMS[item - 1].setter(delta);
 }
+static inline void OnItemActivated(const MenuItem &) {}
+// Items 61/62 edit a CV target through a pending copy, so it is seeded on the
+// way in and committed on the way out.
+static inline void OnEnterEdit(int item) {
+    if (item == 61)
+        pendingCVInputTarget[0] = CVInputTarget[0];
+    else if (item == 62)
+        pendingCVInputTarget[1] = CVInputTarget[1];
+}
+static inline void OnExitEdit(int item) {
+    if (item == 61)
+        CVInputTarget[0] = pendingCVInputTarget[0];
+    else if (item == 62)
+        CVInputTarget[1] = pendingCVInputTarget[1];
+}
 static inline void OnMenuNavigate() {}
 
 #include "encoderMenu.hpp"
@@ -185,43 +200,7 @@ class ClockForgeApp final : public IApp {
         }
     }
 
-    void EncoderButton(bool pressed) override {
-        oldSwitchState = switchState;
-        switchState = pressed ? 0 : 1; // active-low, matching the raw pin
-        if (switchState != 1 || oldSwitchState != 0)
-            return; // act on release only
-
-        lastEncoderUpdate = millis();
-        REQUEST_DISPLAY_REFRESH();
-
-        if (menuMode != 0) {
-            // Commit and leave edit mode. CV target items copy the pending
-            // selection back to the live value.
-            if (menuMode == 61) {
-                CVInputTarget[0] = pendingCVInputTarget[0];
-            } else if (menuMode == 62) {
-                CVInputTarget[1] = pendingCVInputTarget[1];
-            }
-            menuMode = 0;
-            return;
-        }
-
-        if (menuItem >= 1 && menuItem <= MENU_ITEM_COUNT) {
-            const MenuItem &mi = MENU_ITEMS[menuItem - 1];
-            if (mi.type == MENU_ACTION || mi.type == MENU_TOGGLE) {
-                if (mi.action)
-                    mi.action();
-            } else { // MENU_EDIT
-                menuMode = menuItem;
-                // Seed the pending state for CV target editing.
-                if (menuItem == 61) {
-                    pendingCVInputTarget[0] = CVInputTarget[0];
-                } else if (menuItem == 62) {
-                    pendingCVInputTarget[1] = CVInputTarget[1];
-                }
-            }
-        }
-    }
+    void EncoderButton(bool pressed) override { MenuEncoderButton(pressed); }
 
     // Navigate/edit lives in core/encoderMenu.hpp; MenuApplyEdit() and
     // OnMenuNavigate() above are this module's half of it. Direction is

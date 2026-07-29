@@ -118,6 +118,17 @@ void HandleOutputs(); // defined inline in ../lib/engine.hpp, included below
 // ── core/encoderMenu.hpp hooks ───────────────────────────────────────────────
 // GravityForge already has MenuApplyEdit in menuHandlers.hpp. Navigating away
 // drops a toggle-armed physics preview.
+// A flagged toggle (DIR) has no edit mode to turn in, so the click itself has
+// to be what shows the result. Everything else lands back on the page rather
+// than the animation.
+static inline void OnItemActivated(const MenuItem &mi) {
+    if (mi.livePreview)
+        LiveViewArm();
+    else
+        LiveViewClear();
+}
+static inline void OnEnterEdit(int) { LiveViewClear(); } // first detent opens it
+static inline void OnExitEdit(int) { LiveViewClear(); }
 static inline void OnMenuNavigate() { LiveViewClear(); }
 
 #include "encoderMenu.hpp"
@@ -153,36 +164,7 @@ class GravityForgeApp final : public IApp {
         }
     }
 
-    void EncoderButton(bool pressed) override {
-        oldSwitchState = switchState;
-        switchState = pressed ? 0 : 1; // active-low, matching the raw pin
-        if (switchState != 1 || oldSwitchState != 0)
-            return; // act on release only
-
-        lastEncoderUpdate = millis();
-        REQUEST_DISPLAY_REFRESH();
-        if (menuMode != 0) {
-            menuMode = 0;    // commit and leave edit mode
-            LiveViewClear(); // …and land back on the page, not the animation
-            return;
-        }
-        if (menuItem >= 1 && menuItem <= MENU_ITEM_COUNT) {
-            const MenuItem &mi = MENU_ITEMS[menuItem - 1];
-            if (mi.type == MENU_ACTION || mi.type == MENU_TOGGLE) {
-                if (mi.action)
-                    mi.action();
-                // A flagged toggle (DIR) has no edit mode to turn in, so the
-                // click itself has to be what shows the result.
-                if (mi.livePreview)
-                    LiveViewArm();
-                else
-                    LiveViewClear();
-            } else { // MENU_EDIT
-                menuMode = menuItem;
-                LiveViewClear(); // the first detent is what opens the physics view
-            }
-        }
-    }
+    void EncoderButton(bool pressed) override { MenuEncoderButton(pressed); }
 
     // Navigate/edit lives in core/encoderMenu.hpp; MenuApplyEdit() and
     // OnMenuNavigate() above are this module's half of it. Direction is

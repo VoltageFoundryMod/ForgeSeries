@@ -119,6 +119,9 @@ static inline void MenuApplyEdit(int item, int delta) {
     if (MENU_ITEMS[item - 1].setter)
         MENU_ITEMS[item - 1].setter(delta);
 }
+static inline void OnItemActivated(const MenuItem &) {}
+static inline void OnEnterEdit(int) {}
+static inline void OnExitEdit(int) {}
 static inline void OnMenuNavigate() {}
 
 #include "encoderMenu.hpp"
@@ -159,28 +162,7 @@ class NoteForgeApp final : public IApp {
         }
     }
 
-    void EncoderButton(bool pressed) override {
-        oldSwitchState = switchState;
-        switchState = pressed ? 0 : 1; // active-low, matching the raw pin
-        if (switchState != 1 || oldSwitchState != 0)
-            return; // act on release only
-
-        lastEncoderUpdate = millis();
-        REQUEST_DISPLAY_REFRESH();
-        if (menuMode != 0) {
-            menuMode = 0; // commit and leave edit mode
-            return;
-        }
-        if (menuItem >= 1 && menuItem <= MENU_ITEM_COUNT) {
-            const MenuItem &mi = MENU_ITEMS[menuItem - 1];
-            if (mi.type == MENU_ACTION || mi.type == MENU_TOGGLE) {
-                if (mi.action)
-                    mi.action();
-            } else { // MENU_EDIT
-                menuMode = menuItem;
-            }
-        }
-    }
+    void EncoderButton(bool pressed) override { MenuEncoderButton(pressed); }
 
     // Direction is deliberately identical to the standalone firmware — only the
     // control flow changed (the shell polls and calls us, rather than us polling

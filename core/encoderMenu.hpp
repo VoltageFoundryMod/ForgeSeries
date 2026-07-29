@@ -14,6 +14,9 @@
 //   REQUEST_DISPLAY_REFRESH()
 //   MenuApplyEdit(int item, int delta)  — apply one edit step to `item`
 //   OnMenuNavigate()                    — cursor moved off an item
+//   OnItemActivated(const MenuItem &)   — a MENU_ACTION/MENU_TOGGLE was clicked
+//   OnEnterEdit(int item)               — just entered edit mode on `item`
+//   OnExitEdit(int item)                — about to leave edit mode on `item`
 //
 // Both hooks are trivial for most modules; menuHandlers.hpp is the natural
 // place for them. GravityForge is the one that uses them for real — it drops a
@@ -41,5 +44,40 @@ inline void MenuEncoderTurn(int detents) {
         OnMenuNavigate();
     } else if (menuMode >= 1 && menuMode <= MENU_ITEM_COUNT) {
         MenuApplyEdit(menuMode, dir * (int)speedFactor);
+    }
+}
+
+// The encoder button. Acts on the RELEASE edge, which is also what makes the
+// shell's hold-to-switch gesture safe: a hold ends in a reboot, so the release
+// never arrives and the app never treats it as a click.
+//
+// Hook ordering is not arbitrary. OnExitEdit() runs BEFORE menuMode is cleared,
+// because ClockForge commits its pending CV target using it; OnEnterEdit() runs
+// after menuMode is set, and OnItemActivated() after the item's own action().
+inline void MenuEncoderButton(bool pressed) {
+    oldSwitchState = switchState;
+    switchState = pressed ? 0 : 1; // active-low, matching the raw pin
+    if (switchState != 1 || oldSwitchState != 0)
+        return; // act on release only
+
+    lastEncoderUpdate = millis();
+    REQUEST_DISPLAY_REFRESH();
+
+    if (menuMode != 0) {
+        OnExitEdit(menuMode);
+        menuMode = 0;
+        return;
+    }
+
+    if (menuItem >= 1 && menuItem <= MENU_ITEM_COUNT) {
+        const MenuItem &mi = MENU_ITEMS[menuItem - 1];
+        if (mi.type == MENU_ACTION || mi.type == MENU_TOGGLE) {
+            if (mi.action)
+                mi.action();
+            OnItemActivated(mi);
+        } else { // MENU_EDIT
+            menuMode = menuItem;
+            OnEnterEdit(menuItem);
+        }
     }
 }
