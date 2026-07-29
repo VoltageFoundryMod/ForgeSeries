@@ -45,7 +45,8 @@ static volatile bool _core1Enabled = false;
 #include "displayManager.hpp"
 #include "shellObjects.hpp" // extern display/displayMgr/encoder/cal
 #include "encoder.hpp"
-#include "jacks.hpp" // module jack semantics + core/boardPinouts.hpp
+#include "jacks.hpp"
+#include "encoderAccel.hpp" // shared rotation acceleration // module jack semantics + core/boardPinouts.hpp
 #include "storage.hpp" // includes presetManager.hpp transitively
 #include "utils.hpp"
 
@@ -129,34 +130,6 @@ void HandleEncoderClick() {
     }
 }
 
-// Calculate the speed of the encoder rotation.
-// Resets to 1.0 when direction reverses so the first detent after a turn-around
-// is always a single step.
-float speedFactor = 1.0;
-unsigned long lastEncoderTime = 0;
-int lastEncoderDir = 0; // +1 or -1
-void UpdateSpeedFactor(int dir) {
-    unsigned long currentEncoderTime = millis();
-    unsigned long timeDiff = currentEncoderTime - lastEncoderTime;
-    lastEncoderTime = currentEncoderTime;
-
-    if (lastEncoderDir != 0 && dir != lastEncoderDir) {
-        speedFactor = 1.0;
-        lastEncoderDir = dir;
-        return;
-    }
-    lastEncoderDir = dir;
-
-    if (timeDiff < 30) {
-        speedFactor = 8.0; // Very fast spin
-    } else if (timeDiff < 60) {
-        speedFactor = 4.0; // Fast spin
-    } else if (timeDiff < 120) {
-        speedFactor = 2.0; // Moderate spin
-    } else {
-        speedFactor = 1.0; // Normal
-    }
-}
 
 void HandleEncoderPosition() {
     newPosition = encoder.read();

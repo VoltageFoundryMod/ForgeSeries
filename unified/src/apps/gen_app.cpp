@@ -41,6 +41,7 @@
 // namespace, and it reaches <LittleFS.h> and the standard library.
 #include "fsStore.hpp"
 #include "encoder.hpp"
+#include "encoderAccel.hpp" // shared rotation acceleration
 #include "envelope.hpp"
 #include "scales.hpp"
 #include "shellObjects.hpp"
@@ -105,34 +106,6 @@ unsigned long lastEncoderUpdate = 0;
 
 void HandleOutputs();
 
-// Encoder acceleration — the shell does detent detection, so this only times
-// how fast the events arrive.
-static float speedFactor = 1.0f;
-static unsigned long lastEncoderTime = 0;
-static int lastEncoderDir = 0;
-
-static void UpdateSpeedFactor(int dir) {
-    const unsigned long now = millis();
-    const unsigned long timeDiff = now - lastEncoderTime;
-    lastEncoderTime = now;
-
-    if (lastEncoderDir != 0 && dir != lastEncoderDir) {
-        speedFactor = 1.0f;
-        lastEncoderDir = dir;
-        return;
-    }
-    lastEncoderDir = dir;
-
-    if (timeDiff < 30) {
-        speedFactor = 8.0f;
-    } else if (timeDiff < 60) {
-        speedFactor = 4.0f;
-    } else if (timeDiff < 120) {
-        speedFactor = 2.0f;
-    } else {
-        speedFactor = 1.0f;
-    }
-}
 
 void ShowTemporaryMessage(const char *msg, uint32_t durationMs) {
     _displayLocked = true;

@@ -46,6 +46,7 @@
 // namespace, and it reaches <LittleFS.h> and the standard library.
 #include "fsStore.hpp"
 #include "encoder.hpp"
+#include "encoderAccel.hpp" // shared rotation acceleration
 #include "envelope.hpp"
 #include "scales.hpp"
 #include "shellObjects.hpp" // display / displayMgr / encoder / cal — the globals
@@ -103,34 +104,6 @@ unsigned long lastEncoderUpdate = 0;
 
 void HandleOutputs(); // defined inline in lib/engine.hpp, included below
 
-// Encoder acceleration. The shell does detent detection and hands us a
-// direction, so this only tracks how fast those arrive.
-static float speedFactor = 1.0f;
-static unsigned long lastEncoderTime = 0;
-static int lastEncoderDir = 0;
-
-static void UpdateSpeedFactor(int dir) {
-    const unsigned long now = millis();
-    const unsigned long timeDiff = now - lastEncoderTime;
-    lastEncoderTime = now;
-
-    if (lastEncoderDir != 0 && dir != lastEncoderDir) {
-        speedFactor = 1.0f; // reversing always starts from a single step
-        lastEncoderDir = dir;
-        return;
-    }
-    lastEncoderDir = dir;
-
-    if (timeDiff < 30) {
-        speedFactor = 8.0f;
-    } else if (timeDiff < 60) {
-        speedFactor = 4.0f;
-    } else if (timeDiff < 120) {
-        speedFactor = 2.0f;
-    } else {
-        speedFactor = 1.0f;
-    }
-}
 
 // Brief full-screen message ("SAVED", "LOADED"). Core 0 never touches Wire, so
 // it prepares the buffer and lets Core 1 flush. Keeps the quantizers running

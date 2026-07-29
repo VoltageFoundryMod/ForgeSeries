@@ -41,6 +41,7 @@
 // namespace, and it reaches <LittleFS.h> and the standard library.
 #include "fsStore.hpp"
 #include "encoder.hpp"
+#include "encoderAccel.hpp" // shared rotation acceleration
 #include "envelope.hpp"
 #include "scales.hpp"
 #include "shellObjects.hpp"
@@ -106,34 +107,6 @@ int loopOutputSelect = 0;
 int menuScreenTimeout = 2;
 unsigned long lastEncoderUpdate = 0;
 
-// Encoder acceleration — the shell does detent detection, so this only times
-// how fast the events arrive.
-static float speedFactor = 1.0f;
-static unsigned long lastEncoderTime = 0;
-static int lastEncoderDir = 0;
-
-static void UpdateSpeedFactor(int dir) {
-    const unsigned long now = millis();
-    const unsigned long timeDiff = now - lastEncoderTime;
-    lastEncoderTime = now;
-
-    if (lastEncoderDir != 0 && dir != lastEncoderDir) {
-        speedFactor = 1.0f;
-        lastEncoderDir = dir;
-        return;
-    }
-    lastEncoderDir = dir;
-
-    if (timeDiff < 30) {
-        speedFactor = 8.0f;
-    } else if (timeDiff < 60) {
-        speedFactor = 4.0f;
-    } else if (timeDiff < 120) {
-        speedFactor = 2.0f;
-    } else {
-        speedFactor = 1.0f;
-    }
-}
 
 // Global play/stop. Declared by cvInputs.hpp (a CV target can drive it) and
 // referenced from MENU_ITEMS, so both live here rather than in a lib header.
