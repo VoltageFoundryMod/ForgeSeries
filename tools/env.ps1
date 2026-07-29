@@ -21,8 +21,23 @@ if (-not (Test-Path $msys)) { Write-Warning "msys2 not found at $msys - VCV plug
 
 $env:PATH = "$msys\usr\bin;$msys\mingw64\bin;$env:USERPROFILE\.platformio\penv\Scripts;$env:PATH"
 
+# The usual trap: Chocolatey installs a native Windows make that lands earlier
+# on PATH. It is not usable here — it drives cmd.exe as SHELL rather than sh,
+# and Rack's plugin.mk is POSIX. Its failure is opaque:
+#
+#     process_begin: CreateProcess(NULL, jq -r .slug plugin.json, ...) failed.
+#     plugin.mk:9: *** SLUG could not be found in manifest.  Stop.
+#
+# which is really just "wrong make, and no jq". Prepending msys64 above fixes
+# both; the report below is what confirms it.
+
 foreach ($t in @("make", "sh", "g++", "jq", "pio")) {
     $p = (Get-Command $t -ErrorAction SilentlyContinue).Source
     if ($p) { Write-Host ("  {0,-5} {1}" -f $t, $p) }
     else    { Write-Warning "$t not found on PATH" }
+}
+
+$mk = (Get-Command make -ErrorAction SilentlyContinue).Source
+if ($mk -and $mk -notlike "$msys*") {
+    Write-Warning "make resolves to $mk, not msys2's - VCV plugin builds will fail. Is another make earlier on PATH?"
 }
