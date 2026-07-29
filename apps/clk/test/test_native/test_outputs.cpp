@@ -70,7 +70,10 @@ TEST_F(OutputTest, WaveformTypeControl) {
     // Test envelope trigger modes
     dacOutput->SetWaveformType(WaveformType::ADEnvelope);
     EXPECT_TRUE(dacOutput->GetTriggerMode());
-    EXPECT_EQ(dacOutput->GetDividerIndex(), 18); // Should be in trigger mode
+    // Envelopes park on the "Env" slot, which is always the last divider entry.
+    // GetDividerAmounts() is the user-selectable count (Env excluded), so it is
+    // also Env's index — asserting it that way survives the table growing.
+    EXPECT_EQ(dacOutput->GetDividerIndex(), dacOutput->GetDividerAmounts());
 
     dacOutput->SetWaveformType(WaveformType::AREnvelope);
     EXPECT_TRUE(dacOutput->GetTriggerMode());

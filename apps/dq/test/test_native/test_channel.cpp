@@ -10,12 +10,14 @@ static const unsigned long LOOP_US = 330;
 
 namespace {
 
-float voltsToCounts(float v) { return v / 5.0f * 4095.0f; }
+// Process() takes the pitch CV as fractional semitones at 1 V/oct, not ADC
+// counts — counts cannot express a negative CV. Outputs stay in counts.
+float voltsToSemitones(float v) { return v * 12.0f; }
 
 // Feed a channel a constant input for `iterations` loops, advancing the clock.
 void hold(QuantizerChannel &ch, float volts, unsigned long &t, int iterations) {
     for (int i = 0; i < iterations; i++) {
-        ch.Process(voltsToCounts(volts), t, false, false);
+        ch.Process(voltsToSemitones(volts), t, false, false);
         t += LOOP_US;
     }
 }
@@ -38,7 +40,7 @@ TEST(Channel, SettleSuppressesNotesCrossedDuringAJump) {
     int changes = 0;
     int last = ch.GetQuantizedSemitone();
     for (int i = 0; i < 4; i++) {
-        ch.Process(voltsToCounts(ramp[i]), t, false, false);
+        ch.Process(voltsToSemitones(ramp[i]), t, false, false);
         if (ch.GetQuantizedSemitone() != last) {
             last = ch.GetQuantizedSemitone();
             changes++;
@@ -58,7 +60,7 @@ TEST(Channel, SettleZeroFollowsImmediately) {
     unsigned long t = 0;
     hold(ch, 0.0f, t, 50);
 
-    ch.Process(voltsToCounts(1.0f), t, false, false);
+    ch.Process(voltsToSemitones(1.0f), t, false, false);
     EXPECT_EQ(12, ch.GetQuantizedSemitone());
 }
 
@@ -94,14 +96,14 @@ TEST(Channel, SettleDoesNotDelayAScaleChange) {
 
     bool cMajor[12] = {1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1}; // no C#
     ch.SetActiveNotes(cMajor);
-    ch.Process(voltsToCounts(1.0f / 12.0f), t, false, false);
+    ch.Process(voltsToSemitones(1.0f / 12.0f), t, false, false);
     EXPECT_NE(1, ch.GetQuantizedSemitone()) << "output stuck on a note not in the scale";
 }
 
 TEST(Channel, FirstNoteAfterPowerOnIsNotDelayed) {
     QuantizerChannel ch;
     ch.SetSettle(50);
-    ch.Process(voltsToCounts(1.0f), 0, false, false);
+    ch.Process(voltsToSemitones(1.0f), 0, false, false);
     EXPECT_EQ(12, ch.GetQuantizedSemitone());
 }
 
@@ -171,7 +173,7 @@ TEST(Channel, NoteSyncFiresTheEnvelopeOnNoteChangeOnly) {
     hold(ch, 0.0f, t, 50);
 
     // Note change -> gate fires.
-    ch.Process(voltsToCounts(1.0f), t, false, false);
+    ch.Process(voltsToSemitones(1.0f), t, false, false);
     EXPECT_GT(ch.GetGateOutput(), 0);
 
     // A trigger with no note change does nothing in NOTE sync.
@@ -182,7 +184,7 @@ TEST(Channel, NoteSyncFiresTheEnvelopeOnNoteChangeOnly) {
     ch2.envelope.SetDecay(1);
     unsigned long t2 = 0;
     hold(ch2, 0.0f, t2, 50);
-    ch2.Process(voltsToCounts(0.0f), t2, true, true);
+    ch2.Process(voltsToSemitones(0.0f), t2, true, true);
     EXPECT_EQ(0, ch2.GetGateOutput());
 }
 
@@ -196,11 +198,11 @@ TEST(Channel, TrigSyncFiresOnTheTriggerEdgeOnly) {
     hold(ch, 0.0f, t, 50);
 
     // Note change alone must not fire in TRIG sync.
-    ch.Process(voltsToCounts(1.0f), t, false, false);
+    ch.Process(voltsToSemitones(1.0f), t, false, false);
     EXPECT_EQ(0, ch.GetGateOutput());
 
     t += LOOP_US;
-    ch.Process(voltsToCounts(1.0f), t, true, true);
+    ch.Process(voltsToSemitones(1.0f), t, true, true);
     EXPECT_GT(ch.GetGateOutput(), 0);
 }
 
@@ -214,7 +216,7 @@ TEST(Channel, GlideRampsTowardTheNewNote) {
     hold(ch, 0.0f, t, 50);
     ASSERT_EQ(0, ch.GetCVOutput());
 
-    ch.Process(voltsToCounts(1.0f), t, false, false);
+    ch.Process(voltsToSemitones(1.0f), t, false, false);
     uint16_t firstStep = ch.GetCVOutput();
     EXPECT_GT(firstStep, 0);
     EXPECT_LT(firstStep, 819) << "glide jumped straight to the target";
@@ -229,7 +231,7 @@ TEST(Channel, NoGlideJumpsImmediately) {
     ch.SetGlide(0);
     unsigned long t = 0;
     hold(ch, 0.0f, t, 50);
-    ch.Process(voltsToCounts(1.0f), t, false, false);
+    ch.Process(voltsToSemitones(1.0f), t, false, false);
     EXPECT_NEAR(819, ch.GetCVOutput(), 2);
 }
 
@@ -252,7 +254,7 @@ TEST(Channel, SampleHoldIgnoresTheInputBetweenTriggers) {
     }
 
     // The trigger latches whatever the input is at that moment.
-    ch.Process(voltsToCounts(1.0f), t, true, true);
+    ch.Process(voltsToSemitones(1.0f), t, true, true);
     EXPECT_EQ(12, ch.GetQuantizedSemitone());
 }
 
@@ -267,7 +269,7 @@ TEST(Channel, SampleHoldUsesSettleAsTheSampleDelay) {
     ASSERT_EQ(0, ch.GetQuantizedSemitone());
 
     // Trigger arrives while the input is still at the old value.
-    ch.Process(voltsToCounts(0.0f), t, true, false);
+    ch.Process(voltsToSemitones(0.0f), t, true, false);
     EXPECT_EQ(0, ch.GetQuantizedSemitone()) << "sampled before the delay elapsed";
     t += LOOP_US;
 
@@ -291,7 +293,7 @@ TEST(Channel, SampleHoldReSnapsAHeldNoteWhenTheScaleChanges) {
     ch.SetActiveNotes(cMajor);
     // Hold the input somewhere else entirely: the output must re-snap the *held*
     // note into the new scale, not jump to whatever the input is now doing.
-    ch.Process(voltsToCounts(3.0f), t, false, false);
+    ch.Process(voltsToSemitones(3.0f), t, false, false);
     EXPECT_NE(1, ch.GetQuantizedSemitone());
     EXPECT_LE(ch.GetQuantizedSemitone(), 2) << "output followed the input without a trigger";
 }

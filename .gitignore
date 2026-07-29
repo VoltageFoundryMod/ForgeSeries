@@ -10,7 +10,7 @@ vcv/dist/
 vcv/plugin.dll
 vcv/plugin.so
 vcv/plugin.dylib
-ry. PlatformIO writes into $HOME, and when HOME is unset
+# A literal "~" directory. PlatformIO writes into $HOME, and when HOME is unset
 # or mis-expanded (some msys/Git-Bash invocations) it creates ./~/ containing a
 # full package cache — 1400+ files, including embedded git repos. Never ours.
 ~/

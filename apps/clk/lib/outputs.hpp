@@ -1,7 +1,20 @@
 #pragma once
+#ifdef UNIT_TEST
+#include "ArduinoFake.h"
+// ArduinoFake defines Arduino's min/max macros only for C (#ifndef __cplusplus),
+// but the RP2040 core has them in C++ too and this file uses them bare. The VCV
+// shim closes the same gap the same way — see vcvlib/shim/Arduino.h.
+#include <algorithm>
+using std::max;
+using std::min;
+#else
 #include <Arduino.h>
+#endif
 
-#include "boardIO.hpp" // MAXDAC / MAXADC
+// boardPinouts.hpp, not boardIO.hpp: MAXDAC/MAXADC are board facts, and pulling
+// in the whole DAC driver for two constants also drags Adafruit_MCP4728/Wire in,
+// which the native test build has no stubs for.
+#include "boardPinouts.hpp" // MAXDAC / MAXADC
 #include "euclidean.hpp"
 #include "utils.hpp"
 

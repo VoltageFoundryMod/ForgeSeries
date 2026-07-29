@@ -8,13 +8,14 @@ set -euo pipefail
 cd "$(dirname "$0")/.." # -> vcv-plugin/
 mkdir -p build
 
-# The shim and forgevcv headers live in the shared library (a sibling repo /
-# submodule). Override FORGEVCV to point elsewhere.
-FORGEVCV="${FORGEVCV:-../../ForgeSeries-VCVLib}"
+# The shim and forgevcv headers live in vcvlib/ at the root of this monorepo
+# (they used to be a sibling repo/submodule). Override FORGEVCV to point
+# elsewhere.
+FORGEVCV="${FORGEVCV:-../../../vcvlib}"
 
 CXX="${CXX:-g++}"
 "$CXX" -std=c++17 -g -O0 \
-    -Isrc -I"$FORGEVCV/shim" -I"$FORGEVCV/include" -I../lib \
+    -Isrc -I"$FORGEVCV/shim" -I"$FORGEVCV/include" -I../lib -I../../../core \
     src/engine/fw_engine.cpp \
     test/isolation_test.cpp \
     -o build/isolation_test

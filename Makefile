@@ -101,12 +101,32 @@ list:
 all: unified
 
 # Native unit tests (env:native, googletest + ArduinoFake).
-.PHONY: test
-test:
-	@for a in $(APPS); do \
-	  echo "== test $$a =="; \
-	  $(PIO) test -d apps/$$a -e native || exit 1; \
-	done
+#
+# Only the apps that actually have a suite: `pio test` fails outright ("Nothing
+# to build. Please put your test suites to the 'test' folder") on an app whose
+# test/ holds just a README, which is scp today. Asking the filesystem means
+# adding a suite is enough to get it run — there is no second list to update.
+TEST_APPS := $(foreach a,$(APPS),$(if $(wildcard apps/$(a)/test/test_native),$(a)))
+
+.PHONY: test $(addprefix test-,$(APPS))
+test: $(addprefix test-,$(TEST_APPS))
+
+$(addprefix test-,$(APPS)): test-%:
+	$(PIO) test -d apps/$* -e native
+
+# ── VCV engine isolation tests ───────────────────────────────────────────────
+# Each module's fw_engine.cpp is compiled twice into one binary to prove two
+# Rack instances of the same module keep their firmware state apart. Host
+# compiler only — no Rack SDK, since fw_engine.cpp never includes rack.hpp.
+ISOLATION_APPS := $(foreach a,$(APPS),\
+  $(if $(wildcard apps/$(a)/vcv-plugin/test/build_isolation_test.sh),$(a)))
+
+.PHONY: isolation $(addprefix isolation-,$(APPS))
+isolation: $(addprefix isolation-,$(ISOLATION_APPS))
+
+# The script cd's to its own vcv-plugin/, so it runs correctly from here.
+$(addprefix isolation-,$(APPS)): isolation-%:
+	bash apps/$*/vcv-plugin/test/build_isolation_test.sh
 
 # ── VCV Rack plugins ─────────────────────────────────────────────────────────
 # PlatformIO does NOT compile vcv-plugin/, so `make all` passing says nothing
@@ -147,7 +167,7 @@ everything: all plugins
 # appears twice in the browser, from two different plugins. Delete the
 # standalone ones from Rack's plugin directory before installing the
 # consolidated build - see the note below it.
-.PHONY: $(APPS) vcv vcv-install
+.PHONY: $(APPS) vcv vcv-install vcv-dist
 
 $(APPS): %:
 	$(MAKE) -C apps/$*/vcv-plugin install $(if $(RACK_DIR),RACK_DIR=$(RACK_DIR),)
@@ -157,6 +177,12 @@ vcv:
 
 vcv-install:
 	$(MAKE) -C vcv install $(if $(RACK_DIR),RACK_DIR=$(RACK_DIR),)
+
+# The .vcvplugin package for the VCV library. Goes through here rather than
+# `make -C vcv dist` so it also works on Windows, where only this Makefile knows
+# where the msys2 toolchain is.
+vcv-dist:
+	$(MAKE) -C vcv dist $(if $(RACK_DIR),RACK_DIR=$(RACK_DIR),)
 
 # Remove the standalone plugins from Rack's user directory, leaving the
 # consolidated one alone.

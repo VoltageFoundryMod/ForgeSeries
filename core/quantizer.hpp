@@ -32,6 +32,12 @@
 
 #include <math.h>
 
+// MAXDAC, used by QUANT_COUNTS_PER_SEMITONE below. Included here rather than
+// left to the caller for the reason boardPinouts.hpp itself documents: relying
+// on the includer to have defined it is a compile error waiting to happen, and
+// it is one the native test build hits.
+#include "boardPinouts.hpp"
+
 // Output span: 0–5V at 1V/oct = 5 octaves.
 #define QUANT_OCTAVES 5
 #define QUANT_MAX_SEMITONE (QUANT_OCTAVES * 12) // 60 — inclusive top of range

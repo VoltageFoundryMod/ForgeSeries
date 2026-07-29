@@ -1,4 +1,6 @@
-# ForgeSeries
+# Voltage Foundry Modular ForgeSeries
+
+<img src="VFM-Logo-Full.png" alt="Voltage Foundry Modular Logo" style="width:50%"/>
 
 Monorepo for the Voltage Foundry Modular **ForgeSeries** platform — a Eurorack
 module built on a Seeed XIAO RP2040 that runs one of several firmwares, each
@@ -6,7 +8,7 @@ also shipping as a VCV Rack plugin built from the same sources.
 
 ## Layout
 
-```
+```text
 core/      The board, and everything every module shares (21 files)
 apps/
   clk/     ClockForge    — clock generator / modulation source
@@ -18,9 +20,9 @@ vcvlib/    Shared VCV Rack layer (Arduino shim, ForgeModule, IEngine, widgets)
 tools/     env.ps1 — optional PATH helper for Windows
 ```
 
-A module runs on two hosts, and its code lives in one place per host:
+A module runs on two hosts, the shell which is the hardware firmware and VCVRack, and its code lives in one place per host:
 
-```
+```text
 apps/gen/
   src/gen_app.cpp   the module as the shell sees it (forge::IApp)
   src/gen_app.hpp   its factory — the only thing the shell includes
@@ -37,25 +39,25 @@ lost its LOOP▸NAP muting.
 
 ### What belongs in `core/`
 
-Every ForgeSeries module is the *same board*: XIAO RP2040, SSD1306 on Wire,
+Every ForgeSeries module is the _same board_: XIAO RP2040, SSD1306 on Wire,
 MCP4728 on Wire1, one encoder, 3 in / 4 out. Anything that follows from that is
 shared:
 
-| | |
-|---|---|
-| `boardPinouts.hpp` | wiring, converter resolution (`MAXDAC`/`MAXADC`) |
-| `boardIO.hpp` | I2C bring-up, DAC writes + output calibration |
-| `cvInput.hpp` | CV acquisition, calibration, range adapters |
-| `calibrationData.hpp` `calibration.hpp` | the blob, and the wizard that fills it |
-| `fsStore.hpp` `appStorage.hpp` | LittleFS storage; presets and calibration |
-| `shellObjects.hpp` | the board-owned `display` / `displayMgr` / `encoder` / `cal` |
-| `displayManager.hpp` `menuDisplay.hpp` `appDisplay.hpp` `splash.hpp` | UI plumbing |
-| `encoder.hpp` `encoderAccel.hpp` `encoderMenu.hpp` | encoder, acceleration, menu driver |
-| `envelope.hpp` `scales.hpp` `quantizer.hpp` `utils.hpp` `metrics.hpp` | shared DSP/theory |
-| `IApp.hpp` | the shell↔app contract |
+|                                                                       |                                                              |
+| --------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `boardPinouts.hpp`                                                    | wiring, converter resolution (`MAXDAC`/`MAXADC`)             |
+| `boardIO.hpp`                                                         | I2C bring-up, DAC writes + output calibration                |
+| `cvInput.hpp`                                                         | CV acquisition, calibration, range adapters                  |
+| `calibrationData.hpp` `calibration.hpp`                               | the blob, and the wizard that fills it                       |
+| `fsStore.hpp` `appStorage.hpp`                                        | LittleFS storage; presets and calibration                    |
+| `shellObjects.hpp`                                                    | the board-owned `display` / `displayMgr` / `encoder` / `cal` |
+| `displayManager.hpp` `menuDisplay.hpp` `appDisplay.hpp` `splash.hpp`  | UI plumbing                                                  |
+| `encoder.hpp` `encoderAccel.hpp` `encoderMenu.hpp`                    | encoder, acceleration, menu driver                           |
+| `envelope.hpp` `scales.hpp` `quantizer.hpp` `utils.hpp` `metrics.hpp` | shared DSP/theory                                            |
+| `IApp.hpp`                                                            | the shell↔app contract                                       |
 
 What stays in a module's `lib/` is genuinely its own: menu definitions, preset
-schema, `engine.hpp`, and the DSP that makes it that module. Jack *semantics*
+schema, `engine.hpp`, and the DSP that makes it that module. Jack _semantics_
 are module-level too — `lib/jacks.hpp` layers `NUM_CHANNELS`, `OUT_CV`/`OUT_GATE`
 and the calibration wizard's jack names on top of `core/boardPinouts.hpp`.
 
@@ -91,10 +93,10 @@ Build for the ±5 V revision with `-DFORGE_CV_BIPOLAR`. Apps must read through
 the adapters rather than open-coding a mapping, because which one is the
 identity swaps when the flag flips:
 
-| | unipolar | bipolar |
-|---|---|---|
+|                | unipolar | bipolar   |
+| -------------- | -------- | --------- |
 | `CvUni` → 0..1 | identity | `(v+1)/2` |
-| `CvBi` → -1..1 | `v*2-1` | identity |
+| `CvBi` → -1..1 | `v*2-1`  | identity  |
 
 Pitch is **not** normalised — `CvSemitones()` returns 1 V/oct semitones, and DAC
 output stays in counts, scaled at the write. Three domains, three units.
@@ -142,7 +144,7 @@ is what lets four firmwares share one binary — they all define `menuMode`,
 `switchState`, `param` and friends at file scope.
 
 > **Include order in a module TU is load-bearing.** Standard library,
-> third-party and `core/` headers go at *global* scope first, so their guards
+> third-party and `core/` headers go at _global_ scope first, so their guards
 > are already satisfied; only then the module's own headers, inside the
 > namespace. Miss one — `<cstring>`, say — and libstdc++ lands inside
 > `forge::<app>`, producing hundreds of errors in `stringfwd.h` that never name
@@ -150,7 +152,7 @@ is what lets four firmwares share one binary — they all define `menuMode`,
 > because an editor that sorts includes will break this silently. See the header
 > comment in `apps/scp/src/scp_app.cpp`.
 
-A few `core/` headers are included *late*, after the module's state exists,
+A few `core/` headers are included _late_, after the module's state exists,
 because they close over it: `engine.hpp` (the module's globals),
 `appDisplay.hpp` (`HandleOutputs`, the display flags) and `encoderMenu.hpp`
 (the five hooks). That is the price of sharing code that calls back into
@@ -185,8 +187,8 @@ NoteForge's copy purely because `dq` came first in the include path.)
 
 Current size, all four modules in one image:
 
-| | RAM | Flash |
-|---|---|---|
+|         | RAM            | Flash           |
+| ------- | -------------- | --------------- |
 | unified | 28888 (11.0 %) | 239628 (13.1 %) |
 
 Flash is measured against 1830912 bytes — 256 KB of the 2 MB part is reserved
@@ -195,19 +197,19 @@ region moves and stored files are lost.
 
 ### How the image scales with module count
 
-Only one module *runs* at a time, but all of them are *linked*, so static RAM is
+Only one module _runs_ at a time, but all of them are _linked_, so static RAM is
 the sum of every module's state rather than the maximum. That sounds worse than
 it is: most of a module's apparent footprint is the Arduino/TinyUSB baseline,
 which is paid once. What a module actually adds is its own translation unit's
 `data+bss`:
 
 | module | RAM added | flash added |
-|--------|-----------|-------------|
-| clk | ~7 KB | ~46 KB |
-| gen | ~1.9 KB | ~28 KB |
-| scp | ~1.2 KB | ~14 KB |
-| dq  | ~0.7 KB | ~19 KB |
-| shell | ~0.2 KB | ~2 KB |
+| ------ | --------- | ----------- |
+| clk    | ~7 KB     | ~46 KB      |
+| gen    | ~1.9 KB   | ~28 KB      |
+| scp    | ~1.2 KB   | ~14 KB      |
+| dq     | ~0.7 KB   | ~19 KB      |
+| shell  | ~0.2 KB   | ~2 KB       |
 
 Baseline is ~17.8 KB. Four modules is ~11 % of RAM, so ten ClockForge-weight
 ones would be ~34 % and ten typical ones ~15 %. Flash is looser still.
@@ -238,7 +240,7 @@ sibling `ForgeSeries-VCVLib` checkout.
 
 ### Windows toolchain
 
-Everything builds from PowerShell — an msys2 *shell* is not required. Rack's
+Everything builds from PowerShell — an msys2 _shell_ is not required. Rack's
 `plugin.mk` shells out to POSIX tools, but GNU make picks up msys2's `sh.exe`
 as SHELL once it is on PATH, so PowerShell only has to be the parent shell.
 

@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+# A new push to a branch makes the in-flight run for it obsolete.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Every job drives the same entry points the root Makefile gives a developer, so
+# what CI checks and what you run locally cannot drift apart.
+jobs:
+  firmware:
+    name: Firmware (unit tests + unified image)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+          cache: pip
+
+      # Toolchains and library dependencies, keyed on the project files that
+      # decide them. ~/.platformio is where the RP2040 toolchain (~200 MB) and
+      # googletest/ArduinoFake land.
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ runner.os }}-${{ hashFiles('**/platformio.ini') }}
+          restore-keys: pio-${{ runner.os }}-
+
+      - name: Install PlatformIO
+        run: |
+          python -m pip install --upgrade pip
+          pip install platformio
+
+      # Host-side googletest/ArduinoFake suites for each app that has one
+      # (apps/<app>/test/test_native). Nothing here touches hardware.
+      - name: Unit tests
+        run: make test
+
+      # The single image that ships: unified/ hosts the shell plus every app.
+      # The per-app hardware environments are gone, so this is the only firmware
+      # build there is.
+      - name: Build unified firmware
+        run: make unified
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: forgeseries-firmware-uf2
+          path: unified/.pio/build/xiao_rp2040/firmware.uf2
+          if-no-files-found: error
+
+  vcv-isolation:
+    name: VCV engine (multi-instance isolation)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Host compiler only. No Rack SDK is needed: fw_engine.cpp never includes
+      # rack.hpp, and the shim plus the forgevcv headers live in vcvlib/ in this
+      # repo (they used to be a sibling repository).
+      #
+      # This is the check that catches a firmware change breaking the Rack
+      # ports: engine_state.def names firmware globals, so a rename that builds
+      # fine for hardware can still leak state between Rack instances here.
+      - name: Build and run isolation tests
+        run: make isolation
+
+  vcv-plugin:
+    name: VCV Rack plugin
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # plugin.mk shells out to jq (reads SLUG from plugin.json) and, for dist,
+      # to zstd — a .vcvplugin is a zstd-compressed tar, not a zip.
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq zstd
+
+      - name: Download Rack SDK
+        run: |
+          curl -sSLo Rack-SDK.zip https://vcvrack.com/downloads/Rack-SDK-latest-lin-x64.zip
+          unzip -q Rack-SDK.zip
+
+      # The aggregate plugin — every module in one binary, which is what the VCV
+      # library publishes.
+      - name: Build aggregate plugin
+        run: make vcv RACK_DIR=$GITHUB_WORKSPACE/Rack-SDK
+
+      - name: Package aggregate plugin
+        run: make vcv-dist RACK_DIR=$GITHUB_WORKSPACE/Rack-SDK
+
+      - name: Upload plugin package
+        uses: actions/upload-artifact@v4
+        with:
+          name: VoltageFoundryMod-plugin-lin-x64
+          path: vcv/dist/*.vcvplugin
+          if-no-files-found: error
+
+      # The per-module standalone plugins are what you build while working on a
+      # single module, so they have to keep compiling too. Same sources, so this
+      # is cheap; it only catches a stale per-module Makefile.
+      - name: Build standalone plugins
+        run: make plugins RACK_DIR=$GITHUB_WORKSPACE/Rack-SDK

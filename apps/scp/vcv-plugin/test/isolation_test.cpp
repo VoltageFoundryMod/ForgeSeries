@@ -138,12 +138,12 @@ int main() {
     setOffsetCh1(d, 12);
     setOffsetCh2(d, -8);
     setTrigMode(d, 2);
-    setShowLabels(d, true);
+    setShowLabels(d, false); // default is true, so flip d away from a fresh engine
     CHECK(frozen(d) && !frozen(f), "freeze is per-instance");
     CHECK(offsetCh1(d) == 12 && offsetCh1(f) == 0, "CH1 offset per-instance");
     CHECK(offsetCh2(d) == -8, "CH2 offset stored");
     CHECK(trigMode(d) == 2 && trigMode(f) != 2, "trigger mode per-instance");
-    CHECK(showLabels(d) && !showLabels(f), "labels toggle per-instance");
+    CHECK(!showLabels(d) && showLabels(f), "labels toggle per-instance");
     setXyPersist(f, 9); // 60s
     CHECK(xyPersist(f) == 9 && xyPersist(d) == 0, "X-Y persistence per-instance");
 

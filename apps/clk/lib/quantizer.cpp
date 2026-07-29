@@ -4,7 +4,9 @@
 #include "Arduino.h"
 #endif
 
-#include "boardIO.hpp"
+// boardPinouts.hpp, not boardIO.hpp: only MAXDAC/MAXADC are needed here, and
+// the full DAC driver would drag Adafruit_MCP4728/Wire into the native tests.
+#include "boardPinouts.hpp"
 #include <math.h>
 
 // 1V/oct over a 0-5V, 12-bit range: 60 semitones span the full DAC scale, so

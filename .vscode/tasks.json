@@ -1,0 +1,139 @@
+{
+  // Every task goes through the root Makefile rather than calling pio/make
+  // directly, because on Windows that Makefile is what locates the toolchain:
+  // it finds pio.exe under ~/.platformio and switches SHELL and PATH to msys2
+  // for the Rack plugin builds. Calling the tools straight from PowerShell —
+  // which has neither pio nor g++ on PATH — is what the old tasks did, and it
+  // fails. Chocolatey's make on PATH is fine here; the Makefile handles it.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Firmware: Build unified image",
+      "detail": "make unified — the shell plus every app, the only image flashed to the board",
+      "type": "shell",
+      "command": "make",
+      "args": ["unified"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Firmware: Upload to XIAO RP2040",
+      "detail": "make upload — builds, then flashes over USB",
+      "type": "shell",
+      "command": "make",
+      "args": ["upload"],
+      "group": "build",
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Firmware: Upload and Monitor",
+      "detail": "make upload-monitor — flashes, then opens the serial monitor",
+      "type": "shell",
+      "command": "make",
+      "args": ["upload-monitor"],
+      "group": "build",
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Firmware: Clean",
+      "detail": "make clean",
+      "type": "shell",
+      "command": "make",
+      "args": ["clean"],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Firmware: Native tests",
+      "detail": "make test — googletest/ArduinoFake suites for every app that has one",
+      "type": "shell",
+      "command": "make",
+      "args": ["test"],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Firmware: Native tests (one module)",
+      "detail": "make test-<module>",
+      "type": "shell",
+      "command": "make",
+      "args": ["test-${input:module}"],
+      "group": "test",
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "VCV: Build aggregate plugin",
+      "detail": "make vcv — every module in one binary, which is what ships",
+      "type": "shell",
+      "command": "make",
+      "args": ["vcv"],
+      "group": "build",
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "VCV: Install aggregate plugin",
+      "detail": "make vcv-install — installs into Rack's user plugin directory",
+      "type": "shell",
+      "command": "make",
+      "args": ["vcv-install"],
+      "group": "build",
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "VCV: Package aggregate plugin",
+      "detail": "make vcv-dist — builds the .vcvplugin for the VCV library",
+      "type": "shell",
+      "command": "make",
+      "args": ["vcv-dist"],
+      "group": "build",
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      // CAUTION: the standalone plugins have their own slugs (ClockForge,
+      // NoteForge, ...) while the aggregate one is VoltageFoundryMod, so Rack
+      // loads both and every module shows up twice in the browser. Remove the
+      // standalone ones from Rack's plugin directory before installing the
+      // aggregate build — `make -C vcv print-plugins-dir` prints the path.
+      "label": "VCV: Build and install one module (standalone)",
+      "detail": "make <module> — single-module plugin, for working on one module",
+      "type": "shell",
+      "command": "make",
+      "args": ["${input:module}"],
+      "group": "build",
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "VCV: Build all standalone plugins",
+      "detail": "make plugins",
+      "type": "shell",
+      "command": "make",
+      "args": ["plugins"],
+      "group": "build",
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "VCV: Engine isolation tests",
+      "detail": "make isolation — proves two Rack instances of a module keep their firmware state apart (no Rack SDK needed)",
+      "type": "shell",
+      "command": "make",
+      "args": ["isolation"],
+      "group": "test",
+      "problemMatcher": ["$gcc"]
+    }
+  ],
+  "inputs": [
+    {
+      "id": "module",
+      "type": "pickString",
+      "description": "Which module?",
+      "options": ["clk", "dq", "gen", "scp"],
+      "default": "clk"
+    }
+  ]
+}
