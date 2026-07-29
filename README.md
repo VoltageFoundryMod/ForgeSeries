@@ -202,10 +202,18 @@ make everything
 
 The plugin compiler must be **mingw64 g++** — the Rack SDK for Windows is
 mingw-w64 built and MSVC will not link against it. `jq` is needed too, since
-`plugin.mk` uses it to read `SLUG` out of `plugin.json`.
+`plugin.mk` uses it to read `SLUG` out of `plugin.json`:
 
-Neither missing tool gives a useful error: no `jq` surfaces as "SLUG could not
-be found in manifest", and no `pio` surfaces as `make ... Error 127`.
+```
+pacman -S --needed make mingw-w64-x86_64-gcc mingw-w64-x86_64-jq
+```
+
+The Makefile checks for all three before building plugins and says exactly what
+is missing, rather than letting it surface as plugin.mk's "SLUG could not be
+found in manifest". The check runs only for the plugin goals — the firmware
+needs PlatformIO alone and builds without msys2 installed.
+
+Point `MSYS` elsewhere if needed: `make MSYS=D:/msys64 plugins`.
 
 ## History
 

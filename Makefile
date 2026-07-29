@@ -14,14 +14,62 @@
 # shell and PATH our own recipes use, which is what actually matters. Override
 # MSYS if msys2 lives elsewhere.
 ifeq ($(OS),Windows_NT)
-  MSYS ?= C:/msys64
-  ifneq ($(wildcard $(MSYS)/usr/bin/sh.exe),)
-    SHELL := $(MSYS)/usr/bin/sh.exe
+  MSYS    ?= C:/msys64
+  PIO_BIN ?= $(USERPROFILE)/.platformio/penv/Scripts
+
+  WIN_SH  := $(wildcard $(MSYS)/usr/bin/sh.exe)
+  WIN_GXX := $(wildcard $(MSYS)/mingw64/bin/g++.exe)
+  WIN_JQ  := $(wildcard $(MSYS)/mingw64/bin/jq.exe)
+
+  # PlatformIO is all the firmware needs, so it goes on PATH regardless of
+  # whether msys2 is installed.
+  export PATH := $(PIO_BIN):$(PATH)
+
+  # msys2 is only for the Rack plugins. When it is present we also take its sh
+  # as SHELL, which is what lets even Chocolatey's make run plugin.mk.
+  ifneq ($(WIN_SH),)
+    SHELL := $(WIN_SH)
     .SHELLFLAGS := -c
-    # PlatformIO too, so `make` works the same way as `make plugins`.
-    PIO_BIN ?= $(USERPROFILE)/.platformio/penv/Scripts
-    export PATH := $(MSYS)/usr/bin:$(MSYS)/mingw64/bin:$(PIO_BIN):$(PATH)
+    export PATH := $(MSYS)/usr/bin:$(MSYS)/mingw64/bin:$(PATH)
   endif
+endif
+
+# The firmware needs none of the above — only PlatformIO — so the check fires
+# just for the plugin goals. Doing it at parse time means one clear message
+# instead of plugin.mk's "SLUG could not be found in manifest", which names
+# neither the missing tool nor the wrong shell.
+ifeq ($(OS),Windows_NT)
+ifneq ($(filter plugins plugin-% everything,$(or $(MAKECMDGOALS),all)),)
+  WIN_MISSING :=
+  ifeq ($(WIN_SH),)
+    WIN_MISSING += msys2($(MSYS)/usr/bin/sh.exe)
+  endif
+  ifeq ($(WIN_GXX),)
+    WIN_MISSING += mingw-w64-g++($(MSYS)/mingw64/bin/g++.exe)
+  endif
+  ifeq ($(WIN_JQ),)
+    WIN_MISSING += jq($(MSYS)/mingw64/bin/jq.exe)
+  endif
+  ifneq ($(WIN_MISSING),)
+    $(info )
+    $(info Building the VCV Rack plugins on Windows needs msys2, and it is)
+    $(info incomplete or missing. Not found:)
+    $(info )
+    $(foreach m,$(WIN_MISSING),$(info   - $(m)))
+    $(info )
+    $(info Install msys2 from https://www.msys2.org then, in its shell:)
+    $(info )
+    $(info   pacman -S --needed make mingw-w64-x86_64-gcc mingw-w64-x86_64-jq)
+    $(info )
+    $(info mingw-w64 g++ specifically: the Rack SDK for Windows is mingw-built)
+    $(info and MSVC will not link against it. jq is how plugin.mk reads SLUG)
+    $(info out of plugin.json.)
+    $(info )
+    $(info If msys2 lives elsewhere: make MSYS=D:/msys64 plugins)
+    $(info )
+    $(error missing Windows toolchain)
+  endif
+endif
 endif
 
 APPS  := clk dq gen scp
