@@ -67,11 +67,11 @@ calibration and wiring detail. Browsable versions with images live on
    with it removed from the module.)
 3. Copy `CURRENT.UF2` onto that drive. The module reboots into the new firmware.
 4. **Hold the encoder at power-on** to choose a module. It boots straight into
-   that one afterwards; hold the encoder for two seconds while running to get
-   back to the selector.
-5. Run the two-point **calibration wizard** once per board — see the calibration
-   section of any module's manual. Calibration is shared by every module and
-   survives firmware updates.
+   that one afterwards; to get back to the selector, either hold the encoder for
+   two seconds while running or pick **BOOT MENU** on the module's SETTINGS page.
+5. Run the two-point **calibration wizard** once per board: pick **CALIBRATE**,
+   the last row of the module selector. Calibration describes the board, so one
+   run serves every module and it survives firmware updates.
 
 > **Never connect Eurorack power and USB-C at the same time.** The module takes
 > either, not both.
@@ -241,8 +241,8 @@ shared:
 
 What stays in a module's `lib/` is genuinely its own: menu definitions, preset
 schema, `engine.hpp`, and the DSP that makes it that module. Jack _semantics_
-are module-level too — `lib/jacks.hpp` layers `NUM_CHANNELS`, `OUT_CV`/`OUT_GATE`
-and the calibration wizard's jack names on top of `core/boardPinouts.hpp`.
+are module-level too — `lib/jacks.hpp` layers `NUM_CHANNELS` and
+`OUT_CV`/`OUT_GATE` on top of `core/boardPinouts.hpp`.
 
 ClockForge's quantizer is deliberately not shared: it is a separate
 implementation reached through `Output` rather than a channel, so folding it in
@@ -257,9 +257,9 @@ what should be shared hardware state.
 
 **`core/` must never include an app header.** `boardIO.hpp` once included the
 module-level `pinouts.hpp` and made `core/` unbuildable without a module on the
-include path. Where a shared header genuinely needs module-specific data —
-`calibration.hpp` needs `CAL_OUT_NAMES` — it requires the caller to have defined
-it rather than reaching for it.
+include path. Where a shared header genuinely needs data the caller owns, it
+requires the caller to have defined it rather than reaching for it — the way
+`calibration.hpp` takes `SaveCalibration()` from the shell.
 
 ## CV, and the ±5 V hardware
 
@@ -297,10 +297,17 @@ the module selector, then drives exactly one module through `forge::IApp`
 firmware already used: Core 0 does ADC/DAC/encoder, Core 1 renders.
 
 **Using it.** Hold the encoder at power-on to choose a module; the choice
-persists, so it boots straight into it afterwards. Hold the encoder for two
-seconds while running to return to the selector. The switch reboots rather than
+persists, so it boots straight into it afterwards. Two ways back to the
+selector: hold the encoder for two seconds while running, or pick **BOOT MENU**
+on the module's SETTINGS page. Either way the switch reboots rather than
 unwinding in place — a running module owns interrupts, a hardware timer and
 Core 1 work — so `End()` is called first and a flag survives the reset.
+
+The selector's last row is **CALIBRATE**, and it is the only way into the
+wizard. Calibration measures the board's analog front and back ends, not
+anything module-specific, so it belongs to the shell — and it has to run with
+Core 1 parked and no module started, which is only true on this screen. It
+writes `/cal.bin` and reboots back to the selector.
 
 The held-encoder check happens before any module code runs, so a module that
 hangs in its own `Begin()` can still be escaped by holding the encoder and

@@ -86,7 +86,8 @@ Turning the encoder past the keyboards steps through:
 | CH1 GATE  | Mode, attack, decay, sync and level for channel 1             |
 | CH2 GATE  | The same for channel 2                                        |
 | ROUTING   | IN 2 role, transpose range, and per-channel transpose enables |
-| SETTINGS  | Screen timeout, preset slot, save, load, load defaults        |
+| SETTINGS  | Screen timeout, boot menu                                     |
+| PRESETS   | Preset slot, save, load, load defaults                        |
 
 A **hollow arrow** means the row is selected; **click** to start editing and the
 arrow fills in. Turn to change the value, click again to confirm. Spinning the
@@ -217,10 +218,18 @@ octave — a mode that rewrites every note should never be invisible.
 
 ### Presets
 
-The SETTINGS page has 10 slots. Pick a slot, then `SAVE` or `LOAD`. Slot 0 is
+The PRESETS page has 10 slots. Pick a slot, then `SAVE` or `LOAD`. Slot 0 is
 loaded automatically at power-on. `LOAD DEFAULTS` restores the factory settings
 into the live state but does not write them to flash, so a mis-click is undone by
 loading your slot again.
+
+### Switching modules
+
+`BOOT MENU` on the SETTINGS page hands the hardware back to the module selector,
+so you can run a different Forge module — or the calibration wizard — without
+power-cycling. NoteForge flushes anything it owes to flash first, then the module
+reboots into the selector. Holding the encoder for two seconds does the same
+thing from anywhere in the menu.
 
 ## Calibration
 
@@ -228,17 +237,23 @@ Pitch accuracy is the entire job of a quantizer, so calibration matters more her
 than on other modules: an uncalibrated ADC gain error drifts the output off by a
 semitone or more toward the top of the range.
 
-**Hold the encoder button while powering on** to enter the six-step wizard:
+**Hold the encoder button while powering on** to open the module selector, then
+pick **CALIBRATE** at the bottom of the list. From a running module the same
+screen is one click away under **SETTINGS → BOOT MENU** (or hold the encoder for
+two seconds). The six-step wizard:
 
 1. All outputs go to full scale — adjust each on-board trimmer until the jack
    reads 5.00 V on a multimeter.
-2. All outputs go to the ideal 1 V code — measure each jack and dial the reading
-   in with the encoder. This captures the op-amp offset the trimmer leaves.
+2. All outputs go to the ideal 1 V code — measure each jack (named OUT 1 – OUT 4,
+   which are NoteForge's CV 1, CV 2, GATE 1, GATE 2) and dial the reading in with
+   the encoder. This captures the op-amp offset the trimmer leaves.
 3. – 6. Apply an external 1 V and then 3 V reference to each CV input and click
    when the reading is stable.
 
-The result is stored past the preset slots in EEPROM and **survives firmware
-updates**, so you only need to re-run it if the hardware changes.
+The result is stored in `/cal.bin`, separately from the preset slots, and
+**survives firmware updates**. Calibration describes the board rather than any
+one module, so a single run covers all of them and you only need to re-run it if
+the hardware changes.
 
 ## Firmware Update
 

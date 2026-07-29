@@ -11,9 +11,9 @@
 // Include AFTER the globals below are defined — same convention menuHandlers.hpp
 // already uses.
 
+#include "boardPinouts.hpp"
 #include "channel.hpp"
 #include "cvInputs.hpp"
-#include "jacks.hpp"
 
 // Defined by whichever TU is hosting the module.
 extern QuantizerChannel channels[NUM_CHANNELS];

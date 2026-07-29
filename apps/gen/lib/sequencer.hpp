@@ -26,6 +26,11 @@
 #include "quantizer.hpp"
 #include "scales.hpp"
 
+// Two independent voices. NoteForge calls them quantizer channels and
+// GravityForge calls them containers, but the jack layout is identical, and
+// deliberately so: patch cables carry over between the two firmwares.
+#define NUM_CHANNELS 2
+
 // SPREAD: how many octaves the peg ring covers. The span is centred in the
 // module's 0–5 V output range and snapped to whole octaves, so the lowest peg
 // always lands on the root rather than an arbitrary degree.

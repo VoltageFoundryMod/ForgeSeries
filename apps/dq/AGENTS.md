@@ -31,7 +31,7 @@ NoteForge is a **Eurorack modular synthesizer dual CV quantizer** firmware for t
 | [lib/displayManager.hpp](lib/displayManager.hpp) | `DisplayManager` class — rate-limited non-blocking display |
 | [lib/presetManager.hpp](lib/presetManager.hpp) | `LoadSaveParams`, `LoadDefaultParams()`, `CollectParams()`, `UpdateParameters()` |
 | [lib/storage.hpp](lib/storage.hpp) | Platform storage backend (RP2040 EEPROM emulation) |
-| [lib/calibration.hpp](lib/calibration.hpp) | Hardware calibration wizard (hold encoder on boot) |
+| [../../core/calibration.hpp](../../core/calibration.hpp) | Hardware calibration wizard — board-level, run from the shell's module selector |
 | [lib/calibrationData.hpp](lib/calibrationData.hpp) | `CalibrationData` struct, reference-voltage constants |
 | [platformio.ini](platformio.ini) | Build config, dependencies, test environments |
 
@@ -186,7 +186,7 @@ Any new mutable file-scope global **must** be registered in [vcv-plugin/src/engi
 - **Core 1 owns Wire**: never call `Wire` (display bus) from Core 0 — use `_displayFrameReady`/`_displayLocked`
 - **Tables in headers are `static`**: `scaleNames`, `GateModeNames`, `SyncModeNames` etc. have internal linkage so several test translation units can include them. Keep new header tables `static` too.
 - **`micros()` is the only clock**: envelopes and glide are driven entirely by the caller-supplied timestamp, never by wall-clock. That is what makes them testable and what makes the VCV port deterministic.
-- **Calibration** wizard: hold the encoder button during boot → runs [lib/calibration.hpp](lib/calibration.hpp); `CalibrationData` survives firmware flashes in EEPROM
+- **Calibration** wizard: CALIBRATE on the shell's module selector → runs [../../core/calibration.hpp](../../core/calibration.hpp). It is board-level, so it is not compiled into this module at all; `CalibrationData` lives in `/cal.bin` and survives firmware flashes
 
 ---
 

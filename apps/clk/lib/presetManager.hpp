@@ -14,14 +14,14 @@
 
 #include <Arduino.h>
 
+#include "boardPinouts.hpp"
 #include "calibrationData.hpp" // CalibrationData, CAL_LUT_*, CAL_LUT_POINTS
 #include "clockEngine.hpp"
 #include "cvInputs.hpp"
 #include "displayManager.hpp"
 #include "outputs.hpp"
-#include "jacks.hpp"
 
-extern int menuScreenTimeout;     // defined in src/main.cpp
+extern int menuScreenTimeout; // defined in src/main.cpp
 
 // ── Preset schema ─────────────────────────────────────────────────────────────
 // Number of preset slots.
@@ -63,13 +63,13 @@ struct LoadSaveParams {
     int CVInputOffset[NUM_CV_INS];
     EnvelopeParams envParams[NUM_OUTPUTS];
     QuantizerParams quantizerParams[NUM_OUTPUTS];
-    int crossOp[NUM_OUTPUTS];  // CrossOp index per output
-    int crossSrc[NUM_OUTPUTS]; // CrossSource index per output
+    int crossOp[NUM_OUTPUTS];   // CrossOp index per output
+    int crossSrc[NUM_OUTPUTS];  // CrossSource index per output
     int loopBeats[NUM_OUTPUTS]; // Loop length in beats (0 = off)
     int loopWake[NUM_OUTPUTS];  // Loops to run before napping
     int loopNap[NUM_OUTPUTS];   // Loops to mute (0 = never nap)
     int loopShift[NUM_OUTPUTS]; // Nap/wake cycle offset in whole loops
-    int menuScreenTimeout;     // index into screenTimeoutOptions[]
+    int menuScreenTimeout;      // index into screenTimeoutOptions[]
 };
 
 // CV calibration — see calibrationData.hpp for the struct definition.
@@ -95,11 +95,11 @@ LoadSaveParams LoadDefaultParams() {
         p.waveformType[i] = 0;
         p.envParams[i] = {200.0f, 200.0f, 70.0f, 250.0f, 0.5f, 0.5f, 0.5f, false};
         p.quantizerParams[i] = {false, 3, 4, 1, 0};
-        p.crossOp[i] = 0;  // CrossNone
-        p.crossSrc[i] = 0; // Out 1
+        p.crossOp[i] = 0;   // CrossNone
+        p.crossSrc[i] = 0;  // Out 1
         p.loopBeats[i] = 0; // off
         p.loopWake[i] = 1;
-        p.loopNap[i] = 0;   // never nap
+        p.loopNap[i] = 0; // never nap
         p.loopShift[i] = 0;
     }
     for (int i = 0; i < NUM_CV_INS; i++) {

@@ -269,6 +269,22 @@ static void doLoadDefaults() {
     ShowTemporaryMessage("DEFAULTS", 900);
 }
 
+// Hand the module back to the shell's SELECT MODULE screen — which is also the
+// only way into the calibration wizard, since that has to run with no app
+// started. The shell finishes the tick, calls End() so anything owed to storage
+// is flushed, and reboots into the selector.
+//
+// The hold-the-encoder gesture does the same thing; this is the discoverable
+// way in. Rack has no shell and nothing to switch to, so the port says so
+// rather than pretending.
+static void doBootMenu() {
+#ifdef FORGE_UNIFIED
+    ::forge::RequestAppMenu();
+#else
+    ShowTemporaryMessage("N/A", 900);
+#endif
+}
+
 // ─────────────────────────────────────────────────────────────
 // THE MENU TABLE
 // ─────────────────────────────────────────────────────────────
@@ -339,11 +355,14 @@ const MenuItem MENU_ITEMS[] = {
     {"CH2 TRANSP:", getTransposeEnabled<1>, nullptr, 88, 0, 6, ROW_SINGLE, MENU_TOGGLE, nullptr, toggleTransposeEnabled<1>}, // 50
 
     // ── Group 7: settings ──────────────────────────
-    {"SCR TIMEOUT:", getTimeout, nullptr, 88, 0, 7, ROW_SINGLE, MENU_EDIT, setTimeout, nullptr},    // 51
-    {"PRESET SLOT:", getSaveSlot, nullptr, 88, 0, 7, ROW_SINGLE, MENU_EDIT, setSaveSlot, nullptr},  // 52
-    {"SAVE", nullptr, nullptr, 0, 0, 7, ROW_ACTION, MENU_ACTION, nullptr, doSave},                  // 53
-    {"LOAD", nullptr, nullptr, 0, 0, 7, ROW_ACTION, MENU_ACTION, nullptr, doLoad},                  // 54
-    {"LOAD DEFAULTS", nullptr, nullptr, 0, 0, 7, ROW_ACTION, MENU_ACTION, nullptr, doLoadDefaults}, // 55
+    {"SCR TIMEOUT:", getTimeout, nullptr, 88, 0, 7, ROW_SINGLE, MENU_EDIT, setTimeout, nullptr}, // 51
+    {"BOOT MENU", nullptr, nullptr, 0, 0, 7, ROW_ACTION, MENU_ACTION, nullptr, doBootMenu},      // 52
+
+    // ── Group 8: presets ───────────────────────────
+    {"PRESET SLOT:", getSaveSlot, nullptr, 88, 0, 8, ROW_SINGLE, MENU_EDIT, setSaveSlot, nullptr},  // 53
+    {"SAVE", nullptr, nullptr, 0, 0, 8, ROW_ACTION, MENU_ACTION, nullptr, doSave},                  // 54
+    {"LOAD", nullptr, nullptr, 0, 0, 8, ROW_ACTION, MENU_ACTION, nullptr, doLoad},                  // 55
+    {"LOAD DEFAULTS", nullptr, nullptr, 0, 0, 8, ROW_ACTION, MENU_ACTION, nullptr, doLoadDefaults}, // 56
 };
 
 const int MENU_ITEM_COUNT = sizeof(MENU_ITEMS) / sizeof(MENU_ITEMS[0]);

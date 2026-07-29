@@ -13,9 +13,9 @@
 #include <Arduino.h>
 
 #include "boardIO.hpp"
+#include "boardPinouts.hpp"
 #include "calibrationData.hpp"
 #include "cvInput.hpp" // shared acquisition + range adapters
-#include "jacks.hpp"
 #include "utils.hpp"
 
 // Oversampling per read comes from core/cvInput.hpp (default 8) — averages out
@@ -82,10 +82,10 @@ static constexpr float TRANSPOSE_HYSTERESIS = 0.15f;
 // ── extern refs defined in main.cpp ──────────────────────────────────────────
 
 // ── TRIG input ───────────────────────────────────────────────────────────────
-volatile bool trigPending = false;      // set by the ISR, drained by the loop
-volatile unsigned long lastTrigUs = 0;  // for debouncing
-volatile bool trigSeen = false;         // has any edge arrived yet?
-volatile bool trigLevel = false;        // current input level (Gate mode)
+volatile bool trigPending = false;     // set by the ISR, drained by the loop
+volatile unsigned long lastTrigUs = 0; // for debouncing
+volatile bool trigSeen = false;        // has any edge arrived yet?
+volatile bool trigLevel = false;       // current input level (Gate mode)
 
 // Rising-edge ISR on CLK_IN_PIN. Must stay trivial — it only queues the edge.
 // trigSeen guards the debounce window so the very first edge is never dropped:

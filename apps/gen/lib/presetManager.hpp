@@ -15,11 +15,11 @@
 #include <Arduino.h>
 #endif
 
+#include "boardPinouts.hpp"
 #include "calibrationData.hpp"
 #include "clock.hpp"
 #include "displayManager.hpp"
 #include "params.hpp"
-#include "jacks.hpp"
 #include "sequencer.hpp"
 
 extern GravityChannel channels[NUM_CHANNELS]; // src/main.cpp
@@ -51,7 +51,7 @@ struct LoadSaveParams {
     uint8_t scaleIndex[NUM_CHANNELS];
     uint8_t rootIndex[NUM_CHANNELS];
     uint8_t spread[NUM_CHANNELS]; // octaves the peg ring covers
-    int8_t bias[NUM_CHANNELS];   // -100 crowd low .. +100 crowd high
+    int8_t bias[NUM_CHANNELS];    // -100 crowd low .. +100 crowd high
     uint8_t gateMode[NUM_CHANNELS];
     uint16_t attackMs[NUM_CHANNELS];
     uint16_t decayMs[NUM_CHANNELS];

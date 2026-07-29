@@ -44,9 +44,9 @@ wall-clock reads.
 | [lib/menuDisplay.hpp](lib/menuDisplay.hpp) | Draw primitives (`MD_Row`, `MD_RenderGroup`, …) |
 | [lib/menuRender.hpp](lib/menuRender.hpp) | `HandleDisplay()` + the physics home screen |
 | [lib/presetManager.hpp](lib/presetManager.hpp) | `LoadSaveParams`, `CollectParams()`, `UpdateParameters()` |
-| [lib/randomize.hpp](lib/randomize.hpp) | `RandomizeParams()` — backs both SETTINGS ▸ RANDOM and the plugin's Randomize |
+| [lib/randomize.hpp](lib/randomize.hpp) | `RandomizeParams()` — backs both PRESETS ▸ RANDOM and the plugin's Randomize |
 | [lib/storage.hpp](lib/storage.hpp) | RP2040 EEPROM emulation backend |
-| [lib/calibration.hpp](lib/calibration.hpp) | Calibration wizard (hold encoder on boot) |
+| [../../core/calibration.hpp](../../core/calibration.hpp) | Calibration wizard — board-level, run from the shell's module selector |
 | [lib/boardIO.hpp](lib/boardIO.hpp) | `InitIO()`, `InitWire()`, `InitDAC()`, `DACWriteAll()` |
 | [lib/pinouts.hpp](lib/pinouts.hpp) | Pin/GPIO assignments, jack map |
 
@@ -171,7 +171,7 @@ save/load therefore has to be in `LoadSaveParams`; a parameter reachable from th
 context menu but missing from `CollectParams()` is silently not persisted.
 
 **Randomize** lives in [lib/randomize.hpp](lib/randomize.hpp) so the hardware's
-SETTINGS ▸ RANDOM action and Rack's Randomize (Ctrl+R) roll the same patch. It
+PRESETS ▸ RANDOM action and Rack's Randomize (Ctrl+R) roll the same patch. It
 deliberately leaves tempo, the IN 1 role and the CV matrix alone — those are
 patch wiring, not sound design.
 

@@ -78,7 +78,7 @@ Measures the frequency of the selected input (`Chan`: CH1 or CH2) and shows a la
 Turning the encoder opens the settings overlay for the current mode. The overlay hides itself about 5 seconds after the last interaction.
 
 - **Turn** — move the cursor through the parameter list.
-- **Click** — start editing the selected parameter; turn to change the value, click again to stop editing. (On/off rows like `Info` toggle directly with a click.)
+- **Click** — start editing the selected parameter; turn to change the value, click again to stop editing. (On/off rows like `Info` toggle directly with a click, and `Boot` acts immediately.)
 - **Long press (~1 s)** — freeze / unfreeze the display. A `HOLD` indicator is shown while frozen; new samples are ignored until unfrozen.
 
 ### Parameters
@@ -97,8 +97,11 @@ Turning the encoder opens the settings overlay for the current mode. The overlay
 | `Pers`    | X-Y                     | Phosphor persistence (Live to 5 min)               |
 | `Chan`    | Tuner                   | Measured input channel (CH1 / CH2)                 |
 | `Info`    | all except Tuner        | Show axis labels (V/div, time/div, peak frequency) |
+| `Boot`    | all (hardware only)     | Click to leave for the module selector             |
 
 All settings (mode included) are saved automatically about 5 seconds after the last change and restored on the next power-up.
+
+`Boot` hands the hardware back to the module selector, so you can run a different Forge module — or the calibration wizard — without power-cycling. ForgeView flushes its pending settings save first, then the module reboots into the selector. Holding the encoder for two seconds does the same thing, but that gesture is also the freeze-frame long-press, so the menu row is the unambiguous way. The row is absent in the VCV Rack plugin, which has no selector to return to.
 
 ## Operation
 

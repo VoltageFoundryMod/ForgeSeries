@@ -88,7 +88,6 @@ static volatile bool _displayLocked = false;
 #include "appDisplay.hpp"    // core: RedrawDisplay + SAVED/LOADED
 
 
-#include "calibration.hpp" // core: the shared wizard
 #include "../lib/version.hpp"
 // clang-format on
 

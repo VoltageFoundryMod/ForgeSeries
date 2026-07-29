@@ -32,6 +32,7 @@ Part of the **Forge** series of modules which share a single hardware platform. 
     - [Gate (per container)](#gate-per-container)
     - [CV Input Modulation](#cv-input-modulation)
     - [Settings](#settings)
+    - [Presets](#presets)
   - [Working with the module](#working-with-the-module)
     - [Getting a first sequence](#getting-a-first-sequence)
     - [Using proximity musically](#using-proximity-musically)
@@ -93,7 +94,7 @@ The module is driven entirely from the rotary encoder:
 - **Turn** (while navigating): move between parameters. Crossing a group boundary changes the page.
 - **Click** on a value parameter: enter edit mode. The value is now changed by turning the encoder.
 - **Click** again: leave edit mode.
-- **Click** on an action row (RESET BALLS, KICK, SAVE, LOAD, RANDOM): execute it immediately.
+- **Click** on an action row (RESET BALLS, KICK, SAVE, LOAD, RANDOM, BOOT MENU): execute it immediately.
 - **Click** on a toggle row (DIR): flip it immediately.
 
 Turning the encoder quickly accelerates the step size (up to 8× for a fast spin), so long ranges like BPM or DECAY can be crossed without a lot of turning. Reversing direction always resets to single steps.
@@ -132,7 +133,8 @@ Turning the encoder from the home screen walks through the pages in this order:
 | **A GATE**    | Mode, attack, decay, level, accent                 |
 | **B GATE**    | Same, container B                                  |
 | **CV IN**     | IN 2 / IN 3 destination and depth                  |
-| **SETTINGS**  | Preset slot, save, load, randomize, screen timeout |
+| **SETTINGS**  | Screen timeout, boot menu                          |
+| **PRESETS**   | Preset slot, save, load, randomize                 |
 
 ## Parameters
 
@@ -277,11 +279,15 @@ Spin is modulated as a continuous multiplier rather than by stepping through the
 
 ![Settings page](images/display/Settings.png)
 
+- **TIMEOUT** — Return to the physics screen after `OFF`, `2s`, `5s`, `10s` or `20s` of inactivity.
+- **BOOT MENU** — Hand the hardware back to the module selector, so you can run a different Forge module — or the calibration wizard — without power-cycling. GravityForge flushes anything it owes to flash first, then the module reboots into the selector. Holding the encoder for two seconds does the same thing from anywhere in the menu.
+
+### Presets
+
 - **SLOT** (0–9) — The preset slot that SAVE and LOAD act on.
 - **SAVE** — Write the current settings to the selected slot.
 - **LOAD** — Recall the selected slot.
-- **RANDOM** — Roll a whole new patch. See [Randomize](#randomize).
-- **TIMEOUT** — Return to the physics screen after `OFF`, `2s`, `5s`, `10s` or `20s` of inactivity.
+- **RANDOM** — Roll a whole new patch. See [Randomize](#randomize). It sits here rather than under Settings because, like LOAD, it replaces the whole patch — it just rolls the new one instead of reading it from a slot.
 
 ## Working with the module
 
@@ -378,7 +384,7 @@ The ranges it draws from are narrower than the full parameter ranges, so a roll 
 
 The module has 10 memory slots (0–9). The parameters saved into slot 0 are automatically loaded on boot.
 
-1. Navigate to **SLOT** on the SETTINGS page.
+1. Navigate to **SLOT** on the PRESETS page.
 2. Click the encoder, turn to the desired slot, and click again to leave edit mode.
 3. Select **SAVE** and click the encoder to store the current settings in that slot.
 4. Select **LOAD** and click the encoder to recall it.
@@ -417,7 +423,9 @@ Calibration data is stored in a dedicated area of non-volatile memory **separate
 
 The wizard has 6 steps: output trim, output offset capture, then four CV input captures (1 V and 3 V on each of the two CV inputs).
 
-1. Power on the module **from your Eurorack supply** while **holding the encoder button** pressed. The display shows the calibration wizard; release the button at the welcome screen and click the encoder to start.
+1. Power on the module **from your Eurorack supply** while **holding the encoder button** pressed, which opens the module selector. Release the button, scroll to **CALIBRATE** at the bottom of the list and click. (From a running module you can get to the same screen with **SETTINGS → BOOT MENU**, or by holding the encoder for two seconds.) Click the encoder at the welcome screen to start.
+
+   Calibration belongs to the board, not to any one module: one run covers every module in the firmware, and the wizard reboots back to the selector when it is done.
 
    > ⚠️ Calibrate on Eurorack power, **not** the MCU's USB port — USB cannot drive the outputs to full scale, so the trim would be wrong. **Never connect Eurorack power and USB at the same time, as this could damage the module.**
 
@@ -425,7 +433,7 @@ The wizard has 6 steps: output trim, output offset capture, then four CV input c
    All four outputs are driven to full scale. Using a multimeter set to DC voltage, probe each output jack in turn and adjust its corresponding trimmer potentiometer on the PCB until the reading is exactly **5.00 V**. When all four outputs read 5.00 V, press the encoder to continue.
 
 3. **Step 2 — Output offset** (`2/6  <OUT> OFFSET`):
-   All outputs are driven to a nominal 1.000 V. For each output in turn (CV 1, CV 2, GATE1, GATE2), measure the actual voltage at that jack and dial the measured value in with the encoder, then click to confirm. The firmware uses the difference to correct that channel.
+   All outputs are driven to a nominal 1.000 V. For each output jack in turn (OUT 1 – OUT 4, i.e. CV 1, CV 2, GATE 1, GATE 2 in GravityForge's terms), measure the actual voltage at that jack and dial the measured value in with the encoder, then click to confirm. The firmware uses the difference to correct that channel. The wizard names the jacks by number rather than by role, because it runs before a module has been chosen.
 
 4. **Steps 3–6 — CV input capture** (`3/6` … `6/6`):
    The display asks for a specific reference voltage on a specific input, in turn:

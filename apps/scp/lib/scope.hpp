@@ -217,16 +217,42 @@ enum ParamId {
     P_LABELS,   // engineering-unit labels on/off
     P_CHAN,     // tuner: which input channel to measure (1 or 2)
     P_PERSIST,  // X-Y: phosphor persistence duration
+    P_BOOT,     // leave for the shell's module selector (click, not editable)
 };
+
+// Hand the module back to the shell's SELECT MODULE screen — which is also the
+// only way into the calibration wizard, since that has to run with no app
+// started. The shell finishes the tick, calls End() so ForgeView's debounced
+// settings save is flushed, and reboots into the selector.
+//
+// The hold-the-encoder gesture does the same thing; this is the discoverable
+// way in.
+static inline void ScopeRequestBootMenu() {
+#ifdef FORGE_UNIFIED
+    ::forge::RequestAppMenu();
+#endif
+}
 
 #define SCOPE_ARRLEN(a) ((int)(sizeof(a) / sizeof((a)[0])))
 
-static const ParamId kParamsLFO[] = {P_MODE, P_TIMEBASE, P_OFF1, P_OFF2, P_VSCALE, P_LABELS};
-static const ParamId kParamsWave[] = {P_MODE, P_TIMEBASE, P_OFF1, P_VSCALE, P_REFRESH, P_LABELS};
-static const ParamId kParamsShot[] = {P_MODE, P_TIMEBASE, P_TRIG, P_OFF1, P_VSCALE, P_LABELS};
-static const ParamId kParamsSpec[] = {P_MODE, P_SCHAN, P_HF, P_FILT, P_LABELS};
-static const ParamId kParamsXY[] = {P_MODE, P_VSCALE, P_PERSIST, P_LABELS};
-static const ParamId kParamsTuner[] = {P_MODE, P_CHAN};
+// P_BOOT rides on the end of every list: the overlay is the only menu ForgeView
+// has, and the way out has to be reachable from whichever mode you are in.
+//
+// It is compiled out of the Rack port rather than left inert. The other modules
+// can afford a row that answers "N/A" because they have a message overlay to
+// answer with; ForgeView has none, so the row would sit there doing nothing.
+#ifdef FORGE_UNIFIED
+#define SCOPE_BOOT_ROW , P_BOOT
+#else
+#define SCOPE_BOOT_ROW
+#endif
+
+static const ParamId kParamsLFO[] = {P_MODE, P_TIMEBASE, P_OFF1, P_OFF2, P_VSCALE, P_LABELS SCOPE_BOOT_ROW};
+static const ParamId kParamsWave[] = {P_MODE, P_TIMEBASE, P_OFF1, P_VSCALE, P_REFRESH, P_LABELS SCOPE_BOOT_ROW};
+static const ParamId kParamsShot[] = {P_MODE, P_TIMEBASE, P_TRIG, P_OFF1, P_VSCALE, P_LABELS SCOPE_BOOT_ROW};
+static const ParamId kParamsSpec[] = {P_MODE, P_SCHAN, P_HF, P_FILT, P_LABELS SCOPE_BOOT_ROW};
+static const ParamId kParamsXY[] = {P_MODE, P_VSCALE, P_PERSIST, P_LABELS SCOPE_BOOT_ROW};
+static const ParamId kParamsTuner[] = {P_MODE, P_CHAN SCOPE_BOOT_ROW};
 
 static const ParamId *ScopeParamList(int &count) {
     switch (menuMode) {
@@ -291,6 +317,8 @@ static const char *ScopeParamLabel(ParamId id) {
         return "Chan";
     case P_PERSIST:
         return "Pers";
+    case P_BOOT:
+        return "Boot";
     }
     return "?";
 }
@@ -336,6 +364,9 @@ static void ScopeParamFormat(ParamId id, char *buf, int n) {
         break;
     case P_PERSIST:
         snprintf(buf, n, "%s", kXYPersistNames[constrain(xyPersist, 0, XY_PERSIST_COUNT - 1)]);
+        break;
+    case P_BOOT:
+        snprintf(buf, n, "Menu");
         break;
     }
 }
@@ -387,6 +418,8 @@ static void ScopeParamEdit(ParamId id, int dir) {
     case P_PERSIST:
         xyPersist = constrain(xyPersist + dir, 0, XY_PERSIST_COUNT - 1);
         break;
+    case P_BOOT:
+        break; // a click acts on it, not a detent
     }
 }
 
@@ -928,6 +961,8 @@ void ScopeEncoderButton(bool pressed) {
         unsigned long held = millis() - pressStartMs;
         if (held >= 800) {
             frozen = !frozen; // long press toggles freeze
+        } else if (!param_select && ScopeParamAt(param) == P_BOOT) {
+            ScopeRequestBootMenu(); // acts on the click; nothing to edit
         } else if (!param_select && ScopeParamAt(param) == P_LABELS) {
             showLabels = !showLabels; // on/off row: click flips it directly
         } else {

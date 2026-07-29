@@ -27,7 +27,7 @@ ClockForge is a **Eurorack modular synthesizer clock/CV module** firmware for th
 | [lib/pinouts.hpp](lib/pinouts.hpp) | XIAO RP2040 pin/GPIO assignments |
 | [lib/presetManager.hpp](lib/presetManager.hpp) | `LoadSaveParams`, `CalibrationData`, `LoadDefaultParams()`, `CollectParams()`, `UpdateParameters()` |
 | [lib/storage.hpp](lib/storage.hpp) | Platform storage backend (RP2040 EEPROM emulation) |
-| [lib/calibration.hpp](lib/calibration.hpp) | Hardware calibration wizard (hold encoder on boot) |
+| [../../core/calibration.hpp](../../core/calibration.hpp) | Hardware calibration wizard — board-level, run from the shell's module selector |
 | [lib/calibrationData.hpp](lib/calibrationData.hpp) | `CalibrationData` struct, LUT constants |
 | [lib/euclidean.hpp](lib/euclidean.hpp) | Bjorklund's Euclidean rhythm algorithm |
 | [lib/quantizer.cpp](lib/quantizer.cpp) | Pitch quantization logic |
@@ -137,7 +137,7 @@ unsavedChanges = true; // also keep the raw flag in sync for save/load checks
 - **Core 1 owns Wire**: never call `Wire` (display bus) from Core 0 — use `_displayFrameReady`/`_displayLocked` flags
 - **Keep ISR fast**: `ClockPulse()` runs at 960 PPQN; avoid heap allocation or blocking calls inside it
 - **`quantizer.cpp` and `scales.cpp`** are `#include`d directly in [lib/outputs.hpp](lib/outputs.hpp) — they are not compiled separately
-- **Calibration** wizard: hold encoder button during boot → runs [lib/calibration.hpp](lib/calibration.hpp); `CalibrationData` survives firmware flashes in EEPROM
+- **Calibration** wizard: CALIBRATE on the shell's module selector → runs [../../core/calibration.hpp](../../core/calibration.hpp). It is board-level, so it is not compiled into this module at all; `CalibrationData` lives in `/cal.bin` and survives firmware flashes
 
 ---
 

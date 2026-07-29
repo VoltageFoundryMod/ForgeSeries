@@ -430,6 +430,22 @@ static void actRandom() {
     ShowTemporaryMessage("RANDOM", 700);
 }
 
+// Hand the module back to the shell's SELECT MODULE screen — which is also the
+// only way into the calibration wizard, since that has to run with no app
+// started. The shell finishes the tick, calls End() so anything owed to storage
+// is flushed, and reboots into the selector.
+//
+// The hold-the-encoder gesture does the same thing; this is the discoverable
+// way in. Rack has no shell and nothing to switch to, so the port says so
+// rather than pretending.
+static void actBootMenu() {
+#ifdef FORGE_UNIFIED
+    ::forge::RequestAppMenu();
+#else
+    ShowTemporaryMessage("N/A", 700);
+#endif
+}
+
 static const char *const screenTimeoutNames[] = {"OFF", "2s", "5s", "10s", "20s"};
 static String getTimeout() { return String(screenTimeoutNames[constrain(menuScreenTimeout, 0, 4)]); }
 static void setTimeout(int d) {
@@ -524,11 +540,16 @@ const MenuItem MENU_ITEMS[] = {
     {"IN3 DEPTH", getCvDepth<1>, nullptr, 82, 0, 10, ROW_SINGLE, MENU_EDIT, setCvDepth<1>, nullptr},
 
     // ── 11 SETTINGS ──
-    {"SLOT", getSlot, nullptr, 82, 0, 11, ROW_SINGLE, MENU_EDIT, setSlot, nullptr},
-    {"SAVE", nullptr, nullptr, 0, 0, 11, ROW_ACTION, MENU_ACTION, nullptr, actSave},
-    {"LOAD", nullptr, nullptr, 0, 0, 11, ROW_ACTION, MENU_ACTION, nullptr, actLoad},
-    {"RANDOM", nullptr, nullptr, 0, 0, 11, ROW_ACTION, MENU_ACTION, nullptr, actRandom},
     {"TIMEOUT", getTimeout, nullptr, 82, 0, 11, ROW_SINGLE, MENU_EDIT, setTimeout, nullptr},
+    {"BOOT MENU", nullptr, nullptr, 0, 0, 11, ROW_ACTION, MENU_ACTION, nullptr, actBootMenu},
+
+    // ── 12 PRESETS ──
+    // RANDOM belongs here rather than in SETTINGS: like LOAD it replaces the
+    // whole patch, it just rolls the new one instead of reading it from a slot.
+    {"SLOT", getSlot, nullptr, 82, 0, 12, ROW_SINGLE, MENU_EDIT, setSlot, nullptr},
+    {"SAVE", nullptr, nullptr, 0, 0, 12, ROW_ACTION, MENU_ACTION, nullptr, actSave},
+    {"LOAD", nullptr, nullptr, 0, 0, 12, ROW_ACTION, MENU_ACTION, nullptr, actLoad},
+    {"RANDOM", nullptr, nullptr, 0, 0, 12, ROW_ACTION, MENU_ACTION, nullptr, actRandom},
 };
 
 const int MENU_ITEM_COUNT = (int)(sizeof(MENU_ITEMS) / sizeof(MENU_ITEMS[0]));

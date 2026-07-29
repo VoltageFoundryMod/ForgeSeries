@@ -12,9 +12,9 @@
 // Include AFTER the globals below are defined — the convention menuHandlers.hpp
 // already follows.
 
+#include "boardPinouts.hpp"
 #include "clockEngine.hpp"
 #include "cvInputs.hpp"
-#include "jacks.hpp"
 #include "metrics.hpp"
 #include "outputs.hpp"
 

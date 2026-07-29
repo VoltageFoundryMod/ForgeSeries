@@ -22,10 +22,10 @@
 #endif
 
 #include "boardIO.hpp"
+#include "boardPinouts.hpp"
 #include "calibrationData.hpp"
 #include "cvInput.hpp" // shared acquisition + range adapters
 #include "params.hpp"
-#include "jacks.hpp"
 #include "utils.hpp"
 
 // Oversampling per read (core/cvInput.hpp default is 8) — averages out RP2040
@@ -47,7 +47,6 @@ static constexpr unsigned long TRIG_DEBOUNCE_US = 1000;
 // CvNorm()/CvBipolar() below, which is what makes the polarity switch a
 // build-flag change.
 float channelCv[NUM_CV_INS], oldChannelCv[NUM_CV_INS];
-
 
 // ── IN 1 role ────────────────────────────────────────────────────────────────
 // One jack, several jobs. Auto-detection is impossible — the hardware has no
@@ -177,8 +176,8 @@ void BuildModBus(ModBus &mod) {
             continue;
         }
         float depth = (float)cvDepth[i] / 100.0f;
-        float uni = CvNorm(i);     // 0..1
-        float bip = CvBipolar(i);  // -1..1
+        float uni = CvNorm(i);    // 0..1
+        float bip = CvBipolar(i); // -1..1
 
         switch (cvTarget[i]) {
         case CVGravityA:

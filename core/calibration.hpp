@@ -3,11 +3,18 @@
 // calibration.hpp — Hardware calibration wizard
 //
 // Entry point: RunCalibration()
-// Called from setup() when the encoder button is held during boot.
+// Called by the shell from the CALIBRATE row of the module selector, which is
+// the one place it belongs: calibration describes the board's analog front and
+// back ends, not any one module, and the same /cal.bin then serves every app.
 //
-// This matters more on a quantizer than on any other Forge module: the whole
-// job is turning input volts into the *right* semitone, so an uncalibrated ADC
-// gain error walks the output off by a semitone or more towards 5V.
+// It runs on Core 0 with Core 1 still parked (see unified/src/main.cpp), so it
+// owns the display outright and calls display.display() itself — there is no
+// frame-ready handshake to observe here, and no app is running to fight over it.
+//
+// Worth running even though every module ships usable without it, and most of
+// all before running NoteForge: a quantizer's whole job is turning input volts
+// into the *right* semitone, and an uncalibrated ADC gain error walks the output
+// off by a semitone or more towards 5V.
 //
 // Step 1 — Output trim (full-scale anchor):
 //   All 4 outputs driven to MAXDAC (5V after hardware trimming).
@@ -30,27 +37,16 @@
 //   Two readings per channel (1V + 3V) define a linear mapping:
 //       mv = cvScale * raw_adc + cvOffset
 //
-// CalibrationData is persisted by storage.hpp's SaveCalibration(), whose
-// backend depends on the build: the shared /cal.bin on the filesystem
-// (FORGE_USE_FS, the unified firmware), or past the preset slots in the
-// emulated EEPROM sector standalone. Either survives a firmware flash.
+// CalibrationData is persisted by the shell's SaveCalibration(), which writes
+// the shared /cal.bin on the filesystem. It survives a firmware flash.
 
 #include <Adafruit_SSD1306.h>
 #include <Arduino.h>
 
 #include "boardIO.hpp"
 #include "encoder.hpp"
-// NOT presetManager.hpp: this only needs SaveCalibration(), declared below.
-// The include was vestigial and was the one thing keeping the calibration
-// wizard — which is board-level, not module-level — out of core/.
-// REQUIRES: the including translation unit must already have defined
-// CAL_OUT_NAMES[NUM_OUTPUTS] — what this module calls its output jacks. It
-// lives in each app's lib/jacks.hpp, because jack naming is module
-// semantics. core/ must not include that header itself: it is app-level, and
-// depending on it makes core/ unbuildable without an app on the include path
-// (the same trap core/boardIO.hpp fell into with pinouts vs boardPinouts).
 
-// Forward declarations from main.cpp
+// Forward declaration from the shell (unified/src/main.cpp).
 extern void SaveCalibration(const CalibrationData &);
 
 // ── Calibration constants ────────────────────────────────────────────────────
@@ -62,7 +58,12 @@ static const int CAL_ADC_SAMPLES = 256; // samples averaged per capture point pe
 static const int CAL_DAC_LOW_MV = 1000;                             // ideal low point (mV)
 static const int CAL_DAC_LOW_CODE = MAXDAC * CAL_DAC_LOW_MV / 5000; // = 819 counts
 
-// Jack names, so the prompts say "GATE 1" rather than "OUT 3".
+// Jack names for the prompts. Physical, not module-flavoured: the wizard runs
+// from the module selector, before an app has been chosen, so "OUT 3" is the
+// only name that is true whichever one you go on to boot. (They used to come
+// from each app's lib/jacks.hpp, back when every firmware carried its own copy
+// of the wizard.)
+static const char *const CAL_OUT_NAMES[NUM_OUTPUTS] = {"OUT 1", "OUT 2", "OUT 3", "OUT 4"};
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -80,12 +81,9 @@ static void _CalHeader(const char *title) {
     display.drawLine(0, 9, 127, 9, WHITE);
 }
 
-// Flush display buffer — Core 1 owns Wire on RP2040, so signal it.
-static void _CalFlush() {
-    extern volatile bool _displayFrameReady;
-    _displayFrameReady = true;
-    delay(35); // ~28ms for 128×64 @ 400kHz I2C
-}
+// Push the prepared frame to the panel. Core 1 is parked while the wizard runs,
+// so this core owns Wire and writes it directly (~28ms for 128×64 @ 400kHz).
+static void _CalFlush() { display.display(); }
 
 // Block until the encoder button is pressed then released (with debounce).
 static void _CalWaitClick() {
@@ -119,7 +117,6 @@ static uint16_t _CalReadADCRaw(int pin) { return (uint16_t)analogRead(pin); }
 // confirm with a click.  Used for output-offset capture, where the module
 // cannot read its own output and must be told the multimeter reading.
 static int _CalEnterMV(const char *title, const char *prompt, int startMV) {
-    extern volatile bool _displayFrameReady;
     int valMV = constrain(startMV, 0, 5000);
     long base = encoder.read();
     bool redraw = true;
@@ -148,7 +145,7 @@ static int _CalEnterMV(const char *title, const char *prompt, int startMV) {
             display.setTextSize(1);
             display.setCursor(0, 56);
             display.print("Turn=set Click=save");
-            _displayFrameReady = true; // Core 1 flushes over Wire
+            _CalFlush();
             redraw = false;
         }
         // Confirm on click (debounced), then wait for release.

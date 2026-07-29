@@ -21,6 +21,11 @@
 #include "quantizer.hpp"
 #include "scales.hpp"
 
+// Two independent voices. NoteForge calls them quantizer channels and
+// GravityForge calls them containers, but the jack layout is identical, and
+// deliberately so: patch cables carry over between the two firmwares.
+#define NUM_CHANNELS 2
+
 // When does the gate/envelope fire?
 enum SyncMode : uint8_t {
     SyncTrig = 0, // only on a rising edge at the TRIG input
@@ -52,9 +57,9 @@ class QuantizerChannel {
     bool _activeNotes[12];
     int _scaleIndex = 0; // selection for the "load scale" helper, not the mask
     int _rootIndex = 0;
-    int _octave = 0;      // -3..+3, applied after quantization
-    int _glide = 0;       // 0..100 percent
-    int _settleMs = 5;    // de-glitch window, 0..CHANNEL_SETTLE_MAX_MS
+    int _octave = 0;   // -3..+3, applied after quantization
+    int _glide = 0;    // 0..100 percent
+    int _settleMs = 5; // de-glitch window, 0..CHANNEL_SETTLE_MAX_MS
     uint8_t _syncMode = SyncNote;
     uint8_t _pitchMode = PitchTrack;
     bool _transposeEnabled = false; // does this channel follow the transpose CV?
@@ -67,8 +72,8 @@ class QuantizerChannel {
     int _outputSemitone = 0;     // after octave shift, folded into range
     int _pendingSemitone = -1;   // candidate waiting out the settle window
     unsigned long _pendingSinceUs = 0;
-    int _transposeDegrees = 0;   // set from the transpose CV each iteration
-    bool _sampleArmed = false;   // S&H: a trigger is waiting out the sample delay
+    int _transposeDegrees = 0; // set from the transpose CV each iteration
+    bool _sampleArmed = false; // S&H: a trigger is waiting out the sample delay
     unsigned long _sampleSinceUs = 0;
     float _cvCounts = 0.0f; // glide-smoothed DAC value
     uint16_t _gateCounts = 0;

@@ -10,9 +10,9 @@
 // Include AFTER the globals below are defined — the convention menuHandlers.hpp
 // already follows. Each host declares them, because each owns its own set.
 
+#include "boardPinouts.hpp"
 #include "clock.hpp"
 #include "cvInputs.hpp"
-#include "jacks.hpp"
 #include "params.hpp"
 #include "physics.hpp"
 #include "sequencer.hpp"

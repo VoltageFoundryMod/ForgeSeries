@@ -157,6 +157,7 @@ static const char *const groupTitles[] = {
     "CH2 GATE",  // 5
     "ROUTING",   // 6
     "SETTINGS",  // 7
+    "PRESETS",   // 8
 };
 
 void HandleDisplay() {

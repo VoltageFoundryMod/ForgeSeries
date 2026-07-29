@@ -13,10 +13,10 @@
 
 #include <Arduino.h>
 
+#include "boardPinouts.hpp"
 #include "calibrationData.hpp"
 #include "channel.hpp"
 #include "displayManager.hpp"
-#include "jacks.hpp"
 
 extern QuantizerChannel channels[NUM_CHANNELS]; // defined in src/main.cpp
 extern int menuScreenTimeout;                   // defined in src/main.cpp

@@ -28,6 +28,8 @@
 #include "fsStore.hpp"
 #include "shellObjects.hpp"
 #include "splash.hpp"
+// calibration.hpp is included further down: it needs `display` and
+// SaveCalibration(), both defined below.
 
 #include "clk_app.hpp"
 #include "dq_app.hpp"
@@ -58,6 +60,16 @@ static forge::IApp *const kApps[] = {
 static constexpr int kAppCount = (int)(sizeof(kApps) / sizeof(kApps[0]));
 
 static forge::IApp *g_app = nullptr;
+
+// ── Calibration ─────────────────────────────────────────────────────────────
+// The wizard is board-level: it measures the analog front and back ends, which
+// are the same hardware whichever module you go on to boot, so one run serves
+// every app and it lives here rather than in any of them.
+//
+// It draws straight to `display` and blocks, which is only safe because it runs
+// from the boot menu — Core 0, before Core 1 is released, with no app started.
+void SaveCalibration(const CalibrationData &c) { forge::fs::SaveCalibrationFs(c); }
+#include "calibration.hpp"
 
 // Core 1 is started by the Arduino core *before* setup() runs on Core 0, so
 // without this gate it would render over Wire while display.begin() is still
@@ -140,6 +152,14 @@ static void PollEncoder(forge::IApp *app) {
 //
 // This runs entirely on Core 0, before Core 1 is released, so it can drive the
 // display directly — no frame-ready handshake, and no app is running yet.
+//
+// The list is the apps plus one trailing CALIBRATE row. That row is why the
+// selector is reachable from an app's SETTINGS page at all: the wizard is
+// board-level and can only run with no app started, so this screen is the only
+// place it can live, and without a way back here there would be no way in.
+static constexpr int kCalibrateIndex = kAppCount;
+static constexpr int kMenuEntries = kAppCount + 1;
+
 static void DrawMenu(int sel, int top) {
     display.clearDisplay();
     display.setTextColor(WHITE);
@@ -148,9 +168,9 @@ static void DrawMenu(int sel, int top) {
     display.print("SELECT MODULE");
     display.drawFastHLine(0, 11, SCREEN_WIDTH, WHITE);
 
-    // Four visible rows at 13px; the list scrolls when there are more apps.
+    // Four visible rows at 13px; the list scrolls when there are more entries.
     const int rows = 4;
-    for (int r = 0; r < rows && (top + r) < kAppCount; r++) {
+    for (int r = 0; r < rows && (top + r) < kMenuEntries; r++) {
         const int i = top + r;
         const int y = 15 + r * 12;
         if (i == sel) {
@@ -160,18 +180,23 @@ static void DrawMenu(int sel, int top) {
             display.setTextColor(WHITE);
         }
         display.setCursor(4, y);
-        display.print(kApps[i]->Name());
-        display.setCursor(84, y);
-        display.print("v");
-        display.print(kApps[i]->Version());
+        if (i == kCalibrateIndex) {
+            display.print("CALIBRATE"); // no version — it is not a module
+        } else {
+            display.print(kApps[i]->Name());
+            display.setCursor(84, y);
+            display.print("v");
+            display.print(kApps[i]->Version());
+        }
     }
     display.setTextColor(WHITE);
     display.display();
 }
 
-// Blocks until the user clicks. Returns the chosen index.
+// Blocks until the user clicks. Returns the chosen index — an app index, or
+// kCalibrateIndex.
 static int RunBootMenu(int initial) {
-    int sel = (initial >= 0 && initial < kAppCount) ? initial : 0;
+    int sel = (initial >= 0 && initial < kMenuEntries) ? initial : 0;
     int top = 0;
 
     // The gesture that got us here is the button being held. Wait for release
@@ -198,8 +223,8 @@ static int RunBootMenu(int initial) {
         if (dir != 0) {
             sel += dir;
             if (sel < 0)
-                sel = kAppCount - 1;
-            else if (sel >= kAppCount)
+                sel = kMenuEntries - 1;
+            else if (sel >= kMenuEntries)
                 sel = 0;
             if (sel < top)
                 top = sel;
@@ -218,6 +243,8 @@ static int RunBootMenu(int initial) {
 }
 
 // Which app to run: the stored choice, unless the encoder is held at boot.
+// Returns only when a module was picked; CALIBRATE runs the wizard, which
+// reboots.
 //
 // The held-encoder check is deliberately unconditional and happens before any
 // app code runs, so a firmware that hangs in its own Begin() can still be
@@ -232,6 +259,18 @@ static forge::IApp *SelectApp() {
     const bool requested = forge::fs::BootMenuRequested();
     if (requested || digitalRead(ENCODER_SW) == LOW) {
         const int chosen = RunBootMenu(stored);
+
+        if (chosen == kCalibrateIndex) {
+            // Come back to this screen afterwards rather than dropping into a
+            // module: calibrating is rarely the last thing you meant to do, and
+            // RunCalibration() reboots as soon as it has written /cal.bin.
+            // Keep `stored` as the pre-selection so the list opens where it was.
+            forge::fs::SaveBootApp(stored, /*showMenu=*/true);
+            RunCalibration(); // saves and reboots
+            for (;;) { /* not reached */
+            }
+        }
+
         // Always rewrite, even when the choice is unchanged: it is what clears
         // the showMenu flag, and leaving it set would trap the module in the
         // menu on every boot.

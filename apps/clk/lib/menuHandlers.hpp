@@ -57,11 +57,11 @@
 //
 // RENDERERS: GENERIC vs CUSTOM
 // ──────────────────────────────
-// Groups 1, 2, 3, 6, 7, 11 use the GENERIC renderer (MD_RenderGroup in
-// menuDisplay.hpp) — it iterates items by group and draws them using their
+// Groups 1, 3, 6, 7, 8, 11, 12, 15, 16 use the GENERIC renderer (MD_RenderGroup
+// in menuDisplay.hpp) — it iterates items by group and draws them using their
 // rowStyle.  Adding items to these groups requires NO changes to rendering.
 //
-// Groups 0, 4, 5, 8, 9, 10, 12 have CUSTOM renderers in menuRender.hpp
+// Groups 0, 2, 4, 5, 9, 10, 13, 14 have CUSTOM renderers in menuRender.hpp
 // because they need special layouts (pattern grids, column headers, shared
 // rows, full-width text, etc).  If you add items to these groups or change
 // item numbers within them, also update the corresponding renderer block.
@@ -782,7 +782,7 @@ static String getQtzOct() {
     return _qtzOctBuf;
 }
 
-// ── Group 13: Settings / save-load ───────────────────────────
+// ── Group 16: Presets ────────────────────────────────────────
 static char _slotBuf[4];
 static String getSaveSlot() {
     snprintf(_slotBuf, sizeof(_slotBuf), "%d", saveSlot);
@@ -809,6 +809,32 @@ static String getLoopBeats() { return outputs[loopOutputSelect].GetLoopBeatsDesc
 static String getLoopWake() { return outputs[loopOutputSelect].GetLoopWakeDescription(); }
 static String getLoopNap() { return outputs[loopOutputSelect].GetLoopNapDescription(); }
 static String getLoopShift() { return outputs[loopOutputSelect].GetLoopShiftDescription(); }
+
+// ── Group 12: Settings ───────────────────────────────────────
+// Tap tempo carries the BPM it is tapping against, so the row is worth a value
+// column rather than being a bare ROW_ACTION — it used to get one from a
+// hand-written renderer, which is now gone.
+static char _tapBpmBuf[12];
+static String getTapBpm() {
+    snprintf(_tapBpmBuf, sizeof(_tapBpmBuf), "%u BPM", (unsigned)BPM);
+    return _tapBpmBuf;
+}
+
+// Hand the module back to the shell's SELECT MODULE screen — which is also the
+// only way into the calibration wizard, since that has to run with no app
+// started. The shell finishes the tick, calls End() so anything owed to storage
+// is flushed, and reboots into the selector.
+//
+// The hold-the-encoder gesture does the same thing; this is the discoverable
+// way in. Rack has no shell and nothing to switch to, so the port says so
+// rather than pretending.
+static void actBootMenu() {
+#ifdef FORGE_UNIFIED
+    ::forge::RequestAppMenu();
+#else
+    ShowTemporaryMessage("N/A");
+#endif
+}
 
 static constexpr unsigned long TIMEOUT_OPTIONS[] = {0, 2000, 5000, 10000, 20000};
 static constexpr const char *TIMEOUT_LABELS[] = {"Off", "2s", "5s", "10s", "20s"};
@@ -947,13 +973,16 @@ const MenuItem MENU_ITEMS[] = {
     {"SCALE:", getQtzScale, nullptr, 80, 0, 11, ROW_SINGLE, MENU_EDIT, setQtzScale, nullptr},        // 83
     {"OCT TRANSPOSE:", getQtzOct, nullptr, 96, 0, 11, ROW_SINGLE, MENU_EDIT, setQtzOctave, nullptr}, // 84
 
-    // ── Group 12: Settings / save-load ───────────────────── items 85–90
-    {"TAP TEMPO", nullptr, nullptr, 0, 0, 12, ROW_ACTION, MENU_ACTION, nullptr, SetTapTempo},            // 85
-    {"SCR TIMEOUT:", getTimeout, nullptr, 64, 0, 12, ROW_SINGLE, MENU_EDIT, setMenuTimeout, nullptr},    // 86
-    {"PRESET SLOT:", getSaveSlot, nullptr, 64, 0, 12, ROW_SINGLE, MENU_EDIT, setSaveSlot, nullptr},      // 87
-    {"SAVE", nullptr, nullptr, 0, 0, 12, ROW_ACTION, MENU_ACTION, nullptr, actionSave},                  // 88
-    {"LOAD", nullptr, nullptr, 0, 0, 12, ROW_ACTION, MENU_ACTION, nullptr, actionLoad},                  // 89
-    {"LOAD DEFAULTS", nullptr, nullptr, 0, 0, 12, ROW_ACTION, MENU_ACTION, nullptr, actionLoadDefaults}, // 90
+    // ── Group 12: Settings ────────────────────────────────── items 85–87
+    {"TAP TEMPO:", getTapBpm, nullptr, 76, 0, 12, ROW_SINGLE, MENU_ACTION, nullptr, SetTapTempo},     // 85
+    {"SCR TIMEOUT:", getTimeout, nullptr, 88, 0, 12, ROW_SINGLE, MENU_EDIT, setMenuTimeout, nullptr}, // 86
+    {"BOOT MENU", nullptr, nullptr, 0, 0, 12, ROW_ACTION, MENU_ACTION, nullptr, actBootMenu},         // 87
+
+    // ── Group 16: Presets ─────────────────────────────────── items 88–91
+    {"PRESET SLOT:", getSaveSlot, nullptr, 88, 0, 16, ROW_SINGLE, MENU_EDIT, setSaveSlot, nullptr},      // 88
+    {"SAVE", nullptr, nullptr, 0, 0, 16, ROW_ACTION, MENU_ACTION, nullptr, actionSave},                  // 89
+    {"LOAD", nullptr, nullptr, 0, 0, 16, ROW_ACTION, MENU_ACTION, nullptr, actionLoad},                  // 90
+    {"LOAD DEFAULTS", nullptr, nullptr, 0, 0, 16, ROW_ACTION, MENU_ACTION, nullptr, actionLoadDefaults}, // 91
 };
 
 const int MENU_ITEM_COUNT = (int)(sizeof(MENU_ITEMS) / sizeof(MENU_ITEMS[0]));

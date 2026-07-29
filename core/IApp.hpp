@@ -42,8 +42,13 @@ namespace forge {
 // say). The switch is not immediate: the shell finishes the current tick, calls
 // End() so the app can flush what it owes to storage, and reboots into the menu.
 //
-// The shell also offers this as a hold-the-encoder gesture, so an app does not
-// have to spend a menu slot on it.
+// The shell also offers this as a hold-the-encoder gesture. Apps still carry a
+// menu row for it (SETTINGS -> BOOT MENU), because the gesture is not
+// discoverable and the selector is the only way into the calibration wizard.
+//
+// Declared unconditionally, but only DEFINED by the shell — the VCV ports
+// compile the same app lib/ with no shell behind it, so their menu rows guard
+// the call with #ifdef FORGE_UNIFIED.
 void RequestAppMenu();
 
 struct IApp {

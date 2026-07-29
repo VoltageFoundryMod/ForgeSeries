@@ -75,6 +75,7 @@ The current hardware design supports input signals from 0 to 5V, and the outputs
     - [Misc Settings](#misc-settings)
       - [Tap Tempo](#tap-tempo)
       - [Main screen timeout](#main-screen-timeout)
+      - [Boot menu](#boot-menu)
     - [Save/Load Configuration](#saveload-configuration)
     - [External Clock Sync](#external-clock-sync)
   - [VCV Rack Plugin](#vcv-rack-plugin)
@@ -413,11 +414,15 @@ In addition to setting the BPM manually, the module can be set to the desired BP
 
 The module can be set to return to the main screen (the one showing the BPM and the output boxes) after a certain amount of seconds of inactivity when not editing a parameter. When a parameter is being changed (selected), the timeout doesn't apply. This can be configured in the "Screen Timeout" menu where the options are Off, 2s, 5s, 10s and 20s.
 
+#### Boot menu
+
+"BOOT MENU" hands the hardware back to the module selector, so you can run a different Forge module — or the [calibration wizard](#hardware-calibration) — without power-cycling. ClockForge flushes anything it owes to flash first, then the module reboots into the selector. Holding the encoder for two seconds does the same thing from anywhere in the menu.
+
 ### Save/Load Configuration
 
 The module has 10 memory slots (0–9) to save and load configuration. The parameters saved into slot 0 are automatically loaded on boot.
 
-1. Navigate to the PRESET SLOT parameter.
+1. Navigate to the PRESET SLOT parameter on the PRESETS page.
 2. Click the encoder to enter the desired slot selection.
 3. Click to exit the slot selection.
 4. Select SAVE and click the encoder to save the current slot configuration.
@@ -466,7 +471,9 @@ Calibration data is stored in a dedicated area of non-volatile memory **separate
 
 The wizard has 5 steps: one output trim followed by four CV input captures (1 V and 3 V on each of the two inputs).
 
-1. Power on the module **from your Eurorack supply** while **holding the encoder button** pressed. The display shows the calibration wizard; release the button at the welcome screen and click the encoder to start.
+1. Power on the module **from your Eurorack supply** while **holding the encoder button** pressed, which opens the module selector. Release the button, scroll to **CALIBRATE** at the bottom of the list and click. (From a running module you can get to the same screen with **SETTINGS → BOOT MENU**, or by holding the encoder for two seconds.) Click the encoder at the welcome screen to start.
+
+   Calibration belongs to the board, not to any one module: one run covers every module in the firmware, and the wizard reboots back to the selector when it is done.
 
    > ⚠️ Calibrate on Eurorack power, **not** the MCU's USB port — USB cannot drive the outputs to full scale, so the trim would be wrong. **Never connect Eurorack power and USB at the same time, as this could damage the module.**
 

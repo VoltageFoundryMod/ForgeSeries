@@ -196,6 +196,7 @@ static const char *const groupTitles[] = {
     "B GATE",    //  9
     "CV IN",     // 10
     "SETTINGS",  // 11
+    "PRESETS",   // 12
 };
 
 // ── Live parameter strip ──────────────────────────────────────

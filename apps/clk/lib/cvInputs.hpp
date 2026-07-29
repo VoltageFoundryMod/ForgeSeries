@@ -12,11 +12,11 @@
 #include <Arduino.h>
 
 #include "boardIO.hpp"
+#include "boardPinouts.hpp"
 #include "calibrationData.hpp" // CalibrationData
-#include "cvInput.hpp"         // shared acquisition + range adapters
 #include "clockEngine.hpp"
+#include "cvInput.hpp" // shared acquisition + range adapters
 #include "outputs.hpp"
-#include "jacks.hpp"
 #include "utils.hpp"
 
 // ── CV modulation target enum

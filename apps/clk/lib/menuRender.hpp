@@ -174,10 +174,11 @@ void HandleDisplay() {
             "ENVELOPE SETTINGS", // 9
             "CV INPUT TARGETS",  // 10
             "QUANTIZE SETTINGS", // 11
-            "",                  // 12 (settings — rendered below)
+            "SETTINGS",          // 12 (tap tempo, timeout, boot menu)
             "OUTPUT SETTINGS",   // 13 (level/offset - all 4)
             "CROSS OPS",         // 14 (cross operations - all 4)
             "LOOPS",             // 15 (loop reset + nap/wake, per-output)
+            "PRESETS",           // 16 (slot, save, load, defaults)
         };
 
         // ── Group 4: Euclidean — custom overlay (pattern grid) ─────────────
@@ -464,58 +465,10 @@ void HandleDisplay() {
             return;
         }
 
-        // ── Group 12: Settings — tap BPM + preset + save/load ──────────────
-        if (grp == 12) {
-            display.setTextSize(1);
-            int yPosition = 9;
-            // Tap tempo row (with BPM in parentheses)
-            display.setCursor(MD_LABEL_X, yPosition);
-            display.print("TAP TEMPO");
-            display.print(" (" + String(BPM) + " BPM)");
-            if (menuItem == 85) {
-                display.drawTriangle(MD_CURSOR_X, yPosition - 1, MD_CURSOR_X, yPosition + 7, MD_CURSOR_X + 4, yPosition + 3, 1);
-            }
-            yPosition += MD_ROW_H; // gap
-            // Screen timeout
-            display.setCursor(MD_LABEL_X, yPosition);
-            display.print("SCR TIMEOUT: ");
-            display.print(getTimeout());
-            if (menuItem == 86 && menuMode == 0) {
-                display.drawTriangle(MD_CURSOR_X, yPosition - 1, MD_CURSOR_X, yPosition + 7, MD_CURSOR_X + 4, yPosition + 3, 1);
-            } else if (menuMode == 86) {
-                display.fillTriangle(MD_CURSOR_X, yPosition - 1, MD_CURSOR_X, yPosition + 7, MD_CURSOR_X + 4, yPosition + 3, 1);
-            }
-            yPosition += MD_ROW_H;
-            // Preset slot
-            display.setCursor(MD_LABEL_X, yPosition);
-            display.print("PRESET SLOT: ");
-            display.print(saveSlot);
-            if (menuItem == 87 && menuMode == 0) {
-                display.drawTriangle(MD_CURSOR_X, yPosition - 1, MD_CURSOR_X, yPosition + 7, MD_CURSOR_X + 4, yPosition + 3, 1);
-            } else if (menuMode == 87) {
-                display.fillTriangle(MD_CURSOR_X, yPosition - 1, MD_CURSOR_X, yPosition + 7, MD_CURSOR_X + 4, yPosition + 3, 1);
-            }
-            yPosition += MD_ROW_H;
-            // Save
-            display.setCursor(MD_LABEL_X, yPosition);
-            display.print("SAVE");
-            if (menuItem == 88)
-                display.drawTriangle(MD_CURSOR_X, yPosition - 1, MD_CURSOR_X, yPosition + 7, MD_CURSOR_X + 4, yPosition + 3, 1);
-            yPosition += MD_ROW_H;
-            // Load
-            display.setCursor(MD_LABEL_X, yPosition);
-            display.print("LOAD");
-            if (menuItem == 89)
-                display.drawTriangle(MD_CURSOR_X, yPosition - 1, MD_CURSOR_X, yPosition + 7, MD_CURSOR_X + 4, yPosition + 3, 1);
-            yPosition += MD_ROW_H;
-            // Load defaults
-            display.setCursor(MD_LABEL_X, yPosition);
-            display.print("LOAD DEFAULTS");
-            if (menuItem == 90)
-                display.drawTriangle(MD_CURSOR_X, yPosition - 1, MD_CURSOR_X, yPosition + 7, MD_CURSOR_X + 4, yPosition + 3, 1);
-            RedrawDisplay();
-            return;
-        }
+        // Groups 12 (SETTINGS) and 16 (PRESETS) are plain lists and fall through
+        // to the generic renderer below. They used to share one hand-written
+        // page keyed on item numbers 85–90, which is what made splitting them
+        // worth doing: the split is now two table entries and a title.
 
         // ── All other groups: generic single-column renderer ───────────────
         if (grp < (uint8_t)(sizeof(groupTitles) / sizeof(groupTitles[0]))) {

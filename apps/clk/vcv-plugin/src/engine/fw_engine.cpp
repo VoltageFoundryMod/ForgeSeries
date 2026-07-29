@@ -36,8 +36,8 @@
 namespace {
 
 #include "../shim/Arduino.h"
-#include "../shim/Wire.h"
 #include "../shim/EEPROM.h"
+#include "../shim/Wire.h"
 
 // ── Shim symbol definitions ──────────────────────────────────────────────────
 HostBridge *g_host = nullptr;
@@ -77,6 +77,7 @@ void attachInterrupt(int, void (*isr)(), int) { _clkIsr = isr; }
 #include "shellObjects.hpp"
 
 #include "boardIO.hpp"
+#include "boardPinouts.hpp"
 #include "clockEngine.hpp"
 #include "cvInputs.hpp"
 #include "displayManager.hpp"
@@ -86,7 +87,6 @@ void attachInterrupt(int, void (*isr)(), int) { _clkIsr = isr; }
 #include "menuRender.hpp"
 #include "metrics.hpp"
 #include "outputs.hpp"
-#include "jacks.hpp"
 #include "presetManager.hpp"
 #include "splash.hpp"
 #include "storage.hpp"
@@ -133,8 +133,6 @@ void RedrawDisplay() {
     display.display(); // pack into HostBridge framebuffer
 }
 
-
-
 // Non-blocking: stash the message + expiry; the renderer draws it as an overlay.
 void ShowTemporaryMessage(const char *msg, uint32_t durationMs) {
     strncpy(_tempMsg, msg, sizeof(_tempMsg) - 1);
@@ -152,7 +150,7 @@ void RunCalibration() {
     ShowTemporaryMessage("N/A", 1200);
 }
 
-} // namespace — end of the private firmware translation unit
+} // namespace
 
 // ── Touch points used by the engine entry layer (below) ───────────────────────
 #include "fw_engine.hpp"
@@ -190,13 +188,13 @@ struct EngineState {
     // Exchange this snapshot with the live firmware globals (symmetric).
     void swapWithGlobals() {
         using std::swap;
-#define CF_SCALAR(T, n)          \
-    {                            \
-        T _t = (T)::n;           \
-        ::n = this->n;           \
-        this->n = _t;            \
+#define CF_SCALAR(T, n) \
+    {                   \
+        T _t = (T)::n;  \
+        ::n = this->n;  \
+        this->n = _t;   \
     }
-#define CF_ARRAY(T, n, N)             \
+#define CF_ARRAY(T, n, N)              \
     for (int _i = 0; _i < (N); ++_i) { \
         T _t = (T)::n[_i];             \
         ::n[_i] = this->n[_i];         \
@@ -217,8 +215,9 @@ struct EngineState {
     // which a default-constructed EngineState would not have.
     void copyFromGlobals() {
 #define CF_SCALAR(T, n) this->n = (T)::n;
-#define CF_ARRAY(T, n, N) \
-    for (int _i = 0; _i < (N); ++_i) this->n[_i] = (T)::n[_i];
+#define CF_ARRAY(T, n, N)            \
+    for (int _i = 0; _i < (N); ++_i) \
+        this->n[_i] = (T)::n[_i];
 #define CF_OBJECT(T, n) this->n = ::n;
 #include "engine_state.def"
 #undef CF_SCALAR
@@ -268,7 +267,8 @@ static uint16_t voltsToAdc(float v) {
 // here mirrors main.cpp setup(); without it external-clock sync never engages.
 static void globalOneTimeInit() {
     static bool done = false;
-    if (done) return;
+    if (done)
+        return;
     done = true;
     attachInterrupt(digitalPinToInterrupt(CLK_IN_PIN), ClockReceived, RISING);
     display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS);
@@ -297,7 +297,8 @@ static void doEncoderClick() {
         if (menuItem >= 1 && menuItem <= MENU_ITEM_COUNT) {
             const MenuItem &mi = MENU_ITEMS[menuItem - 1];
             if (mi.type == MENU_ACTION || mi.type == MENU_TOGGLE) {
-                if (mi.action) mi.action();
+                if (mi.action)
+                    mi.action();
             } else { // MENU_EDIT
                 menuMode = menuItem;
                 if (menuItem == 61)
@@ -340,7 +341,8 @@ Engine *createEngine() {
 
 void destroyEngine(Engine *e) {
     std::lock_guard<std::mutex> lock(g_globalsMutex);
-    if (g_host == &e->host) g_host = nullptr;
+    if (g_host == &e->host)
+        g_host = nullptr;
     delete e;
 }
 
@@ -354,11 +356,15 @@ void process(Engine *e, float dt, const float cvVolts[2], bool clockGateHigh, fl
     e->host.adc[CV_1_IN_PIN] = voltsToAdc(cvVolts[0]);
     e->host.adc[CV_2_IN_PIN] = voltsToAdc(cvVolts[1]);
     e->host.gpio[CLK_IN_PIN] = clockGateHigh ? 1 : 0;
-    if (clockGateHigh && !e->lastClock && _clkIsr) _clkIsr();
+    if (clockGateHigh && !e->lastClock && _clkIsr)
+        _clkIsr();
     e->lastClock = clockGateHigh;
 
     // Apply any deferred BPM change.
-    if (bpmNeedsUpdate) { bpmNeedsUpdate = false; UpdateBPM(BPM); }
+    if (bpmNeedsUpdate) {
+        bpmNeedsUpdate = false;
+        UpdateBPM(BPM);
+    }
 
     // Advance the PPQN clock for the elapsed time (batch ticks).
     e->tickAccum += (double)dt * (double)BPM / 60.0 * (double)PPQN;
@@ -372,7 +378,8 @@ void process(Engine *e, float dt, const float cvVolts[2], bool clockGateHigh, fl
     HandleOutputs();
     HandleExternalClock();
 
-    if (displayRefresh) displayMgr.MarkDirty();
+    if (displayRefresh)
+        displayMgr.MarkDirty();
 
     for (int i = 0; i < NUM_OUTPUTS; i++)
         outVolts[i] = e->host.dac[i] / (float)MAXDAC * 5.0f;
@@ -386,8 +393,10 @@ void encoderTurn(Engine *e, int detents) {
         REQUEST_DISPLAY_REFRESH();
         if (menuMode == 0) {
             menuItem += dir;
-            if (menuItem < 1) menuItem = MENU_ITEM_COUNT;
-            else if (menuItem > MENU_ITEM_COUNT) menuItem = 1;
+            if (menuItem < 1)
+                menuItem = MENU_ITEM_COUNT;
+            else if (menuItem > MENU_ITEM_COUNT)
+                menuItem = 1;
         } else if (menuMode >= 1 && menuMode <= MENU_ITEM_COUNT) {
             if (MENU_ITEMS[menuMode - 1].setter)
                 MENU_ITEMS[menuMode - 1].setter(dir);
@@ -397,7 +406,8 @@ void encoderTurn(Engine *e, int detents) {
 
 void encoderButton(Engine *e, bool pressed) {
     EngineScope scope(e);
-    if (pressed && !e->lastButton) doEncoderClick(); // press edge
+    if (pressed && !e->lastButton)
+        doEncoderClick(); // press edge
     e->lastButton = pressed;
     e->host.gpio[ENCODER_SW] = pressed ? 0 : 1;
 }
@@ -413,11 +423,16 @@ void getFramebuffer(Engine *e, uint8_t out[1024]) {
         display.print(_tempMsg);
         display.display();
     } else {
-        if (_tempMsg[0]) { _tempMsg[0] = 0; REQUEST_DISPLAY_REFRESH(); }
-        if (displayRefresh) displayMgr.MarkDirty();
+        if (_tempMsg[0]) {
+            _tempMsg[0] = 0;
+            REQUEST_DISPLAY_REFRESH();
+        }
+        if (displayRefresh)
+            displayMgr.MarkDirty();
         HandleDisplay();
     }
-    for (int i = 0; i < 1024; i++) out[i] = e->host.fb[i];
+    for (int i = 0; i < 1024; i++)
+        out[i] = e->host.fb[i];
 }
 
 std::string serialize(Engine *e) {

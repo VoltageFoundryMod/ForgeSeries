@@ -8,9 +8,9 @@
 //   RP2040 : add_repeating_timer_us lambda → ClockPulse()
 
 #include "boardIO.hpp"
+#include "boardPinouts.hpp"
 #include "metrics.hpp"
 #include "outputs.hpp"
-#include "jacks.hpp"
 #include <Arduino.h>
 #include <hardware/timer.h>
 
