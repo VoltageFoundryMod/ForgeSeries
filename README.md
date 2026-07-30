@@ -87,6 +87,8 @@ artifacts.
 make vcv && make vcv-install   # build the bundle and install it into Rack
 ```
 
+And drop the `.vcvrack` file into plugins in the VCVRack user folder. MacOS is `~/Library/Application Support/Rack2/`, Windows is `C:\Users\<username>\AppData\Local\Rack2\`, and Linux is `~/.local/share/Rack2/`.
+
 The Rack build can accept 0–5 V (like the hardware), ±5 V or 0–10 V inputs, so
 it is more forgiving than the board while behaving identically inside that
 range.
