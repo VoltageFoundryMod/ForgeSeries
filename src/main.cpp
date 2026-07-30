@@ -31,11 +31,9 @@
 #include "splash.hpp"
 // calibration.hpp is included further down: it needs `display` and
 // SaveCalibration(), both defined below.
-
-#include "clk_app.hpp"
-#include "dq_app.hpp"
-#include "gen_app.hpp"
-#include "scp_app.hpp"
+//
+// The app factory headers sit with the registry further down, so that adding a
+// module touches one contiguous block rather than two ends of the file.
 
 // ── Board-owned singletons ──────────────────────────────────────────────────
 // One display, one encoder, one calibration for the whole module, rather than a
@@ -51,12 +49,39 @@ Encoder encoder(ENC_PIN_1, ENC_PIN_2);
 CalibrationData cal = {};
 
 // ── The app registry ────────────────────────────────────────────────────────
-// Adding an app is one include, one entry, and one -I line in platformio.ini.
+// Adding an app is one include, one entry, one -I line in platformio.ini — and,
+// if it should also ship on its own, one env there. Nothing below is per-app
+// beyond those two lines.
+//
+// The includes are unconditional even in a single-module image, because these
+// headers only DECLARE a factory. Declaring forge::DqApp() in a build that does
+// not compile dq_app.cpp costs nothing: an unused declaration is not a link
+// reference. So only the array has to know which modules are actually here.
+//
+// A single-module build (env:xiao_clk and friends) names its factory in
+// FORGE_ONLY_APP and gets an array of one. The shell is otherwise identical: it
+// still boots straight into the module, still honours SETTINGS ▸ BOOT MENU, and
+// still reaches the calibration wizard — the selector simply lists one module
+// and CALIBRATE. See kMenuTitle for the one place kAppCount == 1 is visible.
+#include "clk_app.hpp"
+#include "dq_app.hpp"
+#include "gen_app.hpp"
+#include "scp_app.hpp"
+
+// The order here is the boot menu's order, and the index persisted in /boot
+// (fsStore's SaveBootApp/LoadBootApp) — which is why the array is written out
+// rather than each app TU registering itself at static-init time. Static-init
+// order across translation units is unspecified, so self-registration would let
+// link order decide what index 2 means.
 static forge::IApp *const kApps[] = {
+#ifdef FORGE_ONLY_APP
+    forge::FORGE_ONLY_APP(), // single-module image: this one and no other
+#else
     forge::ClkApp(),
     forge::DqApp(),
     forge::GenApp(),
     forge::ScpApp(),
+#endif
 };
 static constexpr int kAppCount = (int)(sizeof(kApps) / sizeof(kApps[0]));
 
@@ -189,21 +214,33 @@ static void PollEncoder(forge::IApp *app) {
 static constexpr int kCalibrateIndex = kAppCount;
 static constexpr int kMenuEntries = kAppCount + 1;
 
+// A single-module image has nothing to select between — the list is that one
+// module and CALIBRATE — so the header names what the screen is instead of
+// promising a choice.
+static constexpr const char *kMenuTitle =
+    (kAppCount > 1) ? "SELECT MODULE" : "SETUP";
+
+// Shown by SwitchToMenu() on the way out of a running app, for the same reason.
+static constexpr const char *kMenuLeaveMsg =
+    (kAppCount > 1) ? "SELECT MODULE..." : "SETUP...";
+
 static void DrawMenu(int sel, int top) {
     display.clearDisplay();
     display.setTextColor(WHITE);
     display.setTextSize(1);
     display.setCursor(2, 2);
-    display.print("SELECT MODULE");
+    display.print(kMenuTitle);
 
     // The image version, right-aligned on the header row: one number for the
     // whole UF2, above the per-module versions in the list. 6px per character at
-    // text size 1, and "SELECT MODULE" is 13 of them from x=2, so it ends at 80.
+    // text size 1, so the title ends at 2 + len*6 — 80 for "SELECT MODULE" —
+    // and the version may not start before that.
     {
+        const int floorX = 2 + (int)strlen(kMenuTitle) * 6;
         const int len = (int)strlen(forge::kFirmwareVersion);
         int x = SCREEN_WIDTH - len * 6 - 2;
-        if (x < 80) {
-            x = 80; // a long tag gives up alignment rather than the header
+        if (x < floorX) {
+            x = floorX; // a long tag gives up alignment rather than the header
         }
         // An over-long tag clips at the right edge rather than wrapping down
         // into the first list row — setup() turns wrap off firmware-wide.
@@ -494,8 +531,7 @@ static void SwitchToMenu() {
     display.clearDisplay();
     display.setTextSize(1);
     display.setTextColor(WHITE);
-    display.setCursor(18, 28);
-    display.print("SELECT MODULE...");
+    DrawCentered(kMenuLeaveMsg, (int)strlen(kMenuLeaveMsg), 28, 6);
     display.display();
     delay(400); // let the message register before the screen blanks
 

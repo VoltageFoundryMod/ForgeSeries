@@ -1,10 +1,11 @@
 # ForgeSeries build wrapper.
 #
-# One firmware is built for the board: the unified image at the repository root
-# (platformio.ini + src/), the shell plus every module. apps/<app>/ are now
-# native-test projects only — their hardware environments are gone, and their
-# src/main.cpp is kept for reference until the unified image has been verified
-# on hardware for every module.
+# All firmware comes from the one PlatformIO project at the repository root
+# (platformio.ini + src/): the shell plus the modules. `make` builds the unified
+# image with every module in it; `make modules` builds the four single-module
+# images from the same sources — see the "Single-module firmwares" section
+# below. apps/<app>/ hold module sources and native tests, and have no
+# PlatformIO project of their own.
 
 # ── Windows: find the toolchain ourselves ────────────────────────────────────
 # Rack's plugin.mk is POSIX, and the usual Windows trap is Chocolatey's make
@@ -149,9 +150,13 @@ plugins: $(addprefix plugin-,$(APPS))
 $(addprefix plugin-,$(APPS)): plugin-%:
 	$(MAKE) -C apps/$*/vcv-plugin $(if $(RACK_DIR),RACK_DIR=$(RACK_DIR),)
 
-# Everything: firmware for all apps, then every Rack plugin.
+# Everything: every firmware image, then every Rack plugin.
+#
+# `modules` is in here because the single-module images are the one target that
+# a change to src/main.cpp's registry can break while the unified image still
+# builds — which is exactly the change made when an app is added.
 .PHONY: everything
-everything: all plugins
+everything: all modules plugins
 
 # NOTE: Rack's plugin.mk shells out to `jq` to read SLUG from plugin.json, and
 # the compiler must be mingw64 g++ (not the arm-none-eabi one PlatformIO uses).
@@ -214,3 +219,24 @@ clean:
 	$(PIO) run -e $(ENV) -t clean
 upload-monitor:
 	$(PIO) run -e $(ENV) -t upload -t monitor
+
+# ── Single-module firmwares ──────────────────────────────────────────────────
+# The same shell with one module linked in — env:xiao_<app>, see platformio.ini.
+# For hardware that is only ever going to be one module: it boots straight into
+# it, and its boot menu lists that module and CALIBRATE.
+#
+# Named fw-<app> rather than <app>: the bare app names are already taken above,
+# by the targets that build and install that module's standalone Rack plugin.
+#
+#   make modules          all four images
+#   make fw-clk           just ClockForge
+#   make fw-upload-clk    build + flash it
+.PHONY: modules $(addprefix fw-,$(APPS)) $(addprefix fw-upload-,$(APPS))
+
+modules: $(addprefix fw-,$(APPS))
+
+$(addprefix fw-,$(APPS)): fw-%:
+	$(PIO) run -e xiao_$*
+
+$(addprefix fw-upload-,$(APPS)): fw-upload-%:
+	$(PIO) run -e xiao_$* -t upload

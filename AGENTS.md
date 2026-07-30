@@ -37,9 +37,25 @@ apps/<app>/
   test/test_native/   googletest + ArduinoFake suites
 ```
 
-There is **no per-module `platformio.ini` and no per-module firmware** — the root
-project builds the one image, and owns the native test environments
-(`test_dir = apps`).
+There is **no per-module `platformio.ini`** — the root project builds every
+firmware and owns the native test environments (`test_dir = apps`). It has two
+flavours of hardware image, from the same shell and the same module sources:
+
+- `env:xiao_rp2040` — the unified image, every module, selector picks.
+- `env:xiao_clk` / `xiao_dq` / `xiao_gen` / `xiao_scp` — one module each.
+
+The single-module envs differ in exactly two options: `-DFORGE_ONLY_APP=<Factory>`
+and a `build_src_filter` naming one app TU. **`FORGE_ONLY_APP` is read in exactly
+one place — the `kApps[]` initialiser in [src/main.cpp](src/main.cpp)** — and it
+must stay that way. It names a factory rather than a module so that the one
+`#ifdef` covers every module: adding a module is still one include and one array
+entry, with no per-module conditional anywhere.
+
+`kAppCount == 1` is what makes the selector show one module plus **CALIBRATE**;
+everything else falls out of that. In particular `FORGE_UNIFIED` stays defined in
+these builds — it means "there is a shell behind this app", not "all four
+modules" — and the four `<app>_app.hpp` includes stay unconditional, since a
+declared-but-uncalled factory is not a link reference.
 
 `lib/engine.hpp` holds the module's per-iteration engine step and **both hosts
 include it**. Duplicating it instead is how GravityForge's Rack port silently
@@ -50,12 +66,14 @@ lost its LOOP▸NAP muting.
 ```sh
 make                # the unified firmware — this is what you flash
 make upload         # build + flash   (double-tap reset for the UF2 bootloader)
+make modules        # the four single-module images
+make fw-clk         # one of them  (== pio run -e xiao_clk); fw-upload-clk flashes
 make test           # native tests, every module
 make test-dq        # one module  (== pio test -e native_dq)
 make isolation      # VCV engine state-isolation tests
 make vcv            # the consolidated Rack plugin
 make plugins        # every standalone per-module plugin
-make everything     # firmware + all standalone plugins
+make everything     # every firmware image + all standalone plugins
 ```
 
 **Run `make everything` before calling a change done.** PlatformIO does not

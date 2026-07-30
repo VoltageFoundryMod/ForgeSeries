@@ -5,9 +5,9 @@ on:
     branches:
       - main
     # A v* tag runs the same checks and then publishes a release. The tag names
-    # the UF2, not any single module: the image is one indivisible artifact, so
-    # it carries its own version while each app's lib/version.hpp keeps the
-    # per-module number shown in the boot menu.
+    # the release, not any single module: it stamps every image built from this
+    # commit — unified and single-module alike — while each app's lib/version.hpp
+    # keeps the per-module number shown in the boot menu.
     tags:
       - "v*"
   pull_request:
@@ -43,7 +43,7 @@ env:
 # what CI checks and what you run locally cannot drift apart.
 jobs:
   firmware:
-    name: Firmware (unit tests + unified image)
+    name: Firmware (unit tests + images)
     runs-on: ubuntu-latest
 
     steps:
@@ -80,9 +80,8 @@ jobs:
       - name: Unit tests
         run: make test
 
-      # The single image that ships: the root PlatformIO project hosts the shell
-      # plus every app. The per-app hardware environments are gone, so this is
-      # the only firmware build there is.
+      # The image most people flash: the root PlatformIO project hosts the shell
+      # plus every app, and the boot menu picks between them.
       - name: Build unified firmware
         # On a v* tag the image is stamped with it, so the boot menu tells you
         # which release is on the board. Every other build — main, a PR, a local
@@ -102,6 +101,39 @@ jobs:
         with:
           name: forgeseries-firmware-uf2
           path: .pio/build/xiao_rp2040/firmware.uf2
+          if-no-files-found: error
+
+      # The same shell and the same sources with one module linked in, for
+      # hardware that is only ever going to be that module. Built here rather
+      # than in a job of their own so they share this job's PlatformIO cache and
+      # toolchain install, which dominate the runtime — the four images together
+      # add well under a minute of actual compiling.
+      - name: Build single-module firmwares
+        env:
+          FORGE_EXTRA_BUILD_FLAGS: >-
+            ${{ startsWith(github.ref, 'refs/tags/v')
+            && format('-DFORGE_FW_VERSION={0}', github.ref_name)
+            || '' }}
+        run: make modules
+
+      # PlatformIO names every image firmware.uf2 and tells them apart by build
+      # directory, which does not survive being collected into one folder. Rename
+      # to the module names the boot menu shows, since that is what someone
+      # picking a file to flash is looking for.
+      - name: Collect single-module firmwares
+        run: |
+          mkdir -p _modules
+          cp .pio/build/xiao_clk/firmware.uf2 _modules/ClockForge.uf2
+          cp .pio/build/xiao_dq/firmware.uf2  _modules/NoteForge.uf2
+          cp .pio/build/xiao_gen/firmware.uf2 _modules/GravityForge.uf2
+          cp .pio/build/xiao_scp/firmware.uf2 _modules/ForgeView.uf2
+          ls -l _modules
+
+      - name: Upload single-module firmwares
+        uses: actions/upload-artifact@v7
+        with:
+          name: forgeseries-module-uf2
+          path: _modules/*.uf2
           if-no-files-found: error
 
   vcv-isolation:
@@ -284,13 +316,33 @@ jobs:
 
       - name: Collect release assets
         run: |
-          mkdir -p dist
+          mkdir -p dist stage
 
-          # A bare firmware.uf2 is unidentifiable once it is in a downloads
-          # folder beside older ones, and the RP2040 bootloader takes any
-          # filename.
+          # Two firmware downloads, so the choice is made before the file is on
+          # disk rather than by reading four filenames afterwards:
+          #
+          #   -unified.zip   every module in one image, boot menu picks
+          #   -modules.zip   one image per module, no choice to make
+          #
+          # Zipped rather than attached bare because a .uf2 is unidentifiable
+          # once it is in a downloads folder beside older ones — the RP2040
+          # bootloader takes any filename, so nothing renames them back — and
+          # because the four single-module images are one decision, not four.
+          # The version goes in the filenames inside the zip too, since that is
+          # what survives extraction.
           mv _artifacts/forgeseries-firmware-uf2/firmware.uf2 \
-             "dist/ForgeSeries-${GITHUB_REF_NAME}.uf2"
+             "stage/ForgeSeries-${GITHUB_REF_NAME}.uf2"
+          (cd stage && zip -j "../dist/ForgeSeries-${GITHUB_REF_NAME}-unified.zip" \
+             "ForgeSeries-${GITHUB_REF_NAME}.uf2")
+
+          # <Module>.uf2 was named upstream by the firmware job; the tag is added
+          # here, where it is known without being threaded through an artifact.
+          for uf2 in _artifacts/forgeseries-module-uf2/*.uf2; do
+            name="$(basename "$uf2" .uf2)"
+            mv "$uf2" "stage/${name}-${GITHUB_REF_NAME}.uf2"
+          done
+          (cd stage && zip -j "../dist/ForgeSeries-${GITHUB_REF_NAME}-modules.zip" \
+             ClockForge-*.uf2 NoteForge-*.uf2 GravityForge-*.uf2 ForgeView-*.uf2)
 
           # The .vcvplugin names already carry slug, plugin version, os and cpu,
           # so they are flattened in as they are.

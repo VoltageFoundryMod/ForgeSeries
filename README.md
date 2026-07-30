@@ -60,18 +60,34 @@ calibration and wiring detail. Browsable versions with images live on
 
 ### On hardware
 
-1. Download `CURRENT.UF2` from the
-   [Releases](https://github.com/VoltageFoundryMod/ForgeSeries/releases) page.
+1. Download `ForgeSeries-<version>-unified.zip` from the
+   [Releases](https://github.com/VoltageFoundryMod/ForgeSeries/releases) page and
+   unpack the `.uf2` inside it.
 2. Hold the small **BOOT (B)** button on the XIAO while connecting USB-C. A
    drive named `RPI-RP2` appears. (The XIAO is socketed, so this can be done
    with it removed from the module.)
-3. Copy `CURRENT.UF2` onto that drive. The module reboots into the new firmware.
+3. Copy the `.uf2` onto that drive. The module reboots into the new firmware.
 4. **Hold the encoder at power-on** to choose a module. It boots straight into
    that one afterwards; to get back to the selector, either hold the encoder for
    two seconds while running or pick **BOOT MENU** on the module's SETTINGS page.
 5. Run the two-point **calibration wizard** once per board: pick **CALIBRATE**,
    the last row of the module selector. Calibration describes the board, so one
    run serves every module and it survives firmware updates.
+
+#### Single-module images
+
+`ForgeSeries-<version>-modules.zip` on the same release holds one image per
+module — `ClockForge`, `NoteForge`, `GravityForge`, `ForgeView` — for a build of
+the hardware that is only ever going to be one of them. Flashing works exactly
+as above, and everything else in this section still applies: the module boots
+straight in, and holding the encoder at power-on (or **BOOT MENU** on its
+SETTINGS page) opens the same screen with that one module and **CALIBRATE** on
+it, which is how you reach the wizard.
+
+They are the same shell and the same module sources as the unified image, just
+linked with one module instead of four, so a given release behaves identically
+either way. Presets and calibration live in the same files, so you can move
+between the two images without losing either.
 
 > **Never connect Eurorack power and USB-C at the same time.** The module takes
 > either, not both.
@@ -154,13 +170,16 @@ Prerequisites: [PlatformIO](https://platformio.org/) for the firmware, and the
 make                # the firmware (unified image, every module)
 make upload         # build + flash
 make upload-monitor # ...and open the serial monitor
+make modules        # the four single-module images
+make fw-clk         # one of them  (== pio run -e xiao_clk)
+make fw-upload-clk  # ...and flash it
 make test           # native unit tests for every module
 make vcv            # the consolidated Rack plugin
 make vcv-install    # ...and install it into Rack's user directory
 make vcv-dist       # package it as a .vcvplugin
 make plugins        # every standalone per-module Rack plugin
 make clk            # one module's standalone plugin, installed into Rack
-make everything     # firmware + all standalone plugins
+make everything     # every firmware image + all standalone plugins
 ```
 
 **Run `make everything` before committing.** It is the only thing that builds
@@ -313,6 +332,31 @@ writes `/cal.bin` and reboots back to the selector.
 The held-encoder check happens before any module code runs, so a module that
 hangs in its own `Begin()` can still be escaped by holding the encoder and
 power-cycling.
+
+**Single-module images.** `env:xiao_clk` and its three siblings build the same
+shell with one module linked in — for hardware that is only ever going to be
+that module. `make modules`, or `make fw-clk` for one.
+
+The shell is not modified for this and neither is any module. The environment
+passes `-DFORGE_ONLY_APP=<Factory>`, and the single `#ifdef` in `kApps[]` builds
+an array of one from it. Everything above still holds with `kAppCount == 1`: the
+module boots straight in, the selector lists it and **CALIBRATE**, and
+`FORGE_UNIFIED` stays defined so **BOOT MENU** is still on the module's SETTINGS
+page. Stripping the selector out instead is what would have cost something — it
+is the only entry point to the wizard, so removing it means either an `#ifdef`
+axis through four modules' `menuHandlers.hpp` or no field calibration.
+
+Naming the factory rather than setting a per-module flag is what keeps that to
+one `#ifdef`: it covers every module, present and future, so adding one is still
+just an include and an array entry. The four `<app>_app.hpp` includes stay
+unconditional even in a single-module image, because they only _declare_ a
+factory — an unused declaration is not a link reference, so nothing is paid for
+the three that are not there.
+
+The array is written out rather than having each module TU register itself at
+static-init time, because `/boot` stores an _index_ into it and static-init order
+across translation units is unspecified — self-registration would let link order
+decide what index 2 means.
 
 **Storage** is LittleFS, not the emulated EEPROM. That sector is a single 4096
 bytes and its `begin()` clamps silently — which is how ClockForge shipped with
