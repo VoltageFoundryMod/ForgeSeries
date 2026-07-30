@@ -60,9 +60,7 @@ calibration and wiring detail. Browsable versions with images live on
 
 ### On hardware
 
-1. Download `ForgeSeries-<version>-unified.zip` from the
-   [Releases](https://github.com/VoltageFoundryMod/ForgeSeries/releases) page and
-   unpack the `.uf2` inside it.
+1. Download `ForgeSeries-<version>-unified.zip` from the [latest release](https://github.com/VoltageFoundryMod/ForgeSeries/releases) or a [dev build](https://github.com/VoltageFoundryMod/ForgeSeries/actions) from CI run's artifacts (enter one of the workflow runs and the artifacts are at the bottom) and unpack the `.uf2` inside it.
 2. Hold the small **BOOT (B)** button on the XIAO while connecting USB-C. A
    drive named `RPI-RP2` appears. (The XIAO is socketed, so this can be done
    with it removed from the module.)
@@ -70,8 +68,8 @@ calibration and wiring detail. Browsable versions with images live on
 4. **Hold the encoder at power-on** to choose a module. It boots straight into
    that one afterwards; to get back to the selector, either hold the encoder for
    two seconds while running or pick **BOOT MENU** on the module's SETTINGS page.
-5. Run the two-point **calibration wizard** once per board: pick **CALIBRATE**,
-   the last row of the module selector. Calibration describes the board, so one
+5. Run the two-point **calibration wizard** once: pick **CALIBRATE**,
+   the last row of the boot menu. Calibration works for the board, so one
    run serves every module and it survives firmware updates.
 
 #### Single-module images
@@ -96,8 +94,7 @@ between the two images without losing either.
 
 The plugin bundles all four modules under the **Voltage Foundry Modular** brand.
 Until it lands in the VCV library, build it from source — see
-[Building](#building) — or take the packaged `.vcvplugin` from a CI run's
-artifacts.
+[Building](#building) — or take the packaged `.vcvplugin` from the [latest release](https://github.com/VoltageFoundryMod/ForgeSeries/releases) or a [dev build](https://github.com/VoltageFoundryMod/ForgeSeries/actions) from CI run's artifacts (enter one of the workflow runs and the artifacts are at the bottom).
 
 ```sh
 make vcv && make vcv-install   # build the bundle and install it into Rack
