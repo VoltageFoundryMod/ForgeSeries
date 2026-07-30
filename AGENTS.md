@@ -1,0 +1,208 @@
+# ForgeSeries — AI Coding Agent Instructions
+
+Eurorack module firmware for the **Seeed XIAO RP2040**, four modules in one
+image, each also shipping as a VCV Rack plugin that runs the same code.
+
+**[README.md](README.md) is the architecture document and it is current.** Its
+"How it fits together" half covers `core/`, the unified firmware, the CV domain,
+include order and image size in more depth than this file does. Read it before
+making structural changes. This file is the short version plus the rules that
+only matter when editing.
+
+Per-module instructions live in `apps/<app>/AGENTS.md`.
+
+## Layout
+
+```text
+platformio.ini  the firmware project — the repo root IS the PlatformIO project
+src/main.cpp    the shell: owns the board, runs one app at a time
+core/           the board, and everything every module shares
+apps/clk/       ClockForge    — clock generator / modulation source
+apps/dq/        NoteForge     — dual quantizer
+apps/gen/       GravityForge  — physics-based generative sequencer
+apps/scp/       ForgeView     — oscilloscope / spectrum analyser
+vcv/            the consolidated Rack plugin (all modules, one binary)
+vcvlib/         shared Rack layer (Arduino shim, ForgeModule, IEngine, widgets)
+tools/env.ps1   optional PATH helper for Windows
+```
+
+Each module:
+
+```text
+apps/<app>/
+  src/<app>_app.cpp   the module as the shell sees it (forge::IApp)
+  src/<app>_app.hpp   its factory — the only thing the shell includes
+  lib/                the module's own headers, including engine.hpp
+  vcv-plugin/         the same module as a standalone Rack plugin
+  test/test_native/   googletest + ArduinoFake suites
+```
+
+There is **no per-module `platformio.ini` and no per-module firmware** — the root
+project builds the one image, and owns the native test environments
+(`test_dir = apps`).
+
+`lib/engine.hpp` holds the module's per-iteration engine step and **both hosts
+include it**. Duplicating it instead is how GravityForge's Rack port silently
+lost its LOOP▸NAP muting.
+
+## Build & test
+
+```sh
+make                # the unified firmware — this is what you flash
+make upload         # build + flash   (double-tap reset for the UF2 bootloader)
+make test           # native tests, every module
+make test-dq        # one module  (== pio test -e native_dq)
+make isolation      # VCV engine state-isolation tests
+make vcv            # the consolidated Rack plugin
+make plugins        # every standalone per-module plugin
+make everything     # firmware + all standalone plugins
+```
+
+**Run `make everything` before calling a change done.** PlatformIO does not
+compile `vcv-plugin/`, so a green firmware build says nothing about the Rack
+ports.
+
+On Windows the Makefile finds msys2 and PlatformIO itself, so plain `make` works
+from PowerShell. `. .\tools\env.ps1` only matters for running the tools by hand.
+Rack SDK is expected at `../Rack-SDK` (override with `RACK_DIR=`).
+
+## The shell ↔ app contract
+
+[core/IApp.hpp](core/IApp.hpp) is the interface and its header comment is the
+authority. In short: the shell brings up the hardware, draws the module
+selector, owns calibration, then drives one app through
+`Begin()`/`Tick0()`/`Tick1(display)` plus encoder events.
+
+- **Core 0** (`Tick0`): encoder, ADC, engine, DAC — owns **Wire1** (GPIO 0/1, MCP4728)
+- **Core 1** (`Tick1`): GFX render + flush — owns **Wire** (GPIO 6/7, SSD1306)
+- Separate I2C blocks on separate cores, so no mutex. **Never touch `Wire` from
+  Core 0.**
+- An app must not poll the encoder pins — the shell needs those events too (the
+  hold-to-return-to-menu gesture) and two readers race the detent state.
+- `forge::RequestAppMenu()` asks for the module selector. Declared always,
+  **defined only by the shell**, so app menu rows guard it with
+  `#ifdef FORGE_UNIFIED` — the Rack ports compile the same `lib/` with no shell.
+
+## Rules for `core/`
+
+- **Everything `core/` defines must be `inline`** (C++17 inline variables
+  included). The image links the shell plus one TU per module; a file-scope
+  `static` gives each TU a private copy of what should be shared hardware state.
+- **`core/` must never include an app header.** Where a shared header needs
+  something the caller owns, it *requires* the caller to have defined it — the
+  way `calibration.hpp` takes `SaveCalibration()` from the shell.
+- What stays in a module's `lib/` is genuinely its own: menu definitions, preset
+  schema, `engine.hpp`, and the DSP that makes it that module.
+
+## Rules for a module TU
+
+- Each module TU wraps itself in `namespace forge::<app>`. That is what lets
+  four firmwares sharing one binary all define `menuMode`, `switchState` and
+  `param` at file scope.
+- **Include order is load-bearing.** Standard library, third-party and `core/`
+  headers at *global* scope first; only then the module's own headers, inside the
+  namespace. Miss one — `<cstring>`, say — and libstdc++ lands inside
+  `forge::<app>`, producing hundreds of errors in `stringfwd.h` that never name
+  the file responsible. The blocks are bracketed `clang-format off/on` because an
+  include-sorting editor breaks this silently. See the header comment in
+  [apps/scp/src/scp_app.cpp](apps/scp/src/scp_app.cpp).
+- A few `core/` headers are included **late**, after the module's state exists,
+  because they close over it: `engine.hpp`, `appDisplay.hpp` (`HandleOutputs`,
+  the display flags) and `encoderMenu.hpp` (the five hooks).
+- **Tables in headers are `static`** so several test translation units can
+  include them. Keep new ones `static` too.
+
+## Storage
+
+LittleFS via [core/fsStore.hpp](core/fsStore.hpp) → [core/appStorage.hpp](core/appStorage.hpp);
+a module's `lib/storage.hpp` is a four-line shim that defines `FORGE_APP_SLUG`.
+
+```text
+/cal.bin        CalibrationData, shared by every module
+/boot           which module to start, + a return-to-menu flag
+/<app><n>.pre   one preset slot
+```
+
+**Not the emulated EEPROM** — that is a single 4096-byte sector whose `begin()`
+clamps silently, which is how ClockForge shipped with permanently broken
+calibration. The EEPROM backend survives only for the Rack port, where the shim
+is a byte buffer Rack persists into the patch.
+
+- 10 preset slots per module; slot 0 auto-loaded at boot.
+- **Changing `LoadSaveParams` invalidates saved slots** — bump `VALID_MAGIC`.
+- A parameter reachable from the menu but missing from `CollectParams()` is
+  silently not persisted, and in Rack silently lost on patch reload.
+
+## CV
+
+Readings are **normalised floats**: `1.0` is +5 V at the jack on every hardware
+revision. Current hardware is 0–5 V; a later revision moves to ±5 V, built with
+`-DFORGE_CV_BIPOLAR`. Read through the adapters in
+[core/cvInput.hpp](core/cvInput.hpp) — `CvRead`, `CvUni` (0..1), `CvBi` (-1..1)
+— never open-code a mapping, because which adapter is the identity swaps when
+the flag flips.
+
+Pitch is **not** normalised: `CvSemitones()` returns 1 V/oct semitones, and DAC
+output stays in counts, scaled at the write. Three domains, three units.
+
+## VCV Rack
+
+Two flavours, both built from the same module code:
+
+- `apps/<app>/vcv-plugin/` — one standalone plugin per module (slugs
+  `ClockForge`, `NoteForge`, `GravityForge`, `ForgeView`)
+- `vcv/` — the consolidated plugin that ships (slug `VoltageFoundryMod`)
+
+Do not leave both installed in Rack; every module then appears twice in the
+browser. `make -C vcv print-plugins-dir` prints Rack's plugin directory.
+
+`FORGEVCV` defaults to the in-repo `vcvlib/`; it no longer needs a sibling
+checkout.
+
+**Any new mutable file-scope global in `lib/` must be registered in
+`apps/<app>/vcv-plugin/src/engine/engine_state.def`,** or two Rack instances
+share it. `make isolation` is the guard, and only the Rack build catches a stale
+entry.
+
+Panels: `vcv-plugin/res/<Module>.svg` is the single source of jack labels — do
+not draw labels in the widget. Rack renders through nanosvg, which **ignores SVG
+`<text>`**, so every glyph must be converted to a path in Inkscape. That is why
+the files are ~18 MB and thousands of paths; this is normal for the series, not
+something to fix. Keep an editable `-src.svg` with real text and re-run the
+conversion rather than hand-editing the converted file.
+
+## Naming conventions
+
+- **CapitalCase** — free functions (`HandleCVInputs()`, `ApplyParams()`)
+- **_underscoreCamelCase** — private class members (`_isPulseOn`, `_pegMask`)
+- **ALL_CAPS** — constants and macros (`PPQN`, `MAXDAC`, `REQUEST_DISPLAY_REFRESH()`)
+- **Enums** — PascalCase names and values (`GateMode::GateEnvelope`)
+
+## Shared UI patterns
+
+**Display refresh** — always the macro, never set `displayRefresh` directly:
+
+```cpp
+REQUEST_DISPLAY_REFRESH(); // marks dirty + resets screen-timeout timer
+```
+
+**Menu state**: `menuItem` is a 1-based item number; `menuMode` is 0 =
+navigating, or equals the item number being edited. Each module's
+`lib/menuHandlers.hpp` opens with a developer guide — read it before editing.
+
+**Adding a menu item**: add a `MenuItem` to `MENU_ITEMS[]`; `MENU_ITEM_COUNT` is
+computed. Items sharing a `group` render on one page, titled from `groupTitles[]`
+in `lib/menuRender.hpp`.
+
+**Six rows per menu page.** `MD_START_Y=12` + `MD_ROW_H=9` puts row 6 at y=57,
+ending on row 63. A seventh row is clipped with no error.
+
+## Board gotchas
+
+- **All outputs are DAC** (MCP4728 quad 12-bit). This is not the old SAMD21
+  hardware: no PWM gate pins, no inverted gate logic.
+- **DAC channel swap**: hardware swaps DACB↔DACC, compensated by `_chanMap[]` in
+  [core/boardIO.hpp](core/boardIO.hpp) — do not change without hardware in hand.
+- **Calibration** is board-level, not per module: CALIBRATE on the shell's module
+  selector runs [core/calibration.hpp](core/calibration.hpp), writes `/cal.bin`,
+  and every module picks it up.

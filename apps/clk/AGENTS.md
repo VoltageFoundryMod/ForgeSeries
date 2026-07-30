@@ -1,144 +1,110 @@
-# ClockForge Firmware - AI Coding Agent Instructions
+# ClockForge — AI Coding Agent Instructions
 
-## Project Overview
+**Read [../../AGENTS.md](../../AGENTS.md) first** — the board, the shell↔app
+contract, the core split, storage, CV, naming, menu patterns and the VCV rules
+are all shared and documented there, not repeated here. This file covers only
+what is ClockForge's own.
 
-ClockForge is a **Eurorack modular synthesizer clock/CV module** firmware for the **Seeed XIAO RP2040** microcontroller. It generates clock signals, gates, and CV waveforms with features like Euclidean rhythms, swing, quantization, and envelopes. See [Readme.md](Readme.md) for full user-facing feature documentation.
+ClockForge is the **clock generator / modulation source**: four outputs producing
+clocks, gates, Euclidean rhythms, envelopes and CV waveforms, with swing,
+quantization and external sync. [Readme.md](Readme.md) is the user-facing
+feature documentation; [Manual.md](Manual.md) is the shipped manual.
 
-**Part of the Forge Series**: This is one module in a hardware platform family. The hardware is shared; firmware defines module behavior.
-
-**Hardware Platform**: RP2040 (dual-core ARM Cortex-M0+), Arduino framework (`earlephilhower` core), PlatformIO build system.
-
-## Architecture & Key Files
-
-### Module Map
+## Module map
 
 | File | Purpose |
-|------|---------|
-| [src/main.cpp](src/main.cpp) | Entry point, `setup()`, `loop()`, `setup1()`, `loop1()` (Core 1), global variables |
-| [lib/clockEngine.hpp](lib/clockEngine.hpp) | BPM, PPQN, `tickCounter`, external clock sync, `ClockPulse()` ISR |
-| [lib/outputs.hpp](lib/outputs.hpp) | `Output` class — all waveform/rhythm/envelope logic |
-| [lib/cvInputs.hpp](lib/cvInputs.hpp) | `CVTarget` enum, ADC reads, calibration lookup, `HandleCVInputs()` |
-| [lib/menuDefinitions.hpp](lib/menuDefinitions.hpp) | `MenuItem` struct, `RowStyle`/`MenuItemType` enums |
-| [lib/menuHandlers.hpp](lib/menuHandlers.hpp) | `MENU_ITEMS[]` array, all setter/getter lambdas — **read the developer guide at the top of this file before editing** |
-| [lib/menuDisplay.hpp](lib/menuDisplay.hpp) | Low-level draw primitives (`MD_Row`, `MD_TwoColRow`, …) |
-| [lib/menuRender.hpp](lib/menuRender.hpp) | `HandleDisplay()`, per-group renderers |
-| [lib/displayManager.hpp](lib/displayManager.hpp) | `DisplayManager` class — rate-limited non-blocking display |
-| [lib/boardIO.hpp](lib/boardIO.hpp) | `InitIO()`, `InitWire()`, `InitDAC()`, `DACWriteAll()`, `ReadADC()` |
-| [lib/pinouts.hpp](lib/pinouts.hpp) | XIAO RP2040 pin/GPIO assignments |
-| [lib/presetManager.hpp](lib/presetManager.hpp) | `LoadSaveParams`, `CalibrationData`, `LoadDefaultParams()`, `CollectParams()`, `UpdateParameters()` |
-| [lib/storage.hpp](lib/storage.hpp) | Platform storage backend (RP2040 EEPROM emulation) |
-| [../../core/calibration.hpp](../../core/calibration.hpp) | Hardware calibration wizard — board-level, run from the shell's module selector |
-| [lib/calibrationData.hpp](lib/calibrationData.hpp) | `CalibrationData` struct, LUT constants |
+| ---- | ------- |
+| [src/clk_app.cpp](src/clk_app.cpp) | the `forge::IApp` — `Begin`/`Tick0`/`Tick1`, encoder events, all file-scope state |
+| [src/clk_app.hpp](src/clk_app.hpp) | `forge::ClkApp()` factory, the only thing the shell includes |
+| [lib/engine.hpp](lib/engine.hpp) | `HandleOutputs()` — the per-iteration step, shared with the Rack port |
+| [lib/clockEngine.hpp](lib/clockEngine.hpp) | `PPQN`, BPM, `tickCounter`, external clock sync, `ClockPulse()` ISR |
+| [lib/outputs.hpp](lib/outputs.hpp) | `Output` class — all waveform / rhythm / envelope logic |
+| [lib/cvInputs.hpp](lib/cvInputs.hpp) | `CVTarget` enum, `CVTargetDescription[]`, `HandleCVInputs()`, `HandleCVTarget()` |
 | [lib/euclidean.hpp](lib/euclidean.hpp) | Bjorklund's Euclidean rhythm algorithm |
-| [lib/quantizer.cpp](lib/quantizer.cpp) | Pitch quantization logic |
-| [lib/scales.cpp](lib/scales.cpp) | Musical scale definitions |
-| [lib/metrics.hpp](lib/metrics.hpp) | `PerformanceMetrics` — ISR/loop/display timing stats |
-| [lib/encoder.hpp](lib/encoder.hpp) | Rotary encoder wrapper |
-| [lib/utils.hpp](lib/utils.hpp) | Shared math/utility helpers |
-| [platformio.ini](platformio.ini) | Build config, dependencies, test environments |
+| [lib/quantizer.cpp](lib/quantizer.cpp) | pitch quantization — ClockForge's own, not `core/`'s |
+| [lib/scales.cpp](lib/scales.cpp) | musical scale definitions |
+| [lib/menuDefinitions.hpp](lib/menuDefinitions.hpp) | `MenuItem` struct, `RowStyle` / `MenuItemType` enums |
+| [lib/menuHandlers.hpp](lib/menuHandlers.hpp) | `MENU_ITEMS[]` + every setter/getter — **read the guide at the top before editing** |
+| [lib/menuRender.hpp](lib/menuRender.hpp) | `HandleDisplay()`, `groupTitles[]`, per-group renderers |
+| [lib/presetManager.hpp](lib/presetManager.hpp) | `LoadSaveParams`, `LoadDefaultParams()`, `CollectParams()`, `UpdateParameters()` |
+| [lib/storage.hpp](lib/storage.hpp) | four-line shim over `core/appStorage.hpp` |
+| [lib/version.hpp](lib/version.hpp) | module version string shown in the selector |
 
-### Dual-Core Architecture
+Everything board-level — `boardIO`, `boardPinouts`, `displayManager`,
+`menuDisplay`, `encoder`, `metrics`, `utils`, `calibrationData`, `calibration` —
+lives in [../../core/](../../core/).
 
-- **Core 0** (`loop()`): main logic — encoder, CV inputs, clock engine, DAC writes via Wire1
-- **Core 1** (`loop1()`): display only — `display.display()` via Wire (SSD1306)
-- Coordination: `_displayFrameReady` (Core 0 sets, Core 1 clears) and `_displayLocked` (Core 0 pauses Core 1 GFX)
-- Boot gate: the Arduino core launches Core 1 **before** Core 0's `setup()` runs,
-  so `setup1()` spins on `_core1Enabled` until `setup()` has done `InitWire()`,
-  `display.begin()` and the splash. Without it Core 1 flushes over Wire mid-init
-  (mirrored panel) and wipes the splash/version screens
-- Wire (GPIO 6/7, I2C1) → SSD1306 display **only** (Core 1 exclusive at runtime)
-- Wire1 (GPIO 0/1, I2C0) → MCP4728 DAC **only** (Core 0 exclusive at runtime)
-- No mutex needed — separate hardware I2C blocks on separate cores
+`quantizer.cpp` and `scales.cpp` are `#include`d directly by
+[lib/outputs.hpp](lib/outputs.hpp); they are not compiled separately.
+ClockForge's quantizer is deliberately **not** the shared `core/quantizer.hpp` —
+it is a separate implementation reached through `Output` rather than a channel,
+so folding it in would be a port, not a merge.
 
-### Key Subsystems
+## Timing core
 
-**Timing Core** (PPQN = 960):
-- RP2040 `repeating_timer_t` fires `ClockPulse()` → `HandleOutputs()` → `outputs[i].Pulse()`
-- `tickCounter` incremented every tick; ISR must stay fast
-- External clock sync via `HandleExternalClock()` interrupt (rising edge on `CLK_IN_PIN`)
+PPQN = 960. An RP2040 `repeating_timer_t` fires `ClockPulse()` → `HandleOutputs()`
+→ `outputs[i].Pulse()`. At 133 MHz that is 208 µs/tick at 300 BPM, so there is
+ISR headroom — but **keep the ISR fast**: no heap allocation, no blocking calls.
+`tickCounter` increments every tick.
 
-**Output System** — all 4 outputs via MCP4728 quad 12-bit I2C DAC:
-- **No inverted gate logic** (old SAMD21 behavior is gone)
-- Physical channel swap in hardware: DACB/DACC are swapped — see `_chanMap[]` in [lib/boardIO.hpp](lib/boardIO.hpp)
-- 21 waveform types: `Square`, `Triangle`, `Sine`, `Parabolic`, `Sawtooth`, `ExpEnvelope`, `LogEnvelope`, `InvExpEnvelope`, `InvLogEnvelope`, `Hatchet2`, `Hatchet4`, `Noise`, `SmoothNoise`, `SampleHold`, `ResetTrig`, `Play`, `ADEnvelope`, `AREnvelope`, `ADSREnvelope`, `CVInput1`, `CVInput2` (mirror CV in 1/2 to the output; quantise via the Quantize toggle)
+External sync arrives on `HandleExternalClock()`, a rising-edge interrupt on
+`CLK_IN_PIN`. Out-of-range or inconsistent pulses reset the confirmation counter
+rather than yanking the tempo.
 
-**CV Input Modulation**:
-- 2 CV inputs (0–5V) mapped to `CVTarget` targets via `HandleCVTarget()` in [lib/cvInputs.hpp](lib/cvInputs.hpp)
-- Calibration uses a 2-point linear LUT per channel (1V + 3V reference); stored in EEPROM via `CalibrationData`
+## Outputs
 
-**Persistence**:
-- 10 preset slots; slot 0 auto-loaded at boot
-- Schema: `LoadSaveParams` in [lib/presetManager.hpp](lib/presetManager.hpp); platform storage in [lib/storage.hpp](lib/storage.hpp)
-- EEPROM layout: `[0 .. NUM_SLOTS×sizeof(LoadSaveParams))` for presets, then `CalibrationData`
-- **Changing `LoadSaveParams` invalidates all saved slots** — increment `VALID_MAGIC` or add migration
+Four outputs, all through the MCP4728. 21 waveform types in `WaveformType`:
+`Square`, `Triangle`, `Sine`, `Parabolic`, `Sawtooth`, `ExpEnvelope`,
+`LogEnvelope`, `InvExpEnvelope`, `InvLogEnvelope`, `Hatchet2`, `Hatchet4`,
+`Noise`, `SmoothNoise`, `SampleHold`, `ResetTrig`, `Play`, `ADEnvelope`,
+`AREnvelope`, `ADSREnvelope`, `CVInput1`, `CVInput2` — the last two mirror a CV
+input to the output, quantised via the Quantize toggle.
 
-## Build, Test & Upload
+## Common tasks
 
-```bash
-pio run                    # build (env: xiao_rp2040)
-pio test -e native         # run GoogleTest native tests
-pio device monitor         # serial debug at 115200 baud
-```
+### Adding a waveform
 
-VS Code tasks: **Build PlatformIO Project** → **Convert ELF to UF2** → **Upload Firmware to Seeeduino XIAO**.
+1. Add the enum value to `WaveformType` in [lib/outputs.hpp](lib/outputs.hpp)
+2. Add its description to `WaveformTypeDescriptions[]`
+3. Implement it in `Output::GeneratePulse()`
+4. Update [Readme.md](Readme.md) and [Manual.md](Manual.md)
 
-**Flashing**: Double-tap reset to enter UF2 bootloader; device mounts as mass storage.
+### Adding a CV modulation target
 
-## Naming Conventions
+1. Add the enum to `CVTarget` in [lib/cvInputs.hpp](lib/cvInputs.hpp)
+2. Add its description to `CVTargetDescription[]`
+3. Implement it in `HandleCVTarget()` in the same file
 
-- **CapitalCase**: Free functions (`UpdateBPM()`, `HandleEncoderPosition()`)
-- **_underscoreCamelCase**: Private class members (`_isPulseOn`, `_dutyCycle`)
-- **ALL_CAPS**: Constants and macros (`PPQN`, `MAXDAC`, `CLK_IN_PIN`, `REQUEST_DISPLAY_REFRESH()`)
-- **Enums**: PascalCase names and values (`OutputType::DACOut`, `WaveformType::ExpEnvelope`)
+### Adding a menu parameter
 
-## Critical Patterns
+1. Write the `valueFn` getter and `setter`/`action` in [lib/menuHandlers.hpp](lib/menuHandlers.hpp)
+2. Add a `MenuItem` to `MENU_ITEMS[]` — max six rows per page
+3. Add the field to `LoadSaveParams`, `CollectParams()` and `UpdateParameters()`
+   in [lib/presetManager.hpp](lib/presetManager.hpp), and bump `VALID_MAGIC`
+4. Mark the state dirty in the setter — `displayMgr.SetUnsavedChanges(true)` for
+   the indicator, and `unsavedChanges = true` for the raw flag the save/load
+   checks read
+5. If it should also appear in Rack's context menu, add a bridge pair in
+   `vcv-plugin/src/engine/fw_engine.{hpp,cpp}` and a menu entry in
+   `vcv-plugin/src/ClockForge.cpp`
 
-**Display refresh** (always use the macro, never set `displayRefresh` directly):
-```cpp
-REQUEST_DISPLAY_REFRESH(); // marks dirty + resets screen-timeout timer
-```
+## Gotchas
 
-**Unsaved changes indicator** (use the manager, not the raw flag):
-```cpp
-displayMgr.SetUnsavedChanges(true);
-unsavedChanges = true; // also keep the raw flag in sync for save/load checks
-```
+- **ClockForge is the RAM outlier** — ~7 KB of the image's ~29 KB, roughly 10×
+  NoteForge. If static RAM ever gets tight this module is the lever, not the
+  module count. Be deliberate about new file-scope arrays.
+- The `PPQN` ISR path is the one place in the series with a hard real-time
+  budget. Profile with `core/metrics.hpp` rather than guessing.
 
-**Menu state**: `menuItem` is 1-based item number; `menuMode` is 0 = navigating, or equals the item number being edited. See the developer guide in [lib/menuHandlers.hpp](lib/menuHandlers.hpp).
+## Tests
 
-**Adding a menu item**: Add an entry to `MENU_ITEMS[]` in [lib/menuHandlers.hpp](lib/menuHandlers.hpp). `MENU_ITEM_COUNT` is computed automatically. Items with the same `group` render on the same page.
-
-## Common Tasks
-
-### Adding a New Waveform
-
-1. Add enum value to `WaveformType` in [lib/outputs.hpp](lib/outputs.hpp)
-2. Add description string to `WaveformTypeDescriptions[]`
-3. Implement generation in `Output::GeneratePulse()` switch statement
-4. Update user-facing docs in [Readme.md](Readme.md)
-
-### Adding a CV Modulation Target
-
-1. Add enum to `CVTarget` in [lib/cvInputs.hpp](lib/cvInputs.hpp)
-2. Add description to `CVTargetDescription[]`
-3. Implement in `HandleCVTarget()` in the same file
-
-### Adding a Menu Parameter
-
-1. Write `valueFn` getter and `setter`/`action` in [lib/menuHandlers.hpp](lib/menuHandlers.hpp)
-2. Add a `MenuItem` entry to `MENU_ITEMS[]` — group, rowStyle, and type determine rendering
-3. Add the parameter to `LoadSaveParams`, `CollectParams()`, and `UpdateParameters()` in [lib/presetManager.hpp](lib/presetManager.hpp)
-4. Set `displayMgr.SetUnsavedChanges(true)` and `unsavedChanges = true` inside the setter
-
-## Gotchas & Constraints
-
-- **No inverted gate logic** — this is NOT the SAMD21 version; all outputs are DAC via MCP4728
-- **DAC channel swap**: hardware swaps DACB↔DACC; compensated by `_chanMap[]` in [lib/boardIO.hpp](lib/boardIO.hpp) — do not change without verifying with hardware
-- **Core 1 owns Wire**: never call `Wire` (display bus) from Core 0 — use `_displayFrameReady`/`_displayLocked` flags
-- **Keep ISR fast**: `ClockPulse()` runs at 960 PPQN; avoid heap allocation or blocking calls inside it
-- **`quantizer.cpp` and `scales.cpp`** are `#include`d directly in [lib/outputs.hpp](lib/outputs.hpp) — they are not compiled separately
-- **Calibration** wizard: CALIBRATE on the shell's module selector → runs [../../core/calibration.hpp](../../core/calibration.hpp). It is board-level, so it is not compiled into this module at all; `CalibrationData` lives in `/cal.bin` and survives firmware flashes
+`make test-clk` (== `pio test -e native_clk`) runs
+[test/test_native/test_outputs.cpp](test/test_native/test_outputs.cpp).
 
 ---
 
-**For user-facing feature documentation, see [Readme.md](Readme.md). For hardware specifics, consult the Seeed XIAO RP2040 datasheet.**
+**Docs**: [Readme.md](Readme.md) · [Manual.md](Manual.md) ·
+[docs/Hardware_Design.md](docs/Hardware_Design.md) ·
+[docs/VCVRack_Plugin.md](docs/VCVRack_Plugin.md) ·
+[docs/VCVRack_Plugin_Development.md](docs/VCVRack_Plugin_Development.md) ·
+[docs/Improvements.md](docs/Improvements.md)
