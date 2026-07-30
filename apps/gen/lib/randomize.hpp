@@ -81,6 +81,20 @@ inline void RandomizeParams(uint32_t entropy) {
         containerParams[c].balls = (uint8_t)_RndInt(1, 5);
         containerParams[c].pegs = (uint8_t)_RndInt(PHYS_MIN_PEGS, 12);
 
+        // DENSITY thins the roll without touching the motion, so it is the one
+        // knob here that can make a patch breathe rather than merely differ. Kept
+        // to the top of its range: below about half, a roll that also landed on
+        // few balls and a mostly-muted ring reads as a broken module rather than
+        // as a sparse one.
+        //
+        // SPACE is deliberately NOT rolled. It is a rate *ceiling*, and the same
+        // reasoning that leaves tempo and the quantize grid alone applies — how
+        // fast a patch is allowed to speak is a decision about the arrangement,
+        // not part of "give me a new rhythm". The gravity draw below already
+        // spans a bit over 2:1 in tempo now that gravity rescales time, which is
+        // where a roll's density variety should come from.
+        containerParams[c].density = (uint8_t)_RndInt(55, 100);
+
         // Muting pegs is what opens the rhythm up, but a container with most of
         // its ring muted just goes quiet. Roll ~75 % active, then top back up to
         // at least half so no container can be randomized into silence.

@@ -2,10 +2,12 @@
 // forgevcv widgets — the reusable Rack UI pieces shared by ForgeSeries plugins:
 //   FramebufferDisplay : blits the firmware's 128x64 framebuffer as a crisp OLED.
 //   EncoderKnob        : drag-to-rotate / click-to-push hardware encoder.
-//   BpmSlider          : a wide horizontal slider for a tempo submenu.
+//   EngineIntQuantity  : a rack::Quantity over an integer firmware parameter.
+//   IntSlider          : a wide horizontal slider driving that quantity.
 //
-// All three couple only to forgevcv::ForgeModule (fb + the encoder event queue +
-// encoderPixelsPerDetent), so any firmware's module works with them unchanged.
+// The first two couple only to forgevcv::ForgeModule (fb + the encoder event
+// queue + encoderPixelsPerDetent), so any firmware's module works with them
+// unchanged; the last two reach the engine through caller-supplied lambdas.
 // Member functions are defined in-class (implicitly inline) so this header is
 // ODR-safe even if several module translation units include it.
 
@@ -16,6 +18,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <functional>
+#include <string>
 #include <vector>
 
 namespace forgevcv {
@@ -471,11 +475,91 @@ struct EncoderKnob : OpaqueWidget {
     }
 };
 
-// ── Wide horizontal slider for a value submenu (e.g. tempo) ───────────────────
-// Pair with a firmware-specific rack::Quantity that reads/writes through that
-// module's parameter bridge.
-struct BpmSlider : ui::Slider {
-    BpmSlider() { box.size.x = 200.f; }
+// ── Integer firmware parameter as a rack::Quantity ───────────────────────────
+// The engine stores these as ints, but a Quantity is dragged in floats. Rounding
+// on the way in *and* reading the rounded value straight back out would discard
+// every sub-integer mouse movement: Rack delivers a drag as one event per frame,
+// so on a short range (Balls is 1..8) a single frame's movement is worth a few
+// hundredths of a step, rounds to nothing, and a slow drag changes nothing at
+// all no matter how far it travels. So the drag position is kept here as a
+// float and only rounded on the way to the engine.
+//
+// The engine is still the source of truth: `getValue` adopts its value whenever
+// the two disagree by more than that rounding, so encoder turns, CV and preset
+// loads all show up on an open slider.
+struct EngineIntQuantity : rack::Quantity {
+    std::function<int()> getFn;
+    std::function<void(int)> setFn;
+    float minV = 0.f, maxV = 100.f, defV = 0.f;
+    std::string label, unit;
+    int precision = 4;
+
+    float v = 0.f;       // drag position, unrounded
+    bool primed = false; // false until v has been read from the engine once
+
+    void setValue(float nv) override {
+        v = clamp(nv, minV, maxV);
+        primed = true;
+        if (setFn)
+            setFn((int)std::lround(v));
+    }
+
+    float getValue() override {
+        if (!getFn)
+            return defV;
+        float e = (float)getFn();
+        // Only our own rounding? Then the fraction we are mid-drag on is the
+        // better answer. Anything else means the engine moved underneath us.
+        if (!primed || (float)std::lround(v) != e) {
+            v = e;
+            primed = true;
+        }
+        return v;
+    }
+
+    float getMinValue() override { return minV; }
+    float getMaxValue() override { return maxV; }
+    float getDefaultValue() override { return defV; }
+    // Round for display, so the readout never shows a fraction the engine
+    // cannot hold.
+    float getDisplayValue() override { return std::round(getValue()); }
+    void setDisplayValue(float nv) override { setValue(nv); }
+    int getDisplayPrecision() override { return precision; }
+    std::string getLabel() override { return label; }
+    std::string getUnit() override { return unit; }
 };
+
+// ── Wide horizontal slider for a value submenu ───────────────────────────────
+// Rack's ui::Slider moves the value by a fixed 0.001 of the range per pixel, so
+// a full sweep always costs 1000 px of mouse travel — independent of both the
+// widget's width and the number of steps the parameter actually has. That is
+// merely slow for Tempo (271 steps) and unusable for Balls (8), where it works
+// out to 143 px of dragging per ball.
+//
+// Deriving the travel from the step count instead keeps the feel constant
+// across parameters. The clamps stop a 2-step parameter from flipping on a
+// twitch and a 2000 ms one from taking all afternoon; hold Shift for fine
+// adjustment, matching Rack's own knob convention.
+struct IntSlider : ui::Slider {
+    float pxPerStep = 15.f;  // mouse px per integer step
+    float minTravel = 175.f; // px for a full sweep, lower bound
+    float maxTravel = 900.f; // px for a full sweep, upper bound
+    float fineScale = 0.2f;  // Shift-drag multiplier
+
+    IntSlider() { box.size.x = 200.f; }
+
+    void onDragMove(const event::DragMove &e) override {
+        if (quantity) {
+            float travel = clamp(quantity->getRange() * pxPerStep, minTravel, maxTravel);
+            int mods = APP->window ? APP->window->getMods() : 0;
+            float s = ((mods & RACK_MOD_MASK) == GLFW_MOD_SHIFT) ? fineScale : 1.f;
+            quantity->moveScaledValue(s * e.mouseDelta.x / travel);
+        }
+        OpaqueWidget::onDragMove(e);
+    }
+};
+
+// Was the tempo-only slider before it grew into the generic one above.
+using BpmSlider = IntSlider;
 
 } // namespace forgevcv

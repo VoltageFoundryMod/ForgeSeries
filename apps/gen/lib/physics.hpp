@@ -81,6 +81,15 @@
 // rotating, the peg ring sweeps underneath a resting ball, so every contact
 // looks like a *new* peg. That path is what turned the GATE jack into a ~33 Hz
 // sawtooth, and it is why PEG_MIN_IMPACT_SPEED below exists as the real filter.
+//
+// Quoted at the reference gravity and scaled INVERSELY with the speed scale, for
+// the same reason PHYS_REVIVE_US is: these are times, and the container's whole
+// clock now stretches with GRAVITY. Left absolute, the 12 ms window caps a
+// container at 83 Hz — comfortably out of the way at the reference, where the
+// natural rate is ~6 Hz, but wildly out of scale in a container whose natural
+// rate is 1 Hz. Anything that does manage to chatter down there then runs
+// completely unchecked, which is exactly what a fast wall dragging a ball around
+// a low-gravity container does.
 #define PEG_REFRACTORY_US 45000UL
 #define PEG_MIN_INTERVAL_US 12000UL
 
@@ -92,6 +101,8 @@
 // and since rotation keeps changing which peg it is resting on, the short
 // re-trigger window lets it fire continuously — the envelope never gets to
 // finish and the gate output never returns to zero.
+//
+// Quoted at the reference gravity; the live value is scaled — see SpeedScale().
 #define PEG_MIN_IMPACT_SPEED 28.0f
 
 // A ball that has lost its energy gets topped back up to this speed, so a patch
@@ -100,10 +111,51 @@
 // It has to be comfortably ABOVE PEG_MIN_IMPACT_SPEED, or the floor would
 // re-energise balls to a speed that can no longer trigger anything and the
 // container would go quiet — the exact failure the floor exists to prevent.
-// It also sets the idle rhythm: at gravity 220 a 60 px/s bounce hangs for
-// 2*60/220 = 0.55 s, so a settled ball ticks along at about 2 Hz rather than
-// vibrating against the wall.
+//
+// Quoted at the reference gravity, and scaled with it — see SpeedScale().
 #define PHYS_MIN_BOUNCE_SPEED 60.0f
+
+// ── Why GRAVITY has to rescale the speed constants with it ───────────────────
+// The two constants above were tuned at gravity 220 and used to be absolute, and
+// that made GRAVITY almost useless as a density control.
+//
+// The note rate is set by how often a ball reaches a wall, and the usable
+// container is only 2*(R - ballR) = 36 px across. A ball leaving the wall at the
+// 60 px/s floor crosses a mean chord of ~4R/3 ≈ 24 px in ~0.4 s *whatever*
+// gravity is doing — gravity only bends the path on the way. So turning gravity
+// down to 20 gave flatter trajectories at the same ~7 hits/s, when what the
+// control obviously promises is "slower".
+//
+// The fix: the simulation has exactly one length (R) and one acceleration (g), so
+// its natural speed is sqrt(g*R) and its natural time is sqrt(R/g). Scaling both
+// speed constants by sqrt(g / PHYS_REF_GRAVITY) makes GRAVITY a pure rescaling of
+// TIME — under v -> v/k, g -> g/k², the parabola x = v*t, y = g*t²/2 traces the
+// identical path, just taken k times slower. So the character of the motion, the
+// distribution of contact angles and the peg pattern are all preserved exactly;
+// only the tempo changes. That is what makes it a musical control rather than a
+// different-sounding simulation at each setting.
+//
+// At PHYS_REF_GRAVITY the scale is 1.0 and every number is bit-identical to the
+// original tuning, so existing patches sound exactly as they did.
+#define PHYS_REF_GRAVITY 220.0f
+
+// How long a ball may ride the rim without striking before the wall flicks it
+// back off. Quoted at the reference gravity and scaled INVERSELY with the speed
+// scale, because it is a time rather than a speed: a container running at a
+// third of the reference tempo has gaps three times as long, and a fixed
+// threshold would fire inside its normal rhythm and drag it back up to speed.
+//
+// 400 ms sits comfortably outside the reference container's natural per-ball gap
+// (~500 ms at 3 balls), so it never interferes with a container that is speaking
+// for itself — it is a floor under silence, not a metronome.
+#define PHYS_REVIVE_US 400000UL
+
+// Floor on that scale. Gravity is allowed all the way to 0 (a container being
+// stirred purely by its rotating wall), and an unclamped sqrt would take the
+// energy floor to zero — balls would coast to a halt — while taking the impact
+// threshold to zero at the same time, so every graze would speak. That is the
+// buzzer failure mode, reached from the opposite direction.
+#define PHYS_MIN_SPEED_SCALE 0.10f
 
 static const float PHYS_TWO_PI = 6.28318530718f;
 
@@ -180,6 +232,12 @@ struct ContainerSnapshot {
     bool hitPending;
     int16_t hitPeg;
     float hitEnergy;
+    // SPACE's "when did this container last speak", as an age for the same
+    // reason the per-ball hit times are — see the struct comment above. Without
+    // it a repeat starts with an arbitrarily stale gap and drops (or gains) the
+    // phrase's first note.
+    unsigned long spokeAgeUs;
+    bool haveSpoken;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -188,12 +246,32 @@ struct ContainerSnapshot {
 class Container {
     // ── Tunables (menu-facing; set via the Set* API) ──
     float _gravity = 220.0f;    // px/s² downward
+    // sqrt(_gravity / PHYS_REF_GRAVITY), cached by SetGravity(). Multiplies every
+    // speed constant so GRAVITY rescales time rather than only bending paths —
+    // see PHYS_REF_GRAVITY. The default gravity is the reference, hence 1.0.
+    float _speedScale = 1.0f;
     float _restitution = 0.72f; // 0 = dead, 1 = lossless
     float _spinGrip = 0.30f;    // how strongly the moving wall drags a ball
     float _omega = 0.0f;        // rad/s, signed
     int _ballCount = 3;
     int _pegCount = 8;
     uint16_t _pegMask = 0xFFFF; // bit i = peg i emits a note
+
+    // ── The two note-thinning controls ──
+    // Both sit at the very end of the hit path, AFTER the physics has fully
+    // resolved the bounce and after the peg mask. A thinned note is a bounce you
+    // see and do not hear — the balls keep exactly the motion they had, which is
+    // the whole point: every other way of getting fewer notes (fewer balls, less
+    // gravity, less bounce) also changes how the container moves.
+    //
+    // They live here rather than in the sequencer so they take part in the loop
+    // snapshot. DENSITY draws from _rng and SPACE keeps a timestamp; if either
+    // sat above the snapshot boundary a "repeating" phrase would quietly gain and
+    // lose notes on every pass.
+    uint8_t _density = 100;         // % chance a note that would speak, does
+    unsigned long _minGapUs = 0;    // SPACE, in µs; 0 = off
+    unsigned long _lastSpokeUs = 0; // when this container last emitted a note
+    bool _haveSpoken = false;       // ...or has not yet, so the first is never gated
 
     // ── State ──
     float _cx = PHYS_CX_CENTER, _cy = PHYS_CY;
@@ -221,7 +299,16 @@ class Container {
     Container() { Reset(0x12345678u); }
 
     // ── Parameters ───────────────────────────────────────────────────────────
-    void SetGravity(float g) { _gravity = constrain(g, 0.0f, 1200.0f); }
+    void SetGravity(float g) {
+        _gravity = constrain(g, 0.0f, 1200.0f);
+        // Cached rather than recomputed per step: a sqrtf per ball per
+        // millisecond is real money on a soft-float M0+, and gravity changes at
+        // menu/CV rate, not at step rate.
+        _speedScale = sqrtf(_gravity / PHYS_REF_GRAVITY);
+        if (_speedScale < PHYS_MIN_SPEED_SCALE) {
+            _speedScale = PHYS_MIN_SPEED_SCALE;
+        }
+    }
     void SetRestitution(float e) { _restitution = constrain(e, 0.05f, 0.99f); }
     void SetSpinGrip(float g) { _spinGrip = constrain(g, 0.0f, 1.0f); }
     void SetOmega(float w) { _omega = constrain(w, -25.0f, 25.0f); }
@@ -252,6 +339,17 @@ class Container {
         }
     }
 
+    // DENSITY: the chance, in percent, that a strike which has cleared every
+    // other test actually speaks. 100 is the original behaviour.
+    void SetDensity(int pct) { _density = (uint8_t)constrain(pct, 0, 100); }
+    int GetDensity() const { return _density; }
+
+    // SPACE: minimum time between two notes from this container. The caller
+    // converts the user's musical setting (beats) into µs against the live tempo,
+    // exactly as it does for the loop period — the container has no clock.
+    void SetMinGapUs(unsigned long us) { _minGapUs = us; }
+    unsigned long GetMinGapUs() const { return _minGapUs; }
+
     void SetPegMask(uint16_t mask) { _pegMask = mask; }
     void SetPegEnabled(int peg, bool on) {
         if (peg < 0 || peg >= PHYS_MAX_PEGS) {
@@ -265,6 +363,26 @@ class Container {
     }
 
     float GetGravity() const { return _gravity; }
+
+    // The time-rescaling factor this container's gravity implies. Public because
+    // both the coupling in PhysicsWorld and the tests need the same two derived
+    // speeds, and deriving them twice is how they drift apart.
+    float SpeedScale() const { return _speedScale; }
+    float MinImpactSpeed() const { return PEG_MIN_IMPACT_SPEED * _speedScale; }
+    float MinBounceSpeed() const { return PHYS_MIN_BOUNCE_SPEED * _speedScale; }
+    // The three TIME constants scale inversely with the speed scale: slower
+    // container, longer gaps. (Speeds multiply by it, times divide by it — that
+    // is what "rescaling time" means.)
+    unsigned long ReviveUs() const {
+        return (unsigned long)((float)PHYS_REVIVE_US / _speedScale);
+    }
+    unsigned long RefractoryUs() const {
+        return (unsigned long)((float)PEG_REFRACTORY_US / _speedScale);
+    }
+    unsigned long MinIntervalUs() const {
+        return (unsigned long)((float)PEG_MIN_INTERVAL_US / _speedScale);
+    }
+
     float GetRestitution() const { return _restitution; }
     float GetSpinGrip() const { return _spinGrip; }
     float GetOmega() const { return _omega; }
@@ -314,6 +432,10 @@ class Container {
         _rotation = 0.0f;
         _activity = 0.0f;
         _hitPending = false;
+        // A reset is a fresh patch, so SPACE must not hold the first note back on
+        // the strength of a gap measured against the container that just went.
+        _haveSpoken = false;
+        _lastSpokeUs = 0;
         for (int i = 0; i < PHYS_MAX_BALLS; i++) {
             PlaceBall(i);
         }
@@ -340,6 +462,8 @@ class Container {
         s.hitPending = _hitPending;
         s.hitPeg = (int16_t)_hitPeg;
         s.hitEnergy = _hitEnergy;
+        s.spokeAgeUs = nowUs - _lastSpokeUs; // unsigned: wraps
+        s.haveSpoken = _haveSpoken;
     }
 
     void RestoreSnapshot(const ContainerSnapshot &s, unsigned long nowUs) {
@@ -359,12 +483,19 @@ class Container {
         _hitPending = s.hitPending;
         _hitPeg = s.hitPeg;
         _hitEnergy = s.hitEnergy;
+        _lastSpokeUs = nowUs - s.spokeAgeUs;
+        _haveSpoken = s.haveSpoken;
     }
 
     // Impulse every ball — the KICK gesture. Deliberately randomised per ball so
     // a kick scatters the population instead of moving it as one rigid clump,
     // which would just repeat the same rhythm louder.
     void Kick(float strength) {
+        // Scaled like every other speed: a raw kick into a low-gravity container
+        // would inject many times its natural speed and then take an age to bleed
+        // back down, so the gesture would blow the patch out of its tempo instead
+        // of stirring it.
+        strength *= _speedScale;
         for (int i = 0; i < _ballCount; i++) {
             _balls[i].vx += _rng.Bipolar() * strength;
             _balls[i].vy -= (0.4f + _rng.Unit() * 0.6f) * strength;
@@ -416,7 +547,7 @@ class Container {
         int peg = PegAtContact(dx, dy);
 
         unsigned long since = nowUs - _coupleHitUs; // unsigned: wraps correctly
-        unsigned long needed = (peg == _couplePeg) ? PEG_REFRACTORY_US : PEG_MIN_INTERVAL_US;
+        unsigned long needed = (peg == _couplePeg) ? RefractoryUs() : MinIntervalUs();
         if (_couplePeg >= 0 && since < needed) {
             return;
         }
@@ -431,10 +562,13 @@ class Container {
         if (!GetPegEnabled(peg)) {
             return; // a muted peg absorbs the transfer silently
         }
+        if (!Speaks(nowUs)) {
+            return; // thinned by SPACE or DENSITY — a transfer you see, not hear
+        }
         _pegFlash[peg] = 3;
         _hitPending = true;
         _hitPeg = peg;
-        _hitEnergy = energy;
+        _hitEnergy = energy / _speedScale;
     }
 
     // ── Simulation ───────────────────────────────────────────────────────────
@@ -459,6 +593,10 @@ class Container {
         }
 
         const float limit = PHYS_R - PHYS_BALL_R;
+        // Hoisted: both are pure functions of gravity, which cannot change
+        // mid-step, and this is the innermost loop in the module.
+        const float minBounce = PHYS_MIN_BOUNCE_SPEED * _speedScale;
+        const float minImpact = PEG_MIN_IMPACT_SPEED * _speedScale;
 
         for (int i = 0; i < _ballCount; i++) {
             Ball &b = _balls[i];
@@ -509,21 +647,58 @@ class Container {
                 rvx -= _spinGrip * tvx;
                 rvy -= _spinGrip * tvy;
 
+                // ── Energy floor ─────────────────────────────────────────────
+                // Two different ways a ball stops making notes, and they need
+                // different answers. See PHYS_MIN_BOUNCE_SPEED.
+                //
+                // EXHAUSTED — the ball has genuinely run out of energy and is
+                // settling into a pile at the bottom. Absolute speed is the right
+                // measure and an immediate top-up is the right response; this is
+                // the original floor, unchanged.
+                float sp = sqrtf(b.vx * b.vx + b.vy * b.vy);
+                bool exhausted = sp < minBounce;
+
+                // RIDING — the ball has plenty of speed but the grip has dragged
+                // it up to the rim's own velocity, so its speed RELATIVE to the
+                // wall is nearly zero. `vn` is measured in that frame, so a
+                // co-rotating ball never registers a strike and the container
+                // goes silent while looking perfectly lively on screen.
+                //
+                // The absolute floor cannot see this at all: it looks at a ball
+                // travelling at 226 px/s (SPIN 1 at 120 BPM) and correctly
+                // declines to add energy to it. Measured at HEAD, SPIN 1 produced
+                // 0.02 notes/sec at EVERY gravity — the container fired once and
+                // then rode the rim in silence indefinitely.
+                //
+                // But a bare wall-frame floor over-corrects: a dragged ball is
+                // below it on essentially every contact, so it gets re-launched
+                // every time, and with the rim sweeping past it returns within
+                // ~10 ms. That turns the silence into a 45 Hz machine-gun, which
+                // is the buzzer failure this whole section exists to prevent.
+                //
+                // So the revive is rate-limited by whether the ball is ACTUALLY
+                // FAILING TO SPEAK — `lastHitUs` is the time of its last real
+                // strike, muted or not. A ball riding the rim gets flicked off it
+                // a few times a second rather than continuously, which is both
+                // musical and honest about the physics: a fast-spinning bowl
+                // really does hold its contents against the wall.
+                float rsp = sqrtf(rvx * rvx + rvy * rvy);
+                bool riding = rsp < minBounce &&
+                              (unsigned long)(nowUs - b.lastHitUs) > ReviveUs();
+
+                if (exhausted || riding) {
+                    rvx -= nx * minBounce;
+                    rvy -= ny * minBounce;
+                }
+
                 b.vx = rvx + wvx;
                 b.vy = rvy + wvy;
-
-                // Energy floor — see PHYS_MIN_BOUNCE_SPEED.
-                float sp = sqrtf(b.vx * b.vx + b.vy * b.vy);
-                if (sp < PHYS_MIN_BOUNCE_SPEED) {
-                    b.vx -= nx * PHYS_MIN_BOUNCE_SPEED;
-                    b.vy -= ny * PHYS_MIN_BOUNCE_SPEED;
-                }
 
                 // Only a real strike speaks. Grazes and settling contacts are
                 // still resolved as collisions above (and still transmit through
                 // the coupling below), they just do not make a note.
                 float energy = vn;
-                if (energy >= PEG_MIN_IMPACT_SPEED) {
+                if (energy >= minImpact) {
                     RegisterPegHit(b, dx, dy, energy, nowUs);
                 }
 
@@ -568,8 +743,11 @@ class Container {
         float r = (PHYS_R - PHYS_BALL_R) * (0.25f + _rng.Unit() * 0.45f);
         _balls[i].x = _cx + cosf(a) * r;
         _balls[i].y = _cy + sinf(a) * r;
-        _balls[i].vx = _rng.Bipolar() * 30.0f;
-        _balls[i].vy = _rng.Unit() * 10.0f;
+        // Scaled with gravity like every other speed, or dropping a ball into a
+        // slow container would open with a burst at the old tempo before the
+        // motion settled to the one the setting asks for.
+        _balls[i].vx = _rng.Bipolar() * 30.0f * _speedScale;
+        _balls[i].vy = _rng.Unit() * 10.0f * _speedScale;
         _balls[i].lastPeg = -1;
         _balls[i].lastHitUs = 0;
     }
@@ -578,7 +756,7 @@ class Container {
         int peg = PegAtContact(dx, dy);
 
         unsigned long since = nowUs - b.lastHitUs; // unsigned: wraps correctly
-        unsigned long needed = (peg == b.lastPeg) ? PEG_REFRACTORY_US : PEG_MIN_INTERVAL_US;
+        unsigned long needed = (peg == b.lastPeg) ? RefractoryUs() : MinIntervalUs();
         if (b.lastPeg >= 0 && since < needed) {
             return;
         }
@@ -593,10 +771,45 @@ class Container {
         if (!GetPegEnabled(peg)) {
             return; // a muted peg is a silent bounce, not a note
         }
+        if (!Speaks(nowUs)) {
+            return; // thinned by SPACE or DENSITY — a bounce you see, not hear
+        }
         _pegFlash[peg] = 3;
         _hitPending = true;
         _hitPeg = peg;
-        _hitEnergy = energy;
+        // Reported in REFERENCE-gravity units, so ACCENT's impact window (a fixed
+        // 30..150 in sequencer.hpp) keeps meaning the same thing at every gravity.
+        // Without this every hit in a slow container reads as a feather-light one
+        // and ACCENT collapses to a constant.
+        _hitEnergy = energy / _speedScale;
+    }
+
+    // The last gate a note passes: SPACE, then DENSITY.
+    //
+    // SPACE first, and deliberately: it is a hard ceiling on the rate ("never
+    // faster than this"), and DENSITY then thins what got through. Reversing them
+    // would make DENSITY roll dice on notes SPACE was going to drop anyway, so
+    // the two controls would interact instead of composing — at SPACE 1 beat and
+    // DENSITY 50 % you want "at most one note a beat, and about half the beats
+    // speak", which is what this order gives.
+    //
+    // Only a note that actually SPEAKS updates the clock. Restarting the window
+    // on a dropped note would let a busy container hold itself silent for ever.
+    bool Speaks(unsigned long nowUs) {
+        if (_minGapUs > 0 && _haveSpoken) {
+            if ((unsigned long)(nowUs - _lastSpokeUs) < _minGapUs) { // unsigned: wraps
+                return false;
+            }
+        }
+        // Drawn from the container's own PRNG, which travels in the loop
+        // snapshot — so a repeating phrase makes the same density decisions on
+        // every pass instead of shimmering.
+        if (_density < 100 && _rng.Unit() * 100.0f >= (float)_density) {
+            return false;
+        }
+        _lastSpokeUs = nowUs;
+        _haveSpoken = true;
+        return true;
     }
 };
 
@@ -922,8 +1135,15 @@ class PhysicsWorld {
                 // gradient rather than an on/off: a weak coupling only nudges the
                 // trajectories, and the containers start answering each other
                 // audibly only as it is turned up.
+                //
+                // The threshold is the DESTINATION container's, not the source's:
+                // "was that hard enough to ring?" is a question about the rim
+                // being struck, and the two containers can be running quite
+                // different gravities. Using the source's would let a heavy A
+                // machine-gun a becalmed B with strikes far above anything B's own
+                // balls could produce.
                 float transmitted = ct.energy * k;
-                if (transmitted >= PEG_MIN_IMPACT_SPEED) {
+                if (transmitted >= _c[dst].MinImpactSpeed()) {
                     _c[dst].RingPegNear(ct.x, ct.y, transmitted, nowUs);
                 }
             }

@@ -41,6 +41,32 @@ static const char *const QuantizeDivNames[] = {"OFF", "1/4", "1/8", "1/16", "1/8
 // Divisions per beat for each of the above (index 0 unused).
 static const int QuantizeDivPerBeat[] = {1, 1, 2, 4, 3, 6};
 
+// SPACE — the minimum gap between two notes from one container, in beats. OFF is
+// the module's original behaviour: every strike that clears the physics speaks,
+// however close together they land.
+//
+// Measured in beats rather than milliseconds so the spacing follows the tempo,
+// and named with the same "beats" convention as SpinRate above ("1/4" is a
+// quarter of a beat, "4" is four beats) so the two controls read alike.
+//
+// This is a *floor*, not a grid: a note is dropped if it arrives too soon after
+// the last one that spoke, but a note arriving later than the gap plays the
+// instant it happens. QUANTIZE is the control that moves notes onto a grid —
+// SPACE only thins them out, which is what keeps the rhythm human while making
+// it sparse.
+enum NoteSpace : uint8_t {
+    SpaceOff = 0,
+    SpaceQuarterBeat,
+    SpaceHalfBeat,
+    SpaceBeat,
+    Space2Beats,
+    Space4Beats,
+    Space8Beats,
+    NoteSpaceLength
+};
+static const char *const NoteSpaceNames[] = {"OFF", "1/4", "1/2", "1", "2", "4", "8"};
+static const float NoteSpaceBeats[] = {0.0f, 0.25f, 0.5f, 1.0f, 2.0f, 4.0f, 8.0f};
+
 // Container rotation, in beats per full revolution. FREE detaches it from the
 // clock entirely and uses the manual rate instead.
 enum SpinRate : uint8_t {

@@ -87,34 +87,13 @@ struct NoteForge : forgevcv::ForgeModule {
     }
 };
 
-// ── Generic slider quantity for the context menu ─────────────────────────────
+// ── Generic slider for the context menu ──────────────────────────────────────
 // Reads and writes an integer firmware parameter straight through the engine
-// bridge. The slider widget itself is forgevcv's shared wide slider.
-struct EngineIntQuantity : Quantity {
-    std::function<int()> getFn;
-    std::function<void(int)> setFn;
-    float minV = 0.f, maxV = 100.f, defV = 0.f;
-    std::string label, unit;
-
-    void setValue(float v) override {
-        if (setFn)
-            setFn((int)std::round(clamp(v, minV, maxV)));
-    }
-    float getValue() override { return getFn ? (float)getFn() : defV; }
-    float getMinValue() override { return minV; }
-    float getMaxValue() override { return maxV; }
-    float getDefaultValue() override { return defV; }
-    float getDisplayValue() override { return getValue(); }
-    void setDisplayValue(float v) override { setValue(v); }
-    int getDisplayPrecision() override { return 4; }
-    std::string getLabel() override { return label; }
-    std::string getUnit() override { return unit; }
-};
-
+// bridge. Both the quantity and the slider are forgevcv's shared ones.
 static void addSlider(Menu *menu, const std::string &label, const std::string &unit,
                       float minV, float maxV, float defV,
                       std::function<int()> get, std::function<void(int)> set) {
-    EngineIntQuantity *q = new EngineIntQuantity;
+    forgevcv::EngineIntQuantity *q = new forgevcv::EngineIntQuantity;
     q->label = label;
     q->unit = unit;
     q->minV = minV;
@@ -122,7 +101,7 @@ static void addSlider(Menu *menu, const std::string &label, const std::string &u
     q->defV = defV;
     q->getFn = get;
     q->setFn = set;
-    forgevcv::BpmSlider *slider = new forgevcv::BpmSlider; // shared wide slider
+    forgevcv::IntSlider *slider = new forgevcv::IntSlider; // shared wide slider
     slider->quantity = q;                                  // Slider takes ownership
     menu->addChild(slider);
 }

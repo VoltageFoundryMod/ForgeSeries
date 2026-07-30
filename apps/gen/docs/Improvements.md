@@ -22,10 +22,10 @@ it is and why it belongs on *this* module rather than being a generic feature.
       into SPIN as signed entries (`-16 … -1/2, 1/2 … 16, FREE`) frees the row
       that FREE HZ needs and removes a menu item at the same time.
 
-- [ ] **No pitch-domain CV targets.** The matrix modulates physics and coupling
-      but nothing musical. `BIAS` in particular re-registers the melody without
-      touching the rhythm — a different axis from everything else on the list —
-      and `SPREAD` and `ROT` (below) would join it cheaply.
+- [ ] **No pitch-domain CV targets.** The matrix modulates physics, coupling and
+      now density, but nothing musical. `BIAS` in particular re-registers the
+      melody without touching the rhythm — a different axis from everything else
+      on the list — and `SPREAD` and `ROT` (below) would join it cheaply.
 
 ## Concept extensions
 
@@ -44,12 +44,33 @@ it is and why it belongs on *this* module rather than being a generic feature.
       and it gives the same kind of movement Euclidean rotation gives on
       ClockForge. Excellent CV target.
 
-- [ ] **Hit density / probability.** A per-container 0–100 % chance that a valid
-      strike speaks. It is a couple of lines in the emit path and it is the most
-      direct control of the parameter that most needs controlling — at factory
-      settings a container fires ~7 times a second, and every other way of
-      thinning it out (fewer balls, less gravity, less bounce) also changes the
-      character of the motion. Also the obvious next CV target.
+- [x] **Hit density / probability.** *Shipped*, together with two companions that
+      turned out to be the same problem seen from three sides. `DENSITY` (0–100 %
+      chance a strike speaks) and `SPACE` (minimum gap between notes, in beats)
+      both live at the end of the hit path in `Container` — in the physics rather
+      than the sequencer, so they take part in the loop snapshot. `DENSITY` is on
+      the NOTES page and a CV target (`DENS A`/`B`/`AB`); `SPACE` is on the GATE
+      page under DECAY, where the decay-versus-density interaction is felt.
+
+      The third piece was the interesting one. `GRAVITY` was supposed to be the
+      density control and barely worked, because the note rate is set by how often
+      a ball crosses a 36 px container at the *absolute* `PHYS_MIN_BOUNCE_SPEED`
+      floor — gravity only bent the paths on the way. Scaling both speed constants
+      by `sqrt(g/220)` makes GRAVITY a pure rescaling of time (identical
+      trajectories, taken slower) and turns it into a genuine 14:1 tempo control:
+      one ball now runs from 0.27 to 3.9 notes/sec across the range. See Design.md
+      §4 "GRAVITY as a rescaling of time".
+
+- [ ] **DENSITY and SPACE are split across two pages.** Both are "how often does
+      this container speak" and you dial them together, but A/B PHYSICS was
+      already at the six-row cap so they went to NOTES and GATE respectively —
+      each of which is now also full. The tidy shape is the DIR-into-SPIN fold
+      below, which frees a PHYSICS row for `PEGS` (a ring property that only sits
+      on NOTES for want of space, and is the one row there flagged `livePreview`)
+      and leaves NOTES holding `SCALE / ROOT / SPREAD / BIAS / DENSITY / SPACE`.
+      Deferred because signed SPIN touches the preset schema, randomize, the CV
+      matrix and the Rack context menu, and none of that is needed to *use* the
+      controls.
 
 - [ ] **Gravity direction / TILT.** Gravity is hard-wired downward. A per-container
       angle turns falling into tumbling; slaving the angle to the container's own
@@ -86,7 +107,9 @@ it is and why it belongs on *this* module rather than being a generic feature.
 - [ ] **Decay-versus-density warning.** An envelope longer than the gap between
       hits never returns to zero, which is the module's documented failure mode
       and the first thing a new user hits. The hit rate is already known — flag
-      DECAY on screen when it exceeds the measured average gap.
+      DECAY on screen when it exceeds the measured average gap. Less urgent now
+      that `SPACE` sits on the same page and puts a hard floor under that gap,
+      but the warning is what would point a user at it.
 
 - [ ] **Hits-per-second readout.** A small number on the NOTES or GATE page makes
       density a thing you can set rather than guess at, and it makes the point

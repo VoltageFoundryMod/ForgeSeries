@@ -134,7 +134,9 @@ difference between a sequencer and a buzzer:
    Re-striking the same peg needs the full `PEG_REFRACTORY_US`; moving to a
    different one needs the shorter `PEG_MIN_INTERVAL_US`.
 3. **`PHYS_MIN_BOUNCE_SPEED`** — a ball that has lost its energy is topped back
-   up, so a patch never dies in a silent pile at the bottom.
+   up, so a patch never dies in a silent pile at the bottom. There are two
+   different ways that can happen and they need different answers — see
+   "Exhausted versus riding" below.
 
 The interaction between (2) and (3) is the subtle part, and getting it wrong is
 what turned the GATE jack into a continuous sawtooth in the first version. A
@@ -148,12 +150,184 @@ and the output never returned to zero.
 The floor therefore has to sit comfortably **above** the impact threshold. At
 60 px/s a settled ball hangs for `2×60/220 ≈ 0.55 s`, so it ticks along at about
 2 Hz instead of buzzing, and every one of those bounces is hard enough to
-count as a strike. The result is ~7 hits/sec per container.
+count as a strike. The result is ~6 hits/sec per container at the default.
 
-That number then sets the envelope defaults: decay must be shorter than the gap
-between notes (~140 ms) or the gate cannot finish, which is why the factory
-decay is 100 ms rather than something pad-like.
+That number then sets container A's envelope default: decay must be shorter than
+the gap between notes (~160 ms) or the gate cannot finish, which is why A's
+factory decay is 100 ms rather than something pad-like.
 `Sequencer.GateReturnsToZeroBetweenHits` is the regression guard.
+
+Container B ships at the opposite end and is sized the other way round — see
+"The factory patch is two examples" below.
+
+### GRAVITY as a rescaling of time
+
+Both speed constants above are quoted at `PHYS_REF_GRAVITY` (220) and **scale
+with `sqrt(g / PHYS_REF_GRAVITY)`**. While they were absolute, GRAVITY was very
+nearly useless as a density control, and for a reason that is invisible from the
+formula: the hang-time argument above (`2v/g`) only describes a *vertical* bounce
+at the bottom of the bowl. Most contacts are ricochets across a container that is
+only `2(R − ballR) = 36 px` wide, and a ball leaving the wall at the 60 px/s floor
+crosses a mean chord of `4R/3 ≈ 24 px` in ~0.4 s **whatever gravity is doing**.
+Turning gravity down gave flatter paths at the same note rate.
+
+The simulation has exactly one length (`R`) and one acceleration (`g`), so its
+natural speed is `sqrt(gR)` — which at the reference works out to 66 px/s, and is
+why 60 was the right floor to begin with. Scaling both constants by
+`sqrt(g/g₀)` makes GRAVITY a pure rescaling of time: under `v → v/k`,
+`g → g/k²` the parabola `x = vt, y = gt²/2` traces the **identical path**, taken
+`k` times slower. So the character of the motion, the distribution of contact
+angles and the resulting peg pattern are all preserved exactly; only the tempo
+moves. Measured, with three balls:
+
+| GRAVITY | scale | hits/sec |
+| ------- | ----- | -------- |
+| 5       | 0.15  | 1.0      |
+| 30      | 0.37  | 2.1      |
+| 220     | 1.00  | 6.1      |
+| 900     | 2.02  | 12.3     |
+
+Three consequences worth stating, because each is a bug if forgotten:
+
+- **The scale is floored** at `PHYS_MIN_SPEED_SCALE`. Gravity may legally be 0
+  (a container stirred purely by its rotating wall), and an unclamped `sqrt`
+  would take the energy floor to zero — balls coasting to a halt — *and* the
+  impact threshold to zero, so every graze would speak. That is the buzzer
+  failure mode reached from the opposite direction.
+- **Reported hit energy is normalised** back into reference units before it
+  leaves the physics. ACCENT maps a fixed 30..150 impact window onto gate level
+  (`sequencer.hpp`); a slow container reporting its raw, small speeds would make
+  every hit read as feather-light and collapse ACCENT to a constant.
+- **The coupling uses the receiving container's threshold.** "Was that hard
+  enough to ring?" is a question about the rim being struck, and A and B can be
+  running very different gravities. Using the source's would let a heavy A
+  machine-gun a becalmed B.
+
+`Physics.TheReferenceGravityIsUnscaled` pins the compatibility claim: at 220 the
+scale is exactly 1.0 and every number is what it always was.
+
+The **three time constants** — `PEG_REFRACTORY_US`, `PEG_MIN_INTERVAL_US` and
+`PHYS_REVIVE_US` — scale _inversely_ with the same factor. Speeds multiply by it,
+times divide by it; that is what rescaling time means. Leaving the refractory
+windows absolute caps every container at 83 Hz, which is invisible at the
+reference where the natural rate is ~6 Hz, and wildly out of scale in a container
+whose natural rate is 1 Hz — anything that does chatter down there then runs
+completely unchecked.
+
+### Exhausted versus riding
+
+A ball stops making notes in two quite different ways, and conflating them was a
+long-standing bug that the gravity scaling made much easier to hit.
+
+**Exhausted** — the ball has genuinely run out of energy and is settling into a
+pile at the bottom. Absolute speed is the right measure, an immediate top-up to
+`PHYS_MIN_BOUNCE_SPEED` is the right response, and that is the original floor.
+
+**Riding** — the ball has plenty of speed, but SPIN's grip has dragged it up to
+the rim's own velocity. `vn`, the quantity that decides whether a strike speaks,
+is measured _relative to the wall_, so a co-rotating ball registers nothing while
+looking perfectly lively on screen. The absolute floor cannot see this at all: it
+looks at a ball travelling at 226 px/s (SPIN 1 at 120 BPM) and correctly declines
+to add energy to it.
+
+This was already live before the gravity work: measured at that commit, **SPIN 1
+produced 0.02 notes/sec at every gravity** — the container fired once and then
+rode the rim in silence indefinitely. It went unnoticed because every physics
+test in the suite ran with `omega = 0`. Scaling the speed constants with gravity
+then spread the same failure up into the slower spins, since the floor fell below
+the rim speed: SPIN 4 was silent at any gravity below ~80, which is exactly where
+the ambient settings live.
+
+The fix has two halves, and the second is as important as the first:
+
+1. The floor is also evaluated in the **wall's frame**, which is the frame the
+   note-making quantity lives in.
+2. That revive is **rate-limited by whether the ball is actually failing to
+   speak** — `lastHitUs`, the time of its last real strike. A bare wall-frame
+   floor over-corrects badly: a dragged ball is below it on essentially every
+   contact, gets re-launched every time, and with the rim sweeping past returns
+   within ~10 ms. Measured, that turned the silence into a 45 Hz machine-gun.
+
+So a ball riding the rim gets flicked off it a few times a second rather than
+continuously. That is both musical and honest about the physics — a fast-spinning
+bowl really does hold its contents against the wall.
+
+One consequence worth stating plainly: **the rotating wall is an energy source
+that does not scale with gravity.** At SPIN 1 or 1/2 the wall stirs the container
+harder than gravity pulls on it, and GRAVITY loses most of its authority over the
+density. SPIN 4 and slower leave it in charge. `Physics.NoSpinAndGravityCombinationGoesSilent`
+sweeps all six spin rates × six gravities × both directions, which is the shape
+of test this bug needed — any single pair looks fine, and the failure only shows
+up as a hole in the grid.
+
+### DENSITY and SPACE
+
+Two controls sit at the very end of the hit path, after the physics has fully
+resolved the bounce and after the peg mask:
+
+- **DENSITY** — the percentage chance that a note which cleared everything else
+  actually speaks.
+- **SPACE** — a minimum gap between two notes from one container, set in beats
+  and converted to µs against the live tempo by `ApplyParams()` (the container
+  has no clock, exactly as with the loop period).
+
+They exist because *every other* way of thinning the output — fewer balls, less
+gravity, less bounce, fewer pegs — also changes how the container moves, and the
+screen is half the instrument. A thinned note is a bounce you see and do not
+hear, and `Physics.DensityDoesNotDisturbTheMotion` asserts the simulation stays
+bit-identical.
+
+SPACE is checked **first**, then DENSITY. SPACE is a hard ceiling on the rate and
+DENSITY thins what got through, so the two compose rather than interact: at SPACE
+1 beat and DENSITY 50 % you get "at most one note a beat, and about half the
+beats speak". The reverse order would have DENSITY rolling dice on notes SPACE
+was going to drop anyway.
+
+Only a note that actually *speaks* restarts the SPACE window. Restarting it on a
+dropped note would let a busy container gate itself into permanent silence after
+its first note — `Physics.SpaceDoesNotStarveAfterDroppingNotes`.
+
+Both live in `Container` rather than in the sequencer so they take part in the
+loop snapshot: DENSITY draws from the container's PRNG and SPACE keeps a
+timestamp, and if either sat above the snapshot boundary a "repeating" phrase
+would quietly gain and lose notes on every pass. See §6.
+
+### The factory patch is two examples
+
+Because the containers are wholly independent at PROXIMITY 0, the boot patch can
+be two worked examples rather than one, and it is:
+
+| | A (OUT 1/3) | B (OUT 2/4) |
+| --- | --- | --- |
+| Rate | ~6.2 notes/s | ~0.45 notes/s |
+| Physics | g 220, 3 balls, SPIN 8 | g 20, 1 ball, SPIN 16, bounce 0.45 |
+| Notes | C major, SPREAD 2 | C pentatonic major, SPREAD 1, high |
+| Gate | 0 / 100 ms | 120 / 750 ms |
+| Thinning | none | DENSITY 85, SPACE 2 beats |
+
+A is unchanged from the original factory patch, so patching only OUT 1 still
+gives exactly what the module has always given. B exists to make the slow half of
+the range audible without the user having to know it is there — which is the
+thing a parking-lot feature usually fails at.
+
+Three decisions in B are worth recording:
+
+- **Its scale is a subset of A's.** The containers drift into every possible
+  alignment, so B's notes have to be ones that cannot clash with A's whatever
+  lands together. C pentatonic major (C D E G A) contains no semitone at all,
+  which is what lets it sit under a busy C major sequence indefinitely.
+- **SPIN stays slow.** The rotating wall is an energy source that does not scale
+  with gravity, so a fast spin here would stir the container harder than gravity
+  pulls on it and undo the slowness GRAVITY was set for.
+- **The envelope is sized against SPACE's floor, not the average gap.** B averages
+  ~2.3 s between notes but SPACE only guarantees 1 s, so attack + decay is
+  120 + 750 = 870 ms. Sizing it against the average would look right on paper and
+  clip on every close pair — the same mistake as A's decay, one order of
+  magnitude further out.
+
+`Physics.FactoryContainersSitAtOppositeEndsOfTheRange` pins the behaviour; the
+Rack isolation test pins the settings themselves, including that the envelope
+fits inside the SPACE floor.
 
 ---
 

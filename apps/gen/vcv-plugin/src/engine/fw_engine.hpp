@@ -139,6 +139,18 @@ void pegsSet(Engine *, int c, int n);
 bool pegEnabledGet(Engine *, int c, int peg);
 void pegEnabledSet(Engine *, int c, int peg, bool on);
 
+// ── Note thinning, per container ─────────────────────────────────────────────
+// DENSITY is the chance (percent) that a strike which cleared everything else
+// actually speaks; SPACE is a minimum gap between notes, in beats. Both thin the
+// stream while leaving the motion exactly as it was — every other way of getting
+// fewer notes also changes how the container moves.
+int densityGet(Engine *, int c);
+void densitySet(Engine *, int c, int pct);
+int spaceCount();
+std::string spaceName(int index);
+int spaceGet(Engine *, int c);
+void spaceSet(Engine *, int c, int index);
+
 // ── Notes, per container ─────────────────────────────────────────────────────
 int scaleCount();
 std::string scaleName(int index);

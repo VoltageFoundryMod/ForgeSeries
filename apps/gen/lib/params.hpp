@@ -28,7 +28,13 @@
 #include "physics.hpp"
 
 // Parameter ranges — also the clamp limits the menu setters use.
-#define PARAM_GRAVITY_MIN 20.0f
+//
+// The gravity floor was 20 back when it only bent trajectories and the note rate
+// was pinned by an absolute energy floor. Now that gravity rescales time
+// (physics.hpp, PHYS_REF_GRAVITY) the bottom of the range is where the ambient
+// settings live: 5 is a speed scale of 0.15, about a seventh of the reference
+// tempo, or roughly one note every three seconds from a single ball.
+#define PARAM_GRAVITY_MIN 5.0f
 #define PARAM_GRAVITY_MAX 900.0f
 #define PARAM_BOUNCE_MIN 0.10f
 #define PARAM_BOUNCE_MAX 0.98f
@@ -55,6 +61,9 @@ struct ContainerParams {
     uint8_t balls = 3;
     uint8_t pegs = 8;
     uint16_t pegMask = 0xFFFF;
+    // ── Note thinning (see the Container members of the same name) ──
+    uint8_t density = 100;      // % of otherwise-valid strikes that speak
+    uint8_t space = SpaceOff;   // minimum gap between notes, in beats
 };
 
 struct WorldParams {
@@ -79,12 +88,14 @@ struct ModBus {
     float spinScale[2] = {0.0f, 0.0f}; // additive on a 1.0 base multiplier
     float balls[2] = {0.0f, 0.0f};     // additive, whole balls
     float pegs[2] = {0.0f, 0.0f};      // additive, whole pegs
+    float density[2] = {0.0f, 0.0f};   // additive, percent
     float proximity = 0.0f;            // additive, 0..1 domain
     float coupling = 0.0f;             // additive, 0..1 domain
 
     void Clear() {
         for (int i = 0; i < 2; i++) {
             gravity[i] = bounce[i] = spinScale[i] = balls[i] = pegs[i] = 0.0f;
+            density[i] = 0.0f;
         }
         proximity = coupling = 0.0f;
     }
@@ -114,6 +125,18 @@ inline void ApplyParams(PhysicsWorld &world, const Clock &clk,
         c.SetBallCount((int)lroundf((float)p.balls + mod.balls[i]));
         c.SetPegCount((int)lroundf((float)p.pegs + mod.pegs[i]));
         c.SetPegMask(p.pegMask);
+
+        c.SetDensity((int)lroundf((float)p.density + mod.density[i]));
+
+        // SPACE is set in beats and enforced in µs, so it is re-derived every
+        // pass against the live tempo — a tempo change moves the spacing with it,
+        // which is the whole reason the control is musical rather than a
+        // millisecond value that means something different at every BPM.
+        unsigned long gapUs = 0;
+        if (p.space > SpaceOff && p.space < NoteSpaceLength) {
+            gapUs = (unsigned long)(NoteSpaceBeats[p.space] * (float)clk.BeatUs());
+        }
+        c.SetMinGapUs(gapUs);
     }
 
     world.SetProximity(constrain(wp.proximity + mod.proximity, 0.0f, 1.0f));

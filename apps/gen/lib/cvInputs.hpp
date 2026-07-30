@@ -81,12 +81,18 @@ enum CVTarget : uint8_t {
     CVPegsB,
     CVProximity,
     CVCoupling,
+    // Appended, never inserted: presets store the target as a raw index, so a new
+    // entry in the middle would silently re-point every saved patch's modulation.
+    CVDensityA,
+    CVDensityB,
+    CVDensityBoth,
     CVTargetLength
 };
 
 static const char *const CVTargetNames[] = {
     "OFF", "GRAV A", "GRAV B", "GRAV AB", "SPIN A", "SPIN B", "SPIN AB",
-    "BOUNCE", "BALLS", "PEGS A", "PEGS B", "PROX", "COUPLE"};
+    "BOUNCE", "BALLS", "PEGS A", "PEGS B", "PROX", "COUPLE",
+    "DENS A", "DENS B", "DENS AB"};
 
 // Per-input target and depth (0..100 %).
 uint8_t cvTarget[NUM_CV_INS] = {CVProximity, CVGravityBoth};
@@ -217,6 +223,21 @@ void BuildModBus(ModBus &mod) {
             break;
         case CVPegsB:
             mod.pegs[1] += uni * depth * (float)(PHYS_MAX_PEGS - PHYS_MIN_PEGS);
+            break;
+
+        // DENSITY is an amount, not a trim, so it takes the unipolar adapter: set
+        // the menu value to the sparse end and let the CV open the container up.
+        // A slow LFO here is the single most direct way to get a patch that
+        // breathes — the motion never changes, only how much of it you hear.
+        case CVDensityA:
+            mod.density[0] += uni * depth * 100.0f;
+            break;
+        case CVDensityB:
+            mod.density[1] += uni * depth * 100.0f;
+            break;
+        case CVDensityBoth:
+            mod.density[0] += uni * depth * 100.0f;
+            mod.density[1] += uni * depth * 100.0f;
             break;
 
         // Proximity and coupling live in 0..1 and read best as absolute

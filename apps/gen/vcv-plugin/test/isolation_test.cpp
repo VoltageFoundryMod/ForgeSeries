@@ -93,6 +93,13 @@ int main() {
     CHECK(scaleGet(a, 0) == 8 && rootGet(a, 0) == 3 && spreadGet(a, 0) == 4 &&
               biasGet(a, 0) == -60,
           "A: scale + root + spread + bias set");
+
+    // ── Note thinning is per-instance ───────────────────────────────────────
+    densitySet(a, 0, 35);
+    spaceSet(a, 0, 3); // one beat
+    CHECK(densityGet(a, 0) == 35 && spaceGet(a, 0) == 3, "A: density + space set");
+    CHECK(densityGet(b, 0) == 100 && spaceGet(b, 0) == 0,
+          "B: density + space still at their defaults");
     CHECK(scaleGet(b, 0) == 1 && rootGet(b, 0) == 0 && spreadGet(b, 0) == 2 &&
               biasGet(b, 0) == 0,
           "B: scale + root + spread + bias untouched");
@@ -219,6 +226,8 @@ int main() {
     CHECK(scaleGet(b, 0) == 8 && rootGet(b, 0) == 3 && spreadGet(b, 0) == 4 &&
               biasGet(b, 0) == -60,
           "B: scale + root + spread + bias restored from A's blob");
+    CHECK(densityGet(b, 0) == 35 && spaceGet(b, 0) == 3,
+          "B: density + space restored from A's blob");
     CHECK(proximityGet(b) == 100 && couplingGet(b) == 25,
           "B: proximity + couple restored from A's blob");
     CHECK(bpmGet(b) == 200 && quantizeGet(b) == 3,
@@ -241,6 +250,28 @@ int main() {
     reset(a);
     CHECK(gravityGet(a, 0) == 220 && ballsGet(a, 0) == 3 && proximityGet(a) == 0,
           "A: reset() restores the factory defaults");
+
+    // ── The factory patch ships two worked examples ─────────────────────────
+    // Container 0 is the busy sequencer the module has always been; container 1
+    // is a slow ambient voice. They are deliberately far apart so the first patch
+    // cable demonstrates both ends of the range — see LoadDefaultParams().
+    CHECK(gravityGet(a, 0) == 220 && ballsGet(a, 0) == 3 && pegsGet(a, 0) == 8 &&
+              densityGet(a, 0) == 100 && spaceGet(a, 0) == 0 && decayGet(a, 0) == 100,
+          "factory A: busy sequencer, no thinning");
+    CHECK(gravityGet(a, 1) == 20 && ballsGet(a, 1) == 1 && pegsGet(a, 1) == 5 &&
+              densityGet(a, 1) == 85 && spaceGet(a, 1) == 4 /* 2 beats */,
+          "factory B: slow, thinned");
+    // B's whole point is an envelope the module could not previously hold. It
+    // only works because SPACE floors the gap, so it has to fit inside that
+    // floor — 2 beats at the factory 120 BPM is 1000 ms.
+    {
+        int envelope = attackGet(a, 1) + decayGet(a, 1);
+        int floorMs = 2 * 60000 / bpmGet(a);
+        CHECK(envelope < floorMs,
+              "factory B: envelope fits inside the SPACE floor");
+    }
+    // Independent containers, or the two examples would not be separable.
+    CHECK(proximityGet(a) == 0, "factory: containers start apart");
     CHECK(gravityGet(b, 0) == 700 && proximityGet(b) == 100,
           "B: unaffected by A's reset()");
 

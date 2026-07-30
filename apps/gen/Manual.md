@@ -34,9 +34,11 @@ Part of the **Forge** series of modules which share a single hardware platform. 
     - [Settings](#settings)
     - [Presets](#presets)
   - [Working with the module](#working-with-the-module)
+    - [What you hear out of the box](#what-you-hear-out-of-the-box)
     - [Getting a first sequence](#getting-a-first-sequence)
     - [Using proximity musically](#using-proximity-musically)
     - [Taming or thickening the density](#taming-or-thickening-the-density)
+    - [Slow, ambient patterns](#slow-ambient-patterns)
     - [Keeping a phrase](#keeping-a-phrase)
     - [Locking to a grid](#locking-to-a-grid)
     - [External clock sync](#external-clock-sync)
@@ -128,9 +130,9 @@ Turning the encoder from the home screen walks through the pages in this order:
 | **A PHYSICS** | Gravity, bounce, grip, spin, direction, ball count |
 | **B PHYSICS** | Same, container B                                  |
 | **LOOP**      | Phrase length, nap/wake, per-container shift       |
-| **A NOTES**   | Scale, root, spread, bias, peg count               |
+| **A NOTES**   | Scale, root, spread, bias, peg count, density      |
 | **B NOTES**   | Same, container B                                  |
-| **A GATE**    | Mode, attack, decay, level, accent                 |
+| **A GATE**    | Mode, attack, decay, level, accent, space          |
 | **B GATE**    | Same, container B                                  |
 | **CV IN**     | IN 2 / IN 3 destination and depth                  |
 | **SETTINGS**  | Screen timeout, boot menu                          |
@@ -204,7 +206,22 @@ Note that both containers stay separate instruments even when merged: each keeps
 
 ![Physics page](images/display/Physics.png)
 
-- **GRAVITY** (20–900) — How hard the balls are pulled down. Low values give slow, floaty, sparse patterns; high values give fast, dense ones. Gravity mostly changes _how often_ pegs are struck rather than how hard.
+- **GRAVITY** (5–900) — The container's tempo control. Gravity scales the whole simulation in _time_: the balls trace the same paths and strike the same pegs, they just take longer to get there. It changes _how often_ pegs are struck, not how hard.
+
+  With three balls, measured:
+
+  | GRAVITY | Notes per second | Average gap |
+  | ------- | ---------------- | ----------- |
+  | 5       | 0.9              | 1080 ms     |
+  | 30      | 2.3              | 440 ms      |
+  | 120     | 4.6              | 220 ms      |
+  | 220     | 6.2              | 160 ms      |
+  | 600     | 10.2             | 100 ms      |
+  | 900     | 12.6             | 80 ms       |
+
+  Fewer balls thins it further — a single ball at GRAVITY 5 speaks about once every three seconds, which is where the slow ambient settings live.
+
+  Note that a fast **SPIN** competes with this. The rotating wall is its own energy source and does not scale with gravity, so at SPIN `1` or `1/2` the wall is stirring the container harder than gravity is pulling on it and GRAVITY loses most of its authority over the density. SPIN `4` and slower leave it in charge.
 - **BOUNCE** (10–98 %) — How much energy survives an impact. High values keep the balls lively and the pattern busy; low values let them settle toward the bottom of the container and tick along more sparsely.
 - **GRIP** (0–100 %) — How much of the rotating wall's motion is transferred to a ball on contact. This is what makes a rotating container actually stir the balls instead of just spinning a decorative ring behind them. At 0 % rotation only moves the pegs under the balls; at high values the balls get carried around the rim.
 - **SPIN** — Rotation rate in **beats per revolution**: `1/2`, `1`, `2`, `4`, `8`, `16`. Tied to the clock, so rotation stays musically related to the patch. Faster spin sweeps the peg ring under the balls more quickly and moves the melody around more.
@@ -229,6 +246,7 @@ Note that both containers stay separate instruments even when merged: each keeps
   | `HI100` | C2 C3 E3 F3 G3 A3 B3 C4 |
 
 - **PEGS** (3–16) — How many pegs are on the ring. Fewer pegs means bigger intervals between neighbouring notes and a more angular melody; more pegs means smaller steps and a more scalar one. Changing the count re-maps every peg's pitch, since the count is what decides where each peg falls within SPREAD.
+- **DENSITY** (0–100 %) — The chance that a strike actually speaks. At 100 % every valid hit becomes a note, which is the module's original behaviour. Lower it and notes drop out at random while the balls carry on exactly as before — this is the only thinning control that leaves the motion untouched, so the screen stays as lively as it was and only the output gets sparser. At 0 % the container is silent but still bouncing, still coupling and still driving the display.
 
 There is deliberately no octave control — SPREAD and BIAS do more with the same panel space.
 
@@ -241,9 +259,14 @@ There is deliberately no octave control — SPREAD and BIAS do more with the sam
   - **TRIG** — A fixed 10 ms pulse at full level on every hit. Use this to drive drums or anything that only wants a clean trigger.
   - **GATE** — Follows the level at IN 1, ignoring the hits. Useful when you want an external gate to shape the voice.
 - **ATTACK** (0–2000 ms) — Envelope attack time. Zero gives an instant onset.
-- **DECAY** (0–4000 ms) — Envelope decay time. Keep this shorter than the gap between hits, or the envelope never returns to zero and the output stops behaving like a gate. At factory settings a container fires roughly seven times a second, which is why the default decay is 100 ms.
+- **DECAY** (0–4000 ms) — Envelope decay time. Keep this shorter than the gap between hits, or the envelope never returns to zero and the output stops behaving like a gate. At factory settings a container fires roughly six times a second, which is why the default decay is 100 ms. **SPACE**, below, is how you buy room for a longer one.
 - **LEVEL** (0–100 %) — Gate output level, 100 % being 5 V.
 - **ACCENT** (0–100 %) — How much a ball's impact speed scales the gate level. At 0 % every hit is the same height; at high values soft grazes come out quiet and hard strikes come out full. Accent applies in ENV mode only — a trigger pulse has to keep a fixed height or downstream modules will start missing it.
+- **SPACE** (`OFF`, `1/4`, `1/2`, `1`, `2`, `4`, `8` beats) — A minimum gap between two notes from this container. A note arriving sooner than the gap is dropped; one arriving later plays the instant it happens. It follows the tempo, so the spacing moves with the BPM.
+
+  This is a rate _ceiling_, not a grid — it never moves a note, so the rhythm stays as human as the physics made it, just sparser. **QUANTIZE** on the CLOCK page is the control that snaps notes onto a grid, and the two work together: QUANTIZE decides where notes may land, SPACE decides how close together they may land.
+
+  SPACE is also what makes long decays usable. At `1` beat and 90 BPM nothing can arrive less than 660 ms apart, so a 500 ms decay always finishes.
 
 ### CV Input Modulation
 
@@ -266,14 +289,19 @@ IN 2 and IN 3 each have a **DEST** (destination) and a **DEPTH** (0–100 %). De
 | `PEGS B`    | Peg count, container B                    |
 | `PROX`      | Proximity                                 |
 | `COUPLE`    | Coupling amount                           |
+| `DENS A`    | Density, container A                      |
+| `DENS B`    | Density, container B                      |
+| `DENS AB`   | Density, both containers                  |
 
-The **trim** targets (gravity, spin, bounce) are bipolar: 2.5 V is no change, below that subtracts and above that adds. The **amount** targets (balls, pegs, proximity, couple) are unipolar: 0 V adds nothing and 5 V adds the full depth on top of the menu setting.
+The **trim** targets (gravity, spin, bounce) are bipolar: 2.5 V is no change, below that subtracts and above that adds. The **amount** targets (balls, pegs, proximity, couple, density) are unipolar: 0 V adds nothing and 5 V adds the full depth on top of the menu setting.
 
 Modulation is always applied _on top_ of what you set in the menu, never written into it — the menu keeps showing your setting and presets store your setting, not this instant's CV value.
 
 Spin is modulated as a continuous multiplier rather than by stepping through the beats-per-revolution list, so a CV sweep glides the rotation instead of jumping between ratios.
 
 `PROX` on a slow LFO is the single most rewarding patch on this module: the containers drift in and out of each other's reach and the two voices go from independent to entangled and back.
+
+`DENS AB` on a slow LFO is the second: set DENSITY low in the menu and let the CV open the containers up, and the patch breathes between near-silence and a full run without the motion on screen changing at all. Put `DENS A` and `DENS B` on out-of-phase LFOs and the two voices hand off to each other.
 
 ### Settings
 
@@ -291,9 +319,26 @@ Spin is modulated as a continuous multiplier rather than by stepping through the
 
 ## Working with the module
 
+### What you hear out of the box
+
+The factory patch is deliberately **two different instruments**, one per container, with PROXIMITY at 0 so they run independently. Patch both pairs of jacks and you have the module's whole range in front of you before you change anything:
+
+| | **A** — OUT 1 / OUT 3 | **B** — OUT 2 / OUT 4 |
+| --- | --- | --- |
+| Character | The sequencer | The ambient voice |
+| Rate | ~6 notes/sec | ~1 note every 2 s |
+| Notes | C major, two octaves | C pentatonic major, one octave, high |
+| Physics | GRAVITY 220, 3 balls, SPIN 8 | GRAVITY 20, 1 ball, SPIN 16 |
+| Gate | 100 ms decay | 120 ms attack, 750 ms decay |
+| Thinning | none | DENSITY 85 %, SPACE `2` |
+
+B is the worked example for everything in [Slow, ambient patterns](#slow-ambient-patterns) below — its settings are exactly what that section builds, so you can read the recipe off the menu pages rather than typing it in. Its scale is a subset of A's on purpose: the two containers drift into every possible alignment, so B's notes have to be ones that cannot clash with A's whatever lands together.
+
+Then turn **PROXIMITY** up. With the containers this far apart in character it is the most rewarding control on the module — A's busy strikes start shaking notes out of B's slow one.
+
 ### Getting a first sequence
 
-Out of the box both containers are running with three balls each on a C major ring. From there:
+From the factory patch:
 
 1. Set **SCALE** and **ROOT** on the A NOTES and B NOTES pages. Give the two containers different roots a fifth apart for an easy two-voice patch.
 2. Set **PEGS**. Around 5–8 gives clear melodic movement; 12–16 gives something closer to a run.
@@ -313,14 +358,34 @@ If it appears to be doing nothing, check that **COUPLE** is above about 50 % —
 
 ### Taming or thickening the density
 
-Every hit is one note, and at factory settings a container fires several times a second. To thin the pattern out:
+Every hit is one note, and at factory settings a container fires about six times a second. Five controls thin it out, and they are not interchangeable — each gives up something different:
 
-- Fewer **BALLS**.
-- Lower **GRAVITY**, or lower **BOUNCE** so balls lose energy faster.
-- Mute pegs (see below) — a muted peg still bounces the ball, it just does not speak.
-- Fewer **PEGS**, which also widens the intervals.
+| Control     | What it does                    | What else changes                 |
+| ----------- | ------------------------------- | --------------------------------- |
+| **DENSITY** | Drops notes at random           | Nothing — the motion is identical |
+| **SPACE**   | Enforces a minimum gap          | Nothing — the motion is identical |
+| **GRAVITY** | Slows the whole simulation down | The balls visibly slow too        |
+| **BALLS**   | Fewer sources of hits           | Less interplay, more predictable  |
+| **PEGS**    | Fewer pegs on the ring          | Wider intervals in the melody     |
 
-To thicken it: more balls, higher gravity and bounce, faster **SPIN**, and more proximity.
+DENSITY and SPACE are the two that leave the simulation alone — the screen looks exactly as busy as it did and only the output thins. They compose cleanly: SPACE puts a ceiling on the rate, DENSITY thins whatever got through. At SPACE `1` and DENSITY 50 % you get at most one note per beat, and roughly half the beats speak.
+
+Muting pegs is a sixth route — a muted peg still bounces the ball, it just does not speak — but it also decides _which_ notes survive rather than how many.
+
+To thicken instead: more balls, higher gravity and bounce, faster **SPIN**, and more proximity.
+
+### Slow, ambient patterns
+
+Container **B** already ships this way, so the fastest way to learn it is to walk the B pages and read what each control is doing. Building it from scratch on A:
+
+1. **A PHYSICS** — GRAVITY 20, BALLS 1, BOUNCE 45 %. One slowly falling ball. GRAVITY is doing the real work here: it rescales the whole simulation in time, so this is about a third of the default tempo. Keep **SPIN** at `8` or slower — the rotating wall is an energy source that does _not_ scale with gravity, so a fast spin stirs the container harder than low gravity pulls on it and undoes the slowness.
+2. **A NOTES** — SCALE Pentatonic Major, SPREAD 1, PEGS 5. One peg per scale degree, so the ring _is_ the scale. A pentatonic has no semitone in it, which is what lets it sit under another voice without ever fighting it.
+3. **A NOTES ▸ DENSITY** — around 85 %. Drops the occasional note so the line wanders instead of ticking, without touching the motion on screen.
+4. **A GATE** — SPACE `2`, then ATTACK 120 ms and DECAY 750 ms. Do these in that order: SPACE sets a hard floor under the gap (two beats, so 1000 ms at 120 BPM), and the envelope has to fit inside **that floor**, not inside the average gap. Sizing a 1500 ms decay against a 2 s average looks fine on paper and clips on every close pair.
+5. **COUPLING** — PROXIMITY around 40 %, COUPLE 70 %. The containers now occasionally answer each other, which is where the "evolving" comes from.
+6. **CV IN** — `DENS AB` on a very slow LFO at 60 % depth, with DENSITY set to 30 % in the menu. The patch now breathes over minutes.
+
+Add **LOOP** BEATS 8 with NAP 1 / WAKE 3 if you want it to settle into something that repeats and then opens back up. Turn GRAVITY down toward 5 for the extreme end — about one note every three seconds from a single ball.
 
 ### Keeping a phrase
 
@@ -464,8 +529,9 @@ The wizard has 6 steps: output trim, output offset capture, then four CV input c
 - **No Power**: Ensure the module is properly connected to the power supply and the power jumper is set correctly.
 - **No Output**: Check the GATE **LEVEL** is not at 0 %, and that the container has at least one active peg. A container whose pegs are all muted bounces silently.
 - **The gate never returns to zero**: The envelope **DECAY** is longer than the gap between hits. Shorten the decay, or reduce the density (fewer balls, lower gravity or bounce).
-- **Notes are too dense**: Reduce **BALLS**, **GRAVITY**, **BOUNCE** or **PROXIMITY**, or mute some pegs.
-- **The pattern went silent**: The balls may have settled. Use **KICK** on the COUPLING page, or raise **GRAVITY** or **BOUNCE**.
+- **Notes are too dense**: Lower **DENSITY** or raise **SPACE** — those two thin the output without changing the motion. Reducing **BALLS**, **GRAVITY**, **BOUNCE** or **PROXIMITY** also works, and changes the character as well.
+- **The pattern went silent**: Check **DENSITY** is not at 0 and **SPACE** is not longer than you meant. Otherwise the balls may have settled — use **KICK** on the COUPLING page, or raise **GRAVITY** or **BOUNCE**.
+- **It plays for a while, then goes quiet while the balls keep moving**: the balls have been picked up by the rotating wall and are riding the rim, where they no longer strike it. The container flicks them back off automatically, so this should recover on its own within a second or two; if a patch sits on the edge of it, slow the **SPIN** down or raise **GRAVITY** so falling wins over stirring.
 - **PROXIMITY seems to do nothing**: Raise **COUPLE**. Watch for the expanding spark rings, which mark a transmitted strike.
 - **Inconsistent tempo**: Ensure the external clock signal is stable and that **CLK DIV** matches its resolution.
 

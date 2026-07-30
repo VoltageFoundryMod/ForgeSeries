@@ -34,9 +34,9 @@
 //   3  COUPLING   — proximity, couple amount, reset/kick
 //   4  A PHYSICS  — gravity, bounce, grip, spin, reverse, balls
 //   5  B PHYSICS
-//   6  A NOTES    — scale, root, spread, bias, peg count
+//   6  A NOTES    — scale, root, spread, bias, peg count, density
 //   7  B NOTES
-//   8  A GATE     — mode, attack, decay, level, accent
+//   8  A GATE     — mode, attack, decay, level, accent, space
 //   9  B GATE
 //  10  CV         — IN 2 / IN 3 target + depth
 //  11  SETTINGS   — preset slot, save, load, randomize, screen timeout
@@ -341,6 +341,18 @@ static void setPegs(int d) {
     MarkUnsaved();
 }
 
+// DENSITY sits on NOTES rather than PHYSICS because it is not a physics control
+// at all: the balls do exactly what they did, and this decides which of their
+// strikes become notes — the same domain as PEGS directly above it, which
+// decides how many notes there are to hit in the first place.
+template <int C>
+static String getDensity() { return String(containerParams[C].density) + "%"; }
+template <int C>
+static void setDensity(int d) {
+    containerParams[C].density = (uint8_t)constrain((int)containerParams[C].density + d, 0, 100);
+    MarkUnsaved();
+}
+
 // ── GATE (per container) ─────────────────────────────────────
 template <int C>
 static String getGateMode() { return String(channels[C].envelope.GetModeName()); }
@@ -379,6 +391,20 @@ static String getAccent() { return String(channels[C].GetAccent()) + "%"; }
 template <int C>
 static void setAccent(int d) {
     channels[C].SetAccent(channels[C].GetAccent() + d);
+    MarkUnsaved();
+}
+
+// SPACE lives at the bottom of GATE, under DECAY, because the two are read
+// together: an envelope longer than the gap between notes never returns to zero
+// and stops being a gate, which is the module's documented first-time failure.
+// SPACE is the control that puts a floor under that gap, so it belongs where you
+// are already looking when you hit the problem.
+template <int C>
+static String getSpace() { return String(NoteSpaceNames[containerParams[C].space]); }
+template <int C>
+static void setSpace(int d) {
+    containerParams[C].space = (uint8_t)constrain((int)containerParams[C].space + StepDir(d), 0,
+                                                 (int)NoteSpaceLength - 1);
     MarkUnsaved();
 }
 
@@ -511,6 +537,7 @@ const MenuItem MENU_ITEMS[] = {
     {"SPREAD", getSpread<0>, nullptr, 76, 0, 6, ROW_SINGLE, MENU_EDIT, setSpread<0>, nullptr},
     {"BIAS", getBias<0>, nullptr, 76, 0, 6, ROW_SINGLE, MENU_EDIT, setBias<0>, nullptr},
     {"PEGS", getPegs<0>, nullptr, 76, 0, 6, ROW_SINGLE, MENU_EDIT, setPegs<0>, nullptr, true},
+    {"DENSITY", getDensity<0>, nullptr, 76, 0, 6, ROW_SINGLE, MENU_EDIT, setDensity<0>, nullptr, true},
 
     // ── 7 B NOTES ──
     {"SCALE", getScaleName<1>, nullptr, 76, 0, 7, ROW_SINGLE, MENU_EDIT, setScale<1>, nullptr},
@@ -518,6 +545,7 @@ const MenuItem MENU_ITEMS[] = {
     {"SPREAD", getSpread<1>, nullptr, 76, 0, 7, ROW_SINGLE, MENU_EDIT, setSpread<1>, nullptr},
     {"BIAS", getBias<1>, nullptr, 76, 0, 7, ROW_SINGLE, MENU_EDIT, setBias<1>, nullptr},
     {"PEGS", getPegs<1>, nullptr, 76, 0, 7, ROW_SINGLE, MENU_EDIT, setPegs<1>, nullptr, true},
+    {"DENSITY", getDensity<1>, nullptr, 76, 0, 7, ROW_SINGLE, MENU_EDIT, setDensity<1>, nullptr, true},
 
     // ── 8 A GATE ──
     {"MODE", getGateMode<0>, nullptr, 76, 0, 8, ROW_SINGLE, MENU_EDIT, setGateMode<0>, nullptr},
@@ -525,6 +553,7 @@ const MenuItem MENU_ITEMS[] = {
     {"DECAY", getDecay<0>, nullptr, 76, 0, 8, ROW_SINGLE, MENU_EDIT, setDecay<0>, nullptr},
     {"LEVEL", getLevel<0>, nullptr, 76, 0, 8, ROW_SINGLE, MENU_EDIT, setLevel<0>, nullptr},
     {"ACCENT", getAccent<0>, nullptr, 76, 0, 8, ROW_SINGLE, MENU_EDIT, setAccent<0>, nullptr},
+    {"SPACE", getSpace<0>, nullptr, 76, 0, 8, ROW_SINGLE, MENU_EDIT, setSpace<0>, nullptr},
 
     // ── 9 B GATE ──
     {"MODE", getGateMode<1>, nullptr, 76, 0, 9, ROW_SINGLE, MENU_EDIT, setGateMode<1>, nullptr},
@@ -532,6 +561,7 @@ const MenuItem MENU_ITEMS[] = {
     {"DECAY", getDecay<1>, nullptr, 76, 0, 9, ROW_SINGLE, MENU_EDIT, setDecay<1>, nullptr},
     {"LEVEL", getLevel<1>, nullptr, 76, 0, 9, ROW_SINGLE, MENU_EDIT, setLevel<1>, nullptr},
     {"ACCENT", getAccent<1>, nullptr, 76, 0, 9, ROW_SINGLE, MENU_EDIT, setAccent<1>, nullptr},
+    {"SPACE", getSpace<1>, nullptr, 76, 0, 9, ROW_SINGLE, MENU_EDIT, setSpace<1>, nullptr},
 
     // ── 10 CV ──
     {"IN2 DEST", getCvTarget<0>, nullptr, 72, 0, 10, ROW_SINGLE, MENU_EDIT, setCvTarget<0>, nullptr},

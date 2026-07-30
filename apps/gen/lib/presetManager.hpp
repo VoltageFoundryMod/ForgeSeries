@@ -41,7 +41,8 @@ extern uint8_t cvDepth[NUM_CV_INS];           // lib/cvInputs.hpp
 // 0xE1: first GravityForge layout.
 // 0xE2: per-channel OCTAVE replaced by SPREAD + BIAS.
 // 0xE3: loop / phrase mode (beats, wake, nap, per-container shift).
-#define VALID_MAGIC 0xE3 // 0xFF = erased flash, 0x00 = zeroed RAM
+// 0xE4: per-container DENSITY and SPACE.
+#define VALID_MAGIC 0xE4 // 0xFF = erased flash, 0x00 = zeroed RAM
 
 struct LoadSaveParams {
     uint8_t valid; // VALID_MAGIC = valid data; any other = use defaults
@@ -68,6 +69,8 @@ struct LoadSaveParams {
     uint8_t balls[2];
     uint8_t pegs[2];
     uint16_t pegMask[2];
+    uint8_t density[2]; // % of otherwise-valid strikes that speak
+    uint8_t space[2];   // minimum gap between notes, index into NoteSpaceNames
 
     // ── World ──
     float proximity;
@@ -94,54 +97,105 @@ struct LoadSaveParams {
 };
 
 // ── Factory defaults ──────────────────────────────────────────────────────────
-// Boots to something that plays immediately with nothing patched: both
-// containers running, A a slow major arpeggio low down, B faster and higher, and
-// the containers apart so the two sequences are independent until the user
-// dials PROXIMITY in. Coupling is pre-set to a useful 60 % so that turning
-// proximity up does something obvious straight away.
+// Boots to something that plays immediately with nothing patched, and — because
+// the two containers are wholly independent at PROXIMITY 0 — it boots to TWO
+// worked examples rather than one, so both ends of the module's range are
+// audible on the first patch cable:
+//
+//   A (OUT 1 / OUT 3) — the sequencer. Busy, low, C major across two octaves,
+//                       short envelopes. This is the module's identity and it is
+//                       unchanged from the original factory patch.
+//   B (OUT 2 / OUT 4) — the ambient voice. One slowly falling ball, C pentatonic
+//                       major up high, long soft envelopes, and the two thinning
+//                       controls doing real work.
+//
+// Patching only OUT 1 therefore still gives exactly what the module has always
+// given; OUT 2 is the demonstration that the same engine does slow, and that
+// GRAVITY / DENSITY / SPACE are how you get there.
+//
+// Coupling is pre-set to a useful 60 % so that turning PROXIMITY up does
+// something obvious straight away — and with the two containers set this far
+// apart in character, it is also the most interesting thing to turn: A's busy
+// strikes start shaking notes out of B's slow one.
 LoadSaveParams LoadDefaultParams() {
     LoadSaveParams p;
     p.valid = VALID_MAGIC;
 
-    p.noteMask[0] = 0x0AB5; // C major
-    p.noteMask[1] = 0x0AB5;
     for (int i = 0; i < NUM_CHANNELS; i++) {
-        p.scaleIndex[i] = 1; // Major
-        p.rootIndex[i] = 0;  // C
+        p.rootIndex[i] = 0; // C
         p.gateMode[i] = GateEnvelope;
-        p.attackMs[i] = 0;
         p.gateLevel[i] = 100;
         p.accent[i] = 0;
     }
-    // A covers two octaves evenly; B is narrower and crowded a little high,
-    // so the two containers sit in different registers without either being
-    // pinned to one octave.
-    p.spread[0] = 2;
-    p.bias[0] = 0;
-    p.spread[1] = 1;
-    p.bias[1] = 30;
-    // Decay has to be shorter than the gap between notes or the gate never
-    // returns to zero and stops being a gate. A container at these settings
-    // fires roughly 7 times a second (~140 ms apart), so ~100 ms articulates
-    // with room to spare. Longer envelopes are still one menu row away for
-    // pad-like patches — but the default has to sound like a sequencer.
-    p.decayMs[0] = 100;
-    p.decayMs[1] = 70;
-
     for (int i = 0; i < 2; i++) {
-        p.gravity[i] = 220.0f;
-        p.bounce[i] = 0.72f;
         p.grip[i] = 0.30f;
         p.freeHz[i] = 0.25f;
         p.reverse[i] = 0;
         p.pegMask[i] = 0xFFFF;
     }
+
+    // ── A: the sequencer ─────────────────────────────────────────────────────
+    p.noteMask[0] = 0x0AB5; // C major
+    p.scaleIndex[0] = 1;    // Major
+    p.spread[0] = 2;        // two octaves, evenly spaced
+    p.bias[0] = 0;
+    p.gravity[0] = 220.0f;
+    p.bounce[0] = 0.72f;
     p.spin[0] = Spin8;
-    p.spin[1] = Spin4;
     p.balls[0] = 3;
-    p.balls[1] = 2;
     p.pegs[0] = 8;
-    p.pegs[1] = 5;
+    // Decay has to be shorter than the gap between notes or the gate never
+    // returns to zero and stops being a gate. A container at these settings
+    // fires roughly 6 times a second (~160 ms apart), so ~100 ms articulates
+    // with room to spare.
+    p.attackMs[0] = 0;
+    p.decayMs[0] = 100;
+    // No thinning on this side. The dense evolving stream is what the module IS,
+    // and the same argument that keeps LOOP off at boot keeps these neutral here:
+    // both are ways of *taming* the thing it does, and at least one container has
+    // to be the thing itself.
+    p.density[0] = 100;
+    p.space[0] = SpaceOff;
+
+    // ── B: the ambient voice ─────────────────────────────────────────────────
+    // Every number here is doing one job, and between them they cover the three
+    // controls a user reaches for to slow the module down.
+    p.noteMask[1] = 0x0295; // C pentatonic major — C D E G A
+    p.scaleIndex[1] = 9;    // Pentatonic major
+    // A SUBSET of A's C major, deliberately. The two containers are running
+    // independently and will drift into every possible alignment, so B's notes
+    // have to be ones that cannot clash with A's whatever lands together. A
+    // pentatonic has no semitone in it at all, which is what makes it sit under
+    // a busy major sequence without ever fighting it.
+    p.spread[1] = 1;  // one octave, high — well clear of A's two
+    p.bias[1] = 30;
+    // GRAVITY is the tempo. 20 is a speed scale of 0.30, so this container runs
+    // at just under a third of A's, and with a single ball it speaks about once
+    // every 1.5 s against A's six times a second.
+    p.gravity[1] = 20.0f;
+    p.bounce[1] = 0.45f; // damped, so it settles rather than rattling
+    // SPIN stays slow on purpose: the rotating wall is an energy source that does
+    // NOT scale with gravity, so a fast spin here would stir the container harder
+    // than gravity pulls on it and undo the slowness. See Design.md §4.
+    p.spin[1] = Spin16;
+    p.balls[1] = 1;
+    p.pegs[1] = 5; // one peg per pentatonic degree — the ring is the scale
+    // Long and soft — the envelope the module could not previously hold at all,
+    // since at A's density anything approaching a second never returns to zero.
+    //
+    // It works here only because SPACE puts a hard 1 s floor under the gap, and
+    // attack + decay is sized against THAT floor rather than against the average:
+    // 120 + 750 = 870 ms leaves 130 ms of guaranteed silence before the soonest
+    // possible next note. Sizing it against the ~2.3 s average would look fine on
+    // paper and clip on every close pair.
+    p.attackMs[1] = 120;
+    p.decayMs[1] = 750;
+    // The two thinning controls, set visibly off their defaults — which is how a
+    // user finds them on the page. SPACE 2 beats is that 1 s floor at the default
+    // 120 BPM; DENSITY 85 drops the occasional note so the slow line wanders
+    // rather than ticking.
+    p.density[1] = 85;
+    p.space[1] = Space2Beats;
 
     p.proximity = 0.0f;
     p.coupling = 0.6f;
@@ -213,6 +267,8 @@ LoadSaveParams CollectParams() {
         p.balls[i] = containerParams[i].balls;
         p.pegs[i] = containerParams[i].pegs;
         p.pegMask[i] = containerParams[i].pegMask;
+        p.density[i] = containerParams[i].density;
+        p.space[i] = containerParams[i].space;
     }
 
     p.proximity = worldParams.proximity;
@@ -273,6 +329,9 @@ void UpdateParameters(LoadSaveParams p) {
         containerParams[i].balls = (uint8_t)constrain((int)p.balls[i], PHYS_MIN_BALLS, PHYS_MAX_BALLS);
         containerParams[i].pegs = (uint8_t)constrain((int)p.pegs[i], PHYS_MIN_PEGS, PHYS_MAX_PEGS);
         containerParams[i].pegMask = p.pegMask[i];
+        containerParams[i].density = (uint8_t)constrain((int)p.density[i], 0, 100);
+        containerParams[i].space =
+            (uint8_t)constrain((int)p.space[i], 0, (int)NoteSpaceLength - 1);
     }
 
     worldParams.proximity = constrain(p.proximity, 0.0f, 1.0f);

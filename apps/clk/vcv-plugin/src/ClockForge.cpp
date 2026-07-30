@@ -65,24 +65,21 @@ struct ClockForge : forgevcv::ForgeModule {
 };
 
 // ── BPM slider for the context menu ──────────────────────────────────────────
-// A Quantity that reads/writes BPM straight through the engine bridge, driven by
-// the shared forgevcv::BpmSlider inside a submenu.
-struct BpmQuantity : Quantity {
-    ClockForge *module = nullptr;
-    void setValue(float v) override {
-        if (module)
-            cfengine::setBpm(module->cf->raw(), (int)std::round(v));
-    }
-    float getValue() override { return module ? cfengine::bpm(module->cf->raw()) : 120.f; }
-    float getMinValue() override { return cfengine::bpmMin(); }
-    float getMaxValue() override { return cfengine::bpmMax(); }
-    float getDefaultValue() override { return 120.f; }
-    float getDisplayValue() override { return getValue(); }
-    void setDisplayValue(float v) override { setValue(v); }
-    int getDisplayPrecision() override { return 3; }
-    std::string getLabel() override { return "Tempo"; }
-    std::string getUnit() override { return " BPM"; }
-};
+// Reads and writes BPM straight through the engine bridge, driven by the shared
+// forgevcv::IntSlider inside a submenu.
+static forgevcv::EngineIntQuantity *bpmQuantity(ClockForge *m) {
+    cfengine::Engine *e = m->cf->raw();
+    forgevcv::EngineIntQuantity *q = new forgevcv::EngineIntQuantity;
+    q->label = "Tempo";
+    q->unit = " BPM";
+    q->minV = (float)cfengine::bpmMin();
+    q->maxV = (float)cfengine::bpmMax();
+    q->defV = 120.f;
+    q->precision = 3;
+    q->getFn = [=]() { return cfengine::bpm(e); };
+    q->setFn = [=](int v) { cfengine::setBpm(e, v); };
+    return q;
+}
 
 struct ClockForgeWidget : ModuleWidget {
     forgevcv::EncoderKnob *encoder = nullptr; // for the keyboard shortcuts (see onHoverKey)
@@ -178,10 +175,8 @@ struct ClockForgeWidget : ModuleWidget {
 
         // BPM: horizontal slider in a submenu (current value shown at right).
         menu->addChild(createSubmenuItem("BPM", string::f("%d", cfengine::bpm(e)), [=](Menu *menu) {
-            BpmQuantity *q = new BpmQuantity;
-            q->module = m;
-            forgevcv::BpmSlider *slider = new forgevcv::BpmSlider;
-            slider->quantity = q; // Slider takes ownership (deletes it on destruction)
+            forgevcv::IntSlider *slider = new forgevcv::IntSlider;
+            slider->quantity = bpmQuantity(m); // Slider takes ownership (deletes it on destruction)
             menu->addChild(slider);
         }));
 

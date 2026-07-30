@@ -869,3 +869,473 @@ TEST(Physics, SnapshotRestoreReproducesTheNextSteps) {
         EXPECT_FLOAT_EQ(firstX[b], c.GetBall(b).x) << "ball " << b << " replayed differently";
     }
 }
+
+// ── GRAVITY rescales time ────────────────────────────────────────────────────
+// The note rate is set by how often a ball reaches a wall, and the container is
+// only 36 px across — so while the energy floor was an absolute 60 px/s a ball
+// crossed it in ~0.4 s at every gravity, and GRAVITY was very nearly useless as
+// a density control. Scaling both speed constants with sqrt(g) turns it into a
+// pure rescaling of time. See PHYS_REF_GRAVITY.
+//
+// The two literals below mirror PARAM_GRAVITY_MIN/MAX in params.hpp, which this
+// file deliberately does not include — these tests exercise the simulation, not
+// the parameter plumbing.
+
+namespace {
+// Hits from container 0 over `seconds` at one gravity, everything else default.
+int HitsAtGravity(float gravity, int seconds) {
+    PhysicsWorld w;
+    Container &c = w.Get(0);
+    c.SetGravity(gravity);
+    c.SetBallCount(3);
+    c.SetPegCount(8);
+    int hits = 0;
+    for (int i = 0; i < seconds * 1000; i++) {
+        w.Advance(1000UL + (unsigned long)i * 1000UL);
+        int peg = -1;
+        float e = 0.0f;
+        if (c.ConsumeHit(peg, e)) {
+            hits++;
+        }
+    }
+    return hits;
+}
+} // namespace
+
+TEST(Physics, TheReferenceGravityIsUnscaled) {
+    // The backwards-compatibility claim rests on this one: at PHYS_REF_GRAVITY
+    // every derived speed is exactly the constant it always was, so a patch
+    // written before the rescaling sounds identical after it.
+    Container c;
+    c.SetGravity(PHYS_REF_GRAVITY);
+    EXPECT_FLOAT_EQ(1.0f, c.SpeedScale());
+    EXPECT_FLOAT_EQ(PHYS_MIN_BOUNCE_SPEED, c.MinBounceSpeed());
+    EXPECT_FLOAT_EQ(PEG_MIN_IMPACT_SPEED, c.MinImpactSpeed());
+}
+
+TEST(Physics, LowGravityIsGenuinelySlower) {
+    const int kSeconds = 20;
+    int fast = HitsAtGravity(PHYS_REF_GRAVITY, kSeconds);
+    int slow = HitsAtGravity(30.0f, kSeconds);
+
+    ASSERT_GT(fast, 0);
+    ASSERT_GT(slow, 0) << "a slow container still has to speak — silence is the "
+                          "failure the energy floor exists to prevent";
+
+    // sqrt(30/220) = 0.37, so the rate should fall by roughly that factor.
+    // Asserted as "less than half" rather than as a tight ratio because the exact
+    // number is a tuning decision; the point is that GRAVITY moves it at all,
+    // which before this change it essentially did not.
+    EXPECT_LT(slow * 2, fast) << "gravity 30 gave " << slow << " hits against " << fast
+                              << " at the reference — gravity is not rescaling time";
+}
+
+TEST(Physics, HighGravityIsGenuinelyBusier) {
+    const int kSeconds = 20;
+    int reference = HitsAtGravity(PHYS_REF_GRAVITY, kSeconds);
+    int busy = HitsAtGravity(900.0f, kSeconds);
+    EXPECT_GT(busy, reference) << "the top of the range has to be denser than the "
+                                  "middle, or the control is one-sided";
+}
+
+TEST(Physics, TheMinimumGravityStillPlays) {
+    // The bottom of the parameter range is where the ambient settings live, so it
+    // has to be sparse without being silent — and still contain its balls.
+    PhysicsWorld w;
+    Container &c = w.Get(0);
+    c.SetGravity(5.0f);
+    c.SetBallCount(2);
+
+    int hits = 0;
+    const int kSeconds = 30;
+    for (int i = 0; i < kSeconds * 1000; i++) {
+        w.Advance(1000UL + (unsigned long)i * 1000UL);
+        int peg = -1;
+        float e = 0.0f;
+        if (c.ConsumeHit(peg, e)) {
+            hits++;
+        }
+    }
+    EXPECT_GT(hits, 0) << "the calmest setting must still be a sequencer";
+    EXPECT_LT((float)hits / (float)kSeconds, 2.0f) << "...and it must actually be calm";
+    for (int i = 0; i < c.GetBallCount(); i++) {
+        EXPECT_TRUE(InsideContainer(c, c.GetBall(i))) << "ball " << i << " escaped";
+    }
+}
+
+TEST(Physics, ImpactEnergyIsReportedInReferenceUnits) {
+    // ACCENT maps a fixed 30..150 impact window onto gate level. If a slow
+    // container reported its raw (small) speeds, every hit down there would read
+    // as feather-light and ACCENT would collapse to a constant — so energies are
+    // normalised back to reference-gravity units before they leave the physics.
+    const float gravities[] = {PHYS_REF_GRAVITY, 40.0f};
+    for (float g : gravities) {
+        PhysicsWorld w;
+        Container &c = w.Get(0);
+        c.SetGravity(g);
+        c.SetBallCount(3);
+
+        float sum = 0.0f;
+        int n = 0;
+        for (int i = 0; i < 30000; i++) {
+            w.Advance(1000UL + (unsigned long)i * 1000UL);
+            int peg = -1;
+            float e = 0.0f;
+            if (c.ConsumeHit(peg, e)) {
+                sum += e;
+                n++;
+            }
+        }
+        ASSERT_GT(n, 10) << "gravity " << g;
+        float mean = sum / (float)n;
+        // The measured window is ~29..170 averaging ~85 at the reference, and the
+        // normalised mean has to stay in that neighbourhood at every gravity.
+        EXPECT_GT(mean, 40.0f) << "mean impact energy at gravity " << g;
+        EXPECT_LT(mean, 160.0f) << "mean impact energy at gravity " << g;
+    }
+}
+
+// ── The factory patch is two worked examples ─────────────────────────────────
+// A and B ship deliberately far apart in character so the first patch cable
+// demonstrates both ends of the module's range: A the busy sequencer it has
+// always been, B a slow ambient voice built out of GRAVITY, DENSITY and SPACE.
+//
+// The numbers mirror presetManager.hpp's LoadDefaultParams() at 120 BPM.
+// presetManager.hpp cannot be included here (it needs the display manager and
+// main.cpp's globals), so what this pins is the *behaviour* the two settings are
+// chosen for — the settings themselves are asserted in the Rack isolation test.
+
+TEST(Physics, FactoryContainersSitAtOppositeEndsOfTheRange) {
+    PhysicsWorld w;
+    Container &a = w.Get(0);
+    a.SetGravity(220.0f);
+    a.SetRestitution(0.72f);
+    a.SetSpinGrip(0.30f);
+    a.SetBallCount(3);
+    a.SetPegCount(8);
+    a.SetOmega(1.571f); // SPIN 8
+
+    Container &b = w.Get(1);
+    b.SetGravity(20.0f);
+    b.SetRestitution(0.45f);
+    b.SetSpinGrip(0.30f);
+    b.SetBallCount(1);
+    b.SetPegCount(5);
+    b.SetOmega(0.785f); // SPIN 16
+    b.SetDensity(85);
+    b.SetMinGapUs(1000000UL); // SPACE 2 beats at 120 BPM
+
+    std::vector<unsigned long> times[2];
+    const int kSeconds = 120;
+    for (int i = 0; i < kSeconds * 1000; i++) {
+        w.Advance(1000UL + (unsigned long)i * 1000UL);
+        for (int c = 0; c < 2; c++) {
+            int peg = -1;
+            float e = 0.0f;
+            if (w.Get(c).ConsumeHit(peg, e)) {
+                times[c].push_back(w.SimUs());
+            }
+        }
+    }
+
+    float rateA = (float)times[0].size() / (float)kSeconds;
+    float rateB = (float)times[1].size() / (float)kSeconds;
+
+    // A is the module's identity and must not have drifted.
+    EXPECT_GT(rateA, 4.0f) << "container A: " << rateA << " notes/sec";
+    EXPECT_LT(rateA, 8.0f) << "container A: " << rateA << " notes/sec";
+
+    // B has to be unmistakably a different instrument, not merely a bit calmer.
+    EXPECT_LT(rateB, 1.0f) << "container B: " << rateB << " notes/sec";
+    EXPECT_GT(rateB, 0.15f) << "container B is so sparse it reads as broken: " << rateB;
+    EXPECT_GT(rateA, rateB * 8.0f) << "the two examples are not far enough apart";
+
+    // The whole point of B's SPACE setting: its envelope (120 ms attack + 750 ms
+    // decay) has to fit inside the SOONEST possible gap, not the average one.
+    ASSERT_GT(times[1].size(), 10u);
+    unsigned long minGap = 0xFFFFFFFFUL;
+    for (size_t i = 1; i < times[1].size(); i++) {
+        unsigned long gap = times[1][i] - times[1][i - 1];
+        if (gap < minGap) {
+            minGap = gap;
+        }
+    }
+    EXPECT_GE(minGap, 1000000UL) << "SPACE did not hold B's floor";
+    EXPECT_GT(minGap, 870000UL) << "B's 870 ms envelope cannot finish in " << minGap
+                                << " us — the gate stops being a gate";
+}
+
+// ── A rotating wall must not silence the container ───────────────────────────
+// The bug this guards is the one every other test in this file walked straight
+// past, because they all run with omega = 0.
+//
+// SPIN's grip drags a ball up to the rim's own velocity. `vn` — the quantity
+// that decides whether a strike speaks — is measured RELATIVE to the wall, so a
+// co-rotating ball registers nothing while looking perfectly lively on screen.
+// The energy floor was the safety net, and it could not see the problem at all:
+// it measures ABSOLUTE speed, so it looked at a ball travelling at 226 px/s and
+// correctly declined to add energy to it.
+//
+// Measured before the fix: SPIN 1 produced 0.02 notes/sec at EVERY gravity,
+// firing once and then riding the rim silently for the rest of the run. Scaling
+// the speed constants with gravity then spread the same failure up into the
+// slower spins — SPIN 4 was silent at any gravity below ~80, which is exactly
+// the region the ambient settings live in.
+//
+// The sweep is the point of this test. Any single (spin, gravity) pair looks
+// fine; the failure only shows up as a hole in the grid.
+
+namespace {
+struct SilenceReport {
+    float hitsPerSec;
+    float longestSilenceSec;
+};
+
+SilenceReport MeasureSilence(float gravity, float omega, int seconds) {
+    PhysicsWorld w;
+    Container &c = w.Get(0);
+    c.SetGravity(gravity);
+    c.SetOmega(omega);
+    c.SetBallCount(3);
+    c.SetPegCount(8);
+
+    int hits = 0, gap = 0, worst = 0;
+    for (int i = 0; i < seconds * 1000; i++) {
+        w.Advance(1000UL + (unsigned long)i * 1000UL);
+        int peg = -1;
+        float e = 0.0f;
+        if (c.ConsumeHit(peg, e)) {
+            hits++;
+            gap = 0;
+        } else if (++gap > worst) {
+            worst = gap;
+        }
+    }
+    return {(float)hits / (float)seconds, (float)worst / 1000.0f};
+}
+} // namespace
+
+TEST(Physics, NoSpinAndGravityCombinationGoesSilent) {
+    // Every SPIN the menu offers, at 120 BPM, across the gravity range.
+    // omega = 2*pi / (beats * 60 / bpm), i.e. SpinRateBeats from clock.hpp.
+    const float omegas[] = {25.0f, 12.566f, 6.283f, 3.142f, 1.571f, 0.785f};
+    const char *names[] = {"1/2", "1", "2", "4", "8", "16"};
+    const float gravities[] = {5.0f, 20.0f, 60.0f, 220.0f, 600.0f, 900.0f};
+
+    for (int s = 0; s < 6; s++) {
+        for (float g : gravities) {
+            // Both directions: the grip is symmetric, but the peg indexing is not.
+            for (float sign : {1.0f, -1.0f}) {
+                SilenceReport r = MeasureSilence(g, omegas[s] * sign, 30);
+                EXPECT_GT(r.hitsPerSec, 0.2f)
+                    << "SPIN " << names[s] << (sign < 0 ? " REV" : "") << " at gravity "
+                    << g << " produced " << r.hitsPerSec << " notes/sec";
+                EXPECT_LT(r.longestSilenceSec, 6.0f)
+                    << "SPIN " << names[s] << (sign < 0 ? " REV" : "") << " at gravity "
+                    << g << " went silent for " << r.longestSilenceSec << " s";
+            }
+        }
+    }
+}
+
+TEST(Physics, TheReviveDoesNotFireInsideANormalRhythm) {
+    // PHYS_REVIVE_US is a floor under silence, not a metronome. It must sit
+    // outside the natural per-ball gap or it would drag a container that is
+    // speaking perfectly well back up to its own tempo.
+    Container c;
+    c.SetGravity(PHYS_REF_GRAVITY);
+    EXPECT_EQ(PHYS_REVIVE_US, c.ReviveUs());
+
+    // The reference container's natural gap with 3 balls is ~160 ms overall, so
+    // ~500 ms per ball. The revive window has to be comfortably under that to be
+    // useful, and comfortably over one ball's own bounce period to be safe.
+    SilenceReport withSpin = MeasureSilence(PHYS_REF_GRAVITY, 1.571f, 30); // SPIN 8
+    SilenceReport without = MeasureSilence(PHYS_REF_GRAVITY, 0.0f, 30);
+    EXPECT_NEAR(withSpin.hitsPerSec, without.hitsPerSec, 2.0f)
+        << "a spinning container should not be dramatically busier than a still "
+           "one at the same gravity — the revive is firing inside the rhythm";
+}
+
+TEST(Physics, TimeConstantsStretchAsGravityFalls) {
+    // Speeds multiply by the scale, times divide by it. Leaving the refractory
+    // windows absolute caps every container at 83 Hz — invisible at the
+    // reference, where the natural rate is ~6 Hz, and wildly out of scale in a
+    // container whose natural rate is 1 Hz, where it lets anything that does
+    // chatter run completely unchecked.
+    Container ref, slow;
+    ref.SetGravity(PHYS_REF_GRAVITY);
+    slow.SetGravity(20.0f);
+
+    EXPECT_EQ(PEG_REFRACTORY_US, ref.RefractoryUs());
+    EXPECT_EQ(PEG_MIN_INTERVAL_US, ref.MinIntervalUs());
+
+    EXPECT_GT(slow.RefractoryUs(), ref.RefractoryUs() * 2);
+    EXPECT_GT(slow.MinIntervalUs(), ref.MinIntervalUs() * 2);
+    EXPECT_GT(slow.ReviveUs(), ref.ReviveUs() * 2);
+}
+
+// ── DENSITY ──────────────────────────────────────────────────────────────────
+// The chance that a strike which cleared everything else actually speaks. The
+// point of it is that it is the only way to thin the notes without also changing
+// how the container moves.
+
+TEST(Physics, DensityThinsTheNotes) {
+    PhysicsWorld full, thin;
+    full.Get(0).SetBallCount(3);
+    thin.Get(0).SetBallCount(3);
+    thin.Get(0).SetDensity(25);
+
+    int fullHits = 0, thinHits = 0;
+    for (int i = 0; i < 30000; i++) {
+        unsigned long t = 1000UL + (unsigned long)i * 1000UL;
+        full.Advance(t);
+        thin.Advance(t);
+        int peg = -1;
+        float e = 0.0f;
+        if (full.Get(0).ConsumeHit(peg, e)) {
+            fullHits++;
+        }
+        if (thin.Get(0).ConsumeHit(peg, e)) {
+            thinHits++;
+        }
+    }
+    ASSERT_GT(fullHits, 50);
+    EXPECT_LT(thinHits, fullHits / 2) << "25 % density gave " << thinHits << " of " << fullHits;
+    EXPECT_GT(thinHits, 0) << "25 % is thinning, not muting";
+}
+
+TEST(Physics, DensityDoesNotDisturbTheMotion) {
+    // The whole reason DENSITY exists rather than "just use fewer balls": the
+    // simulation stays bit-identical, so what you see is unchanged and only what
+    // you hear is thinner.
+    PhysicsWorld full, thin;
+    full.Get(0).SetBallCount(4);
+    thin.Get(0).SetBallCount(4);
+    thin.Get(0).SetDensity(30);
+
+    RunMs(full, 8000);
+    RunMs(thin, 8000);
+
+    for (int i = 0; i < 4; i++) {
+        EXPECT_FLOAT_EQ(full.Get(0).GetBall(i).x, thin.Get(0).GetBall(i).x) << "ball " << i;
+        EXPECT_FLOAT_EQ(full.Get(0).GetBall(i).y, thin.Get(0).GetBall(i).y) << "ball " << i;
+    }
+}
+
+TEST(Physics, ZeroDensityIsSilentButStillMoving) {
+    PhysicsWorld w;
+    Container &c = w.Get(0);
+    c.SetBallCount(3);
+    c.SetDensity(0);
+
+    int hits = 0;
+    for (int i = 0; i < 20000; i++) {
+        w.Advance(1000UL + (unsigned long)i * 1000UL);
+        int peg = -1;
+        float e = 0.0f;
+        if (c.ConsumeHit(peg, e)) {
+            hits++;
+        }
+    }
+    EXPECT_EQ(0, hits);
+    EXPECT_GT(c.Activity(), 0.0f) << "the balls have to keep bouncing — DENSITY "
+                                     "silences the voice, it does not stop the sim";
+}
+
+// ── SPACE ────────────────────────────────────────────────────────────────────
+// A minimum gap between two notes from one container. A rate ceiling, not a
+// grid: a note arriving later than the gap is not moved onto anything.
+
+TEST(Physics, SpaceEnforcesAMinimumGap) {
+    const unsigned long kGap = 500000UL; // 500 ms — one beat at 120 BPM
+    PhysicsWorld w;
+    Container &c = w.Get(0);
+    c.SetBallCount(4); // busy enough that the gap is doing real work
+    c.SetMinGapUs(kGap);
+
+    std::vector<unsigned long> times;
+    for (int i = 0; i < 30000; i++) {
+        w.Advance(1000UL + (unsigned long)i * 1000UL);
+        int peg = -1;
+        float e = 0.0f;
+        if (c.ConsumeHit(peg, e)) {
+            times.push_back(w.SimUs());
+        }
+    }
+
+    ASSERT_GT(times.size(), 10u) << "SPACE must thin the stream, not stop it";
+    for (size_t i = 1; i < times.size(); i++) {
+        EXPECT_GE(times[i] - times[i - 1], kGap)
+            << "notes " << (i - 1) << " and " << i << " landed closer than SPACE allows";
+    }
+}
+
+TEST(Physics, SpaceOffIsTheOriginalBehaviour) {
+    PhysicsWorld gated, open;
+    gated.Get(0).SetBallCount(3);
+    open.Get(0).SetBallCount(3);
+    gated.Get(0).SetMinGapUs(0);
+
+    int gatedHits = 0, openHits = 0;
+    for (int i = 0; i < 20000; i++) {
+        unsigned long t = 1000UL + (unsigned long)i * 1000UL;
+        gated.Advance(t);
+        open.Advance(t);
+        int peg = -1;
+        float e = 0.0f;
+        if (gated.Get(0).ConsumeHit(peg, e)) {
+            gatedHits++;
+        }
+        if (open.Get(0).ConsumeHit(peg, e)) {
+            openHits++;
+        }
+    }
+    EXPECT_EQ(openHits, gatedHits);
+}
+
+TEST(Physics, SpaceDoesNotStarveAfterDroppingNotes) {
+    // Only a note that actually SPEAKS restarts the window. If a dropped note
+    // reset it too, a container busy enough to have a strike inside every window
+    // would gate itself into permanent silence after its first note.
+    PhysicsWorld w;
+    Container &c = w.Get(0);
+    c.SetBallCount(PHYS_MAX_BALLS); // as busy as it gets
+    c.SetMinGapUs(250000UL);
+
+    int hits = 0;
+    for (int i = 0; i < 20000; i++) {
+        w.Advance(1000UL + (unsigned long)i * 1000UL);
+        int peg = -1;
+        float e = 0.0f;
+        if (c.ConsumeHit(peg, e)) {
+            hits++;
+        }
+    }
+    // 20 s at a 250 ms floor allows at most 80. A working gate lands near that
+    // ceiling with this many balls; a starving one stops at 1.
+    EXPECT_GT(hits, 40) << "SPACE starved the container after " << hits << " notes";
+    EXPECT_LE(hits, 80);
+}
+
+TEST(Physics, ThinnedPhrasesStillLoopExactly) {
+    // DENSITY draws from the container's PRNG and SPACE keeps a timestamp, so
+    // both had to join the loop snapshot. Had either stayed outside it, a
+    // "repeating" phrase would quietly gain and drop notes on every pass.
+    const int kPeriod = 1000;
+    PhysicsWorld w;
+    w.Get(0).SetBallCount(3);
+    w.Get(1).SetBallCount(2);
+    w.Get(0).SetDensity(45);
+    w.Get(1).SetDensity(60);
+    w.Get(1).SetMinGapUs(200000UL);
+    w.SetLoop(2, kPeriod, 1, 0, 0, 0);
+
+    std::vector<LoopHit> all = RunCapturingHits(w, kPeriod * 5);
+    std::vector<LoopHit> first = Slice(all, 0, kPeriod);
+    ASSERT_GT(first.size(), 2u) << "the thinned phrase still has to contain notes";
+
+    for (int rep = 1; rep < 5; rep++) {
+        EXPECT_TRUE(SamePhrase(first, Slice(all, kPeriod * rep, kPeriod)))
+            << "repeat " << rep << " of a thinned phrase diverged";
+    }
+}

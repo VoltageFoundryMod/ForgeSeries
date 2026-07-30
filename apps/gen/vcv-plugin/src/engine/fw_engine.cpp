@@ -765,6 +765,36 @@ void pegEnabledSet(Engine *e, int c, int peg, bool on) {
     REQUEST_DISPLAY_REFRESH();
 }
 
+// ── Note thinning, per container ──
+int densityGet(Engine *e, int c) {
+    EngineScope scope(e);
+    return containerParams[clampC(c)].density;
+}
+void densitySet(Engine *e, int c, int pct) {
+    EngineScope scope(e);
+    containerParams[clampC(c)].density = (unsigned char)constrain(pct, 0, 100);
+    MarkUnsaved();
+    REQUEST_DISPLAY_REFRESH();
+}
+
+int spaceCount() { return (int)NoteSpaceLength; }
+std::string spaceName(int index) {
+    if (index < 0 || index >= (int)NoteSpaceLength)
+        return "";
+    return NoteSpaceNames[index];
+}
+int spaceGet(Engine *e, int c) {
+    EngineScope scope(e);
+    return containerParams[clampC(c)].space;
+}
+void spaceSet(Engine *e, int c, int index) {
+    EngineScope scope(e);
+    containerParams[clampC(c)].space =
+        (unsigned char)constrain(index, 0, (int)NoteSpaceLength - 1);
+    MarkUnsaved();
+    REQUEST_DISPLAY_REFRESH();
+}
+
 // ── Notes, per container ──
 int scaleCount() { return numScales; }
 std::string scaleName(int index) {
