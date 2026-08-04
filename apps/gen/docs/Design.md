@@ -535,11 +535,14 @@ reasoning as NoteForge's degree-based transposition.
 
 ### SPREAD and BIAS
 
-There is deliberately **no octave control.** A single octave offset only slides
-the ring up and down; it says nothing about how wide the ring is or how the notes
-sit inside it. Two controls do more with the same panel space:
+There is deliberately **no separate octave row.** An octave offset on its own only
+slides the ring up and down; it says nothing about how wide the ring is or how the
+notes sit inside it. So the register lives on the ROOT row it belongs to (see
+"Where the span sits" below) and the two rows it would have cost do the work an
+offset cannot:
 
-- **SPREAD** — how many octaves the ring covers (1–5), independent of peg count.
+- **SPREAD** — how many octaves the ring covers (1–5), counted up from ROOT and
+  independent of peg count.
 - **BIAS** — where inside that span the notes crowd (−100 low … 0 even … +100 high).
 
 ```
@@ -555,11 +558,11 @@ Warping `t` moves the notes in between **without moving the ends** (measured,
 and asserted by `Sequencer.BiasTableMatchesTheDocumentedNotes`):
 
 ```
-8 pegs, C major, SPREAD 2
+8 pegs, C major, ROOT C4, SPREAD 2   (0–2 V)
 
-BIAS   0  (even)    C2  E2  G2  B2  D3  F3  A3  C4
-BIAS -100 (low)     C2  D2  E2  F2  G2  A2  C3  C4
-BIAS +100 (high)    C2  C3  E3  F3  G3  A3  B3  C4
+BIAS   0  (even)    C4  E4  G4  B4  D5  F5  A5  C6
+BIAS -100 (low)     C4  D4  E4  F4  G4  A4  C5  C6
+BIAS +100 (high)    C4  C5  E5  F5  G5  A5  B5  C6
 ```
 
 Fixed endpoints are what make the two controls independent: the ring always
@@ -574,21 +577,71 @@ crowded high — at full negative bias it stacked three of eight pegs onto the
 root while full positive bias produced no duplicates at all. Mirroring makes the
 control behave identically in both directions, and neither extreme stacks pegs.
 
-### Where the span sits
+### Where the span sits — ROOT is an absolute note
 
-With no octave control something has to anchor the register. The span is
-**centred in the 0–5 V output range and snapped to whole octaves**, so at the
-default SPREAD 2 the ring runs C2–C4 — a usable register with nothing to set —
-and the lowest peg always lands on the root rather than an arbitrary degree
-part-way up the scale. ROOT still chooses the pitch class.
+**The ring starts on ROOT and opens upward by SPREAD.** ROOT therefore carries an
+octave — it is `C4`, not `C` — and it is the module's register control.
+
+It did not always work that way, and the first version is instructive. With ROOT
+as a bare pitch class nothing anchored the register, so the span was **centred in
+the output range and snapped to whole octaves**: a reasonable-sounding rule that
+turns out to be unusable, because the one thing the user cannot then do is
+choose where the notes are. Two pegs over one octave landed two octaves up, and
+no control on the module would move them. "Centred" is a decision the module has
+no business making — it is the first thing a player wants to state.
+
+Folding the octave into ROOT rather than adding a row is forced by the six-row
+page limit, and it turns out to be the better UI anyway: "the ring starts on this
+note" is one idea, and the row that names the note is where you look for it. The
+menu edits it as a single semitone number so one detent is a semitone, and the
+displayed octave has 0V NOTE applied, so the row reads as the note the
+oscillator will play.
+
+The octave is capped at `QUANT_OCTAVES - SPREAD` so the whole ring fits under
+5 V, and widening SPREAD walks ROOT down rather than letting the top of the ring
+flatten against the ceiling. A root part-way up the top octave can still leave
+the ring a degree or two short of its full span; `SemitoneForPeg` covers less
+rather than stacking the last pegs onto one note, which reads as a fault.
+
+The lowest peg is the root itself — `IndexAtOrAbove`, never the _nearest_ degree,
+so a hand-edited note mask that switches the root off moves the ring up to the
+next available note instead of below the note the row names.
+
+### What the notes are called — 0V NOTE
+
+The jacks are the MCP4728's **0–5 V and nothing else**: five octaves at 1 V/oct,
+with no negative rail to reach below 0 V. So the one thing the module can get
+wrong about pitch is not the voltage but the _name_ — which note the patch
+considers 0 V to be. That is a fact about the oscillator on the other end of the
+cable, not about this module, so it is a setting: **SETTINGS ▸ 0V NOTE**, C0–C5,
+default **C4** (VCV Rack's convention, and the common one on hardware VCOs).
+
+Everything follows from it:
+
+```text
+volts(note) == octave(note) - 0V NOTE
+
+0V NOTE = C4    range C4 (0 V) .. C9 (5 V),   SPREAD 2 ring = C6..C8
+0V NOTE = C2    range C2 (0 V) .. C7 (5 V),   SPREAD 2 ring = C4..C6
+```
+
+It renames, it never transposes — the voltage on the jack is identical at every
+setting, and SPREAD keeps sole control of where inside the range the notes sit.
+Naming it after the thing it sets ("the note at 0 V") rather than REF or TUNING
+is deliberate: both of those read as if turning them moves the pitch, which on
+unipolar hardware is the one thing it cannot do.
+
+It was previously fixed at C0, which is why a note the screen called C2 came out
+of a Rack VCO — where 0 V is C4 — as C6. The setting is stored in the preset, so
+a patch keeps the tuning of the rack it was built in.
 
 Because a peg's pitch now depends on the peg *count* (it sets where each peg
 falls within the span), the count travels with the hit — including a deferred
 one, whose count must be the one that was in force when the ball actually
 struck.
 
-Per container: scale, root, octave, peg count (4–16), and a peg enable mask so
-individual pegs can be silenced to open up the rhythm.
+Per container: scale, root (with its octave), spread, bias, peg count (4–16), and
+a peg enable mask so individual pegs can be silenced to open up the rhythm.
 
 ---
 
@@ -634,12 +687,12 @@ stalls the 1 kHz physics on Core 0.
 | 3     | A PHYSICS | gravity, bounce, balls, spin ratio                 |
 | 4     | B PHYSICS | same, container B                                  |
 | 5     | LOOP      | phrase length, nap/wake, shift, new phrase         |
-| 6     | A NOTES   | scale, root, octave, peg count                     |
+| 6     | A NOTES   | scale, root+octave, spread, bias, pegs, density    |
 | 7     | B NOTES   | same, container B                                  |
 | 8     | A GATE    | mode, attack, decay, level                         |
 | 9     | B GATE    | same, container B                                  |
 | 10    | CV        | IN2 target, IN3 target, depths                     |
-| 11    | SETTINGS  | preset save/load, screen timeout, calibration info |
+| 11    | SETTINGS  | 0V NOTE, screen timeout, boot menu                 |
 
 LOOP sits after the two PHYSICS pages rather than next to CLOCK: its shift and
 nap/wake settings are read per container, so it belongs with the rest of the

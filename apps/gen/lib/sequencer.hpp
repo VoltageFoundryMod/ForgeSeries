@@ -32,10 +32,40 @@
 #define NUM_CHANNELS 2
 
 // SPREAD: how many octaves the peg ring covers. The span is centred in the
-// module's 0–5 V output range and snapped to whole octaves, so the lowest peg
-// always lands on the root rather than an arbitrary degree.
+// module's five-octave output range and snapped to whole octaves, so the lowest
+// peg always lands on the root rather than an arbitrary degree.
 #define CHANNEL_SPREAD_MIN 1
 #define CHANNEL_SPREAD_MAX 5
+
+// ── 0V NOTE: what the module's notes are called ──────────────────────────────
+// The outputs are the MCP4728's 0–5 V, always: five octaves at 1 V/oct, and
+// nothing here can move a voltage — least of all downwards, since there is no
+// negative rail to move onto. What 0V NOTE sets is the *name*: which note the
+// module's 0 V stands for, which is a fact about the VCO on the other end of the
+// cable and not about this module. Everything else follows:
+//
+//     volts(note) == octave(note) - 0V NOTE
+//
+// so the range runs C<n> at 0 V up to C<n+5> at 5 V, and the note on the home
+// screen is the note the VCO plays. The default is C4, VCV Rack's convention and
+// the common one on hardware oscillators; set it to whatever the oscillator you
+// are patched into calls 0 V. Override the default from the build with
+// -DGEN_CV_ZERO_OCTAVE_DEFAULT=n.
+//
+// It used to be fixed at C0, which is why a note the screen called C2 came out
+// of a Rack VCO as C6.
+//
+// Where the peg span sits INSIDE that range is SPREAD's business, and it stays
+// centred (see SemitoneForPeg): the two controls are deliberately independent,
+// so renaming the range can never move a pitch.
+#ifndef GEN_CV_ZERO_OCTAVE_DEFAULT
+#define GEN_CV_ZERO_OCTAVE_DEFAULT 4
+#endif
+
+// C0..C5. Past C5 the top of the five-octave span runs off the end of the octave
+// numbering oscillators actually print on their panels.
+#define GEN_CV_ZERO_OCTAVE_MIN 0
+#define GEN_CV_ZERO_OCTAVE_MAX 5
 
 // BIAS: where inside that span the pegs crowd. 0 spaces them evenly; negative
 // bunches them into the low notes, positive into the high ones. The lowest and
@@ -58,11 +88,16 @@
 class GravityChannel {
     // ── Musical parameters ──
     int _scaleIndex = 1; // Major
-    int _rootIndex = 0;  // C
+    int _rootIndex = 0;  // C — pitch class, also what the scale is built on
+    int _rootOctave = 0; // which octave of the output range the ring starts in
     int _spread = 2;     // octaves the peg ring covers
     int _bias = 0;       // -100 = crowd low, 0 = even, +100 = crowd high
     bool _notes[12] = {false};
     Quantizer _quantizer;
+
+    // The note the module's 0 V stands for, and so the octave number of its
+    // lowest note. Naming only — see the 0V NOTE block above.
+    int _cvZeroOctave = GEN_CV_ZERO_OCTAVE_DEFAULT;
 
     // Base gate level, kept here rather than read back from the envelope because
     // ACCENT rewrites the envelope's level on every hit — the menu must show
@@ -114,6 +149,33 @@ class GravityChannel {
     int GetScaleIndex() const { return _scaleIndex; }
     int GetRootIndex() const { return _rootIndex; }
 
+    // ── ROOT is an absolute note, not just a key ──────────────────────────────
+    // The ring starts on the root and opens upward by SPREAD, so the root is
+    // what puts the channel in a register — the module's octave control, folded
+    // into a row that had to exist anyway (there is no seventh row on the page).
+    //
+    // Without it the span had to guess: it was centred in the output range, which
+    // parked a one-octave ring two octaves up with no way to move it. "Where the
+    // notes are" is now something the user states rather than a side effect of
+    // how wide they asked the ring to be.
+    //
+    // The octave is capped so the whole ring fits under 5 V: raising SPREAD pulls
+    // the root down rather than letting the top of the ring silently flatten
+    // against the ceiling.
+    int MaxRootOctave() const { return QUANT_OCTAVES - _spread; }
+    void SelectRootOctave(int oct) { _rootOctave = constrain(oct, 0, MaxRootOctave()); }
+    int GetRootOctave() const { return _rootOctave; }
+
+    // Root as one number: semitones above the module's lowest note. This is what
+    // the menu edits, so one detent is one semitone and the row reads "C4".
+    int GetRootSemitone() const { return _rootOctave * 12 + _rootIndex; }
+    int MaxRootSemitone() const { return MaxRootOctave() * 12; }
+    void SelectRootSemitone(int st) {
+        st = constrain(st, 0, MaxRootSemitone() + 11);
+        SelectRootOctave(st / 12);
+        SelectRoot(st % 12); // rebuilds the scale on the new pitch class
+    }
+
     void SetActiveNotes(const bool n[12]) {
         for (int i = 0; i < 12; i++) {
             _notes[i] = n[i];
@@ -129,7 +191,24 @@ class GravityChannel {
         _quantizer.Build(_notes);
     }
 
-    void SetSpread(int oct) { _spread = constrain(oct, CHANNEL_SPREAD_MIN, CHANNEL_SPREAD_MAX); }
+    // ── 0V NOTE ──────────────────────────────────────────────────────────────
+    // Global in the menu (one row, applied to both channels) but stored per
+    // channel: a channel is the thing that knows a pitch, and keeping it here
+    // means the Rack port gets per-instance isolation for free from the
+    // GravityChannel entry already in engine_state.def.
+    void SetCvZeroOctave(int oct) {
+        _cvZeroOctave = constrain(oct, GEN_CV_ZERO_OCTAVE_MIN, GEN_CV_ZERO_OCTAVE_MAX);
+    }
+    int GetCvZeroOctave() const { return _cvZeroOctave; }
+
+    // Widening the ring can leave the root too high for it to fit, so the root
+    // comes down with it. Doing it here, where the menu can see the result, is
+    // what keeps the ROOT row honest — the alternative is a ring that quietly
+    // stops starting on the note the row says it starts on.
+    void SetSpread(int oct) {
+        _spread = constrain(oct, CHANNEL_SPREAD_MIN, CHANNEL_SPREAD_MAX);
+        SelectRootOctave(_rootOctave);
+    }
     int GetSpread() const { return _spread; }
     void SetBias(int b) { _bias = constrain(b, CHANNEL_BIAS_MIN, CHANNEL_BIAS_MAX); }
     int GetBias() const { return _bias; }
@@ -162,14 +241,17 @@ class GravityChannel {
     }
 
     // ── Pitch mapping ────────────────────────────────────────────────────────
-    // The peg ring is stretched across SPREAD octaves and warped by BIAS.
+    // The peg ring starts on ROOT, is stretched across SPREAD octaves, and is
+    // warped by BIAS. Three controls, and between them they say exactly where
+    // every peg is — nothing is inferred.
     //
     // Peg i sits at a fraction t = i/(pegCount-1) around the ring. Raising t to a
     // power moves the notes in between without moving the ends:
     //
-    //   BIAS  0    even         C2  E2  G2  B2  D3  F3  A3  C4
-    //   BIAS -100  crowd low    C2  D2  E2  F2  G2  A2  C3  C4
-    //   BIAS +100  crowd high   C2  C3  E3  F3  G3  A3  B3  C4
+    //   ROOT C4, SPREAD 2, 8 pegs (voltages 0–2 V):
+    //   BIAS  0    even         C4  E4  G4  B4  D5  F5  A5  C6
+    //   BIAS -100  crowd low    C4  D4  E4  F4  G4  A4  C5  C6
+    //   BIAS +100  crowd high   C4  C5  E5  F5  G5  A5  B5  C6
     //
     // Keeping the endpoints fixed is what makes SPREAD and BIAS independent: the
     // ring always covers exactly the octaves SPREAD asks for, and BIAS only
@@ -184,23 +266,24 @@ class GravityChannel {
             return _quantizer.SemitoneAt(0);
         }
 
+        // Where the ring starts: the root itself, or — if the note mask has been
+        // hand-edited to switch the root off — the first enabled note above it.
+        // Never below, or the bottom peg would sound lower than the row says.
+        int base = _quantizer.IndexAtOrAbove(GetRootSemitone());
+        if (base < 0 || base > total - 1) {
+            base = total - 1;
+        }
+
         int span = perOctave * _spread;
-        if (span > total - 1) {
-            span = total - 1;
+        // The root octave is already capped so a whole-octave ring fits (see
+        // MaxRootOctave), but a root part-way up the top octave can still leave
+        // it a degree or two short. Cover less rather than stacking the last
+        // pegs onto the top note, which reads as a fault.
+        if (base + span > total - 1) {
+            span = total - 1 - base;
         }
         if (span < 1) {
             span = 1;
-        }
-
-        // Centre the span in the output range, snapped to whole octaves so the
-        // lowest peg lands on the root instead of some arbitrary degree.
-        int baseOctave = (int)lroundf(((float)(total - 1 - span) * 0.5f) / (float)perOctave);
-        int base = baseOctave * perOctave;
-        if (base + span > total - 1) {
-            base = total - 1 - span;
-        }
-        if (base < 0) {
-            base = 0;
         }
 
         float t = (pegCount > 1) ? (float)peg / (float)(pegCount - 1) : 0.0f;
@@ -285,7 +368,11 @@ class GravityChannel {
 
     int GetSemitone() const { return _semitone; }
     int GetNoteIndex() const { return _semitone < 0 ? 0 : SemitoneToNoteIndex(_semitone); }
-    int GetOctaveOut() const { return _semitone < 0 ? 0 : SemitoneToOctave(_semitone); }
+    // Numbered from 0V NOTE, so the screen agrees with the VCO: this note leaves
+    // the jack at (its octave - 0V NOTE) volts.
+    int GetOctaveOut() const {
+        return _cvZeroOctave + (_semitone < 0 ? 0 : SemitoneToOctave(_semitone));
+    }
     // Follows the JACK, not the envelope: a napping channel outputs nothing, so
     // the display must not keep flashing an envelope nobody can hear.
     bool IsGateActive() const { return !_muted && envelope.IsActive(); }

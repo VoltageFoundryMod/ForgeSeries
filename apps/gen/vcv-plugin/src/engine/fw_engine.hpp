@@ -159,9 +159,15 @@ void scaleSet(Engine *, int c, int index); // rebuilds the note mask immediately
 std::string noteName(int note);
 int rootGet(Engine *, int c);
 void rootSet(Engine *, int c, int root);
-// SPREAD is how many octaves the peg ring covers; BIAS warps where the notes
-// crowd inside that span (-100 low .. 0 even .. +100 high). Together they
-// replace what used to be a single OCTAVE offset.
+// ROOT is an absolute note: the pitch class above plus this octave, which is
+// where the peg ring starts. The ceiling depends on the container's SPREAD, so
+// ask for it rather than assuming; raising SPREAD walks the octave down.
+int rootOctaveMax(Engine *, int c);
+int rootOctaveGet(Engine *, int c);
+void rootOctaveSet(Engine *, int c, int octave);
+// SPREAD is how many octaves the peg ring covers, counted up from ROOT; BIAS
+// warps where the notes crowd inside that span (-100 low .. 0 even .. +100
+// high).
 int spreadMin();
 int spreadMax();
 int spreadGet(Engine *, int c);
@@ -195,6 +201,16 @@ int cvTargetGet(Engine *, int input); // input 0 = IN 2, 1 = IN 3
 void cvTargetSet(Engine *, int input, int index);
 int cvDepthGet(Engine *, int input);
 void cvDepthSet(Engine *, int input, int pct);
+
+// ── Output tuning ────────────────────────────────────────────────────────────
+// The note the module's 0 V stands for, as an octave number (C0..C5); C4 is
+// Rack's convention and the default. The outputs are 0..5 V either way — this
+// names those volts rather than moving them, so a note reported as C5 leaves the
+// jack at (5 - this) volts, and the module's range runs C<this> .. C<this+5>.
+int cvZeroOctaveMin();
+int cvZeroOctaveMax();
+int cvZeroOctaveGet(Engine *);
+void cvZeroOctaveSet(Engine *, int octave);
 
 // ── Live readouts ────────────────────────────────────────────────────────────
 std::string currentNote(Engine *, int c); // e.g. "A#3", or "--" before the first hit

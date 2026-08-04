@@ -30,19 +30,20 @@
 // ──────────
 //   0  HOME       — the physics view (custom renderer in menuRender.hpp)
 //   1  CLOCK      — bpm, ppqn, quantize grid, IN 1 role
-//   2  LOOP       — phrase length in beats, nap/wake, per-container shift
-//   3  COUPLING   — proximity, couple amount, reset/kick
-//   4  A PHYSICS  — gravity, bounce, grip, spin, reverse, balls
-//   5  B PHYSICS
+//   2  COUPLING   — proximity, couple amount, reset/kick
+//   3  A PHYSICS  — gravity, bounce, grip, spin, reverse, balls
+//   4  B PHYSICS
+//   5  LOOP       — phrase length in beats, nap/wake, per-container shift
 //   6  A NOTES    — scale, root, spread, bias, peg count, density
 //   7  B NOTES
 //   8  A GATE     — mode, attack, decay, level, accent, space
 //   9  B GATE
 //  10  CV         — IN 2 / IN 3 target + depth
-//  11  SETTINGS   — preset slot, save, load, randomize, screen timeout
+//  11  SETTINGS   — the note at 0 V, screen timeout, boot menu
+//  12  PRESETS    — preset slot, save, load, randomize
 //
-// LOOP sits next to CLOCK rather than at the end because it is a clock-domain
-// control — its length is in beats and it follows the tempo.
+// LOOP sits after the two physics pages rather than at the end: it is what you
+// reach for once the balls are doing something you want to keep.
 //
 // PAGE LENGTH LIMIT: six rows. MD_START_Y=12 with MD_ROW_H=9 puts row 6 at
 // y=57, whose glyphs end on row 63 — exactly the bottom of the screen. A
@@ -298,16 +299,26 @@ static void setScale(int d) {
     MarkUnsaved();
 }
 
+// ROOT is an absolute note — "C4", not "C". The ring starts on it and opens
+// upward by SPREAD, so this is also the channel's octave control; see the ROOT
+// block in lib/sequencer.hpp for why it is one row rather than two.
+//
+// The delta is the encoder's speed factor rather than StepDir: the range is five
+// octaves and moving an octave should not take twelve slow detents.
 template <int C>
-static String getRootName() { return String(noteNames[channels[C].GetRootIndex()]); }
+static String getRootName() {
+    return String(noteNames[channels[C].GetRootIndex()]) +
+           String(channels[C].GetCvZeroOctave() + channels[C].GetRootOctave());
+}
 template <int C>
 static void setRoot(int d) {
-    channels[C].SelectRoot(channels[C].GetRootIndex() + StepDir(d));
+    channels[C].SelectRootSemitone(channels[C].GetRootSemitone() + d);
     MarkUnsaved();
 }
 
-// SPREAD is how many octaves the peg ring covers; BIAS is where the notes
-// crowd inside it. Together they replace the old single OCTAVE offset.
+// SPREAD is how many octaves the peg ring covers, counted up from ROOT; BIAS is
+// where the notes crowd inside it. Widening past the ceiling walks ROOT down —
+// SetSpread() does that, so the ROOT row updates with it.
 template <int C>
 static String getSpread() { return String(channels[C].GetSpread()) + "oct"; }
 template <int C>
@@ -472,6 +483,33 @@ static void actBootMenu() {
 #endif
 }
 
+// 0V NOTE — which note this module should CALL its 0 V. It is a display
+// preference, the modular equivalent of a DAW's "middle C is C3 or C4": the
+// outputs are 0–5 V whatever it says, and nothing in the sound changes. What it
+// buys is that the note on the home screen and the ROOT row are the notes your
+// oscillator actually plays.
+//
+// It lives on SETTINGS, next to TIMEOUT, because that is where preferences
+// belong — the musical control is ROOT on the NOTES page. And it shows the
+// resulting range alongside the note, so the one question it raises ("what does
+// that do to my module?") is answered on the row itself:
+//
+//     0V NOTE   C4   C4-C9
+//
+// See the 0V NOTE block in lib/sequencer.hpp. One row, applied to both channels.
+static String getCvZeroOct() { return String("C") + String(channels[0].GetCvZeroOctave()); }
+static String getCvZeroRange() {
+    const int lo = channels[0].GetCvZeroOctave();
+    return String("C") + String(lo) + "-C" + String(lo + QUANT_OCTAVES);
+}
+static void setCvZeroOct(int d) {
+    int oct = channels[0].GetCvZeroOctave() + StepDir(d);
+    for (int i = 0; i < NUM_CHANNELS; i++) {
+        channels[i].SetCvZeroOctave(oct);
+    }
+    MarkUnsaved();
+}
+
 static const char *const screenTimeoutNames[] = {"OFF", "2s", "5s", "10s", "20s"};
 static String getTimeout() { return String(screenTimeoutNames[constrain(menuScreenTimeout, 0, 4)]); }
 static void setTimeout(int d) {
@@ -570,6 +608,7 @@ const MenuItem MENU_ITEMS[] = {
     {"IN3 DEPTH", getCvDepth<1>, nullptr, 82, 0, 10, ROW_SINGLE, MENU_EDIT, setCvDepth<1>, nullptr},
 
     // ── 11 SETTINGS ──
+    {"0V NOTE", getCvZeroOct, getCvZeroRange, 58, 80, 11, ROW_TWOCOL, MENU_EDIT, setCvZeroOct, nullptr},
     {"TIMEOUT", getTimeout, nullptr, 82, 0, 11, ROW_SINGLE, MENU_EDIT, setTimeout, nullptr},
     {"BOOT MENU", nullptr, nullptr, 0, 0, 11, ROW_ACTION, MENU_ACTION, nullptr, actBootMenu},
 

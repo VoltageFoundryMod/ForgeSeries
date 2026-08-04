@@ -87,6 +87,8 @@ The jack map is deliberately identical to NoteForge, so it stays muscle memory a
 
 CV outputs follow the usual 1V/oct convention within the module's 0–5 V range, which is why the pitch span is centred and limited to five octaves.
 
+Which notes those volts _are_ depends on the oscillator you patch into, so tell the module: **SETTINGS ▸ 0V NOTE** names the note its 0 V stands for (default `C4`, VCV Rack's convention and the common one on hardware VCOs). The module's range is then `C4` at 0 V up to `C9` at 5 V, and the notes on the home screen are the ones you hear. It only renames the shown note — the voltage on the jack never moves.
+
 ## Operation
 
 ### Interface
@@ -130,12 +132,12 @@ Turning the encoder from the home screen walks through the pages in this order:
 | **A PHYSICS** | Gravity, bounce, grip, spin, direction, ball count |
 | **B PHYSICS** | Same, container B                                  |
 | **LOOP**      | Phrase length, nap/wake, per-container shift       |
-| **A NOTES**   | Scale, root, spread, bias, peg count, density      |
+| **A NOTES**   | Scale, root+octave, spread, bias, pegs, density    |
 | **B NOTES**   | Same, container B                                  |
 | **A GATE**    | Mode, attack, decay, level, accent, space          |
 | **B GATE**    | Same, container B                                  |
 | **CV IN**     | IN 2 / IN 3 destination and depth                  |
-| **SETTINGS**  | Screen timeout, boot menu                          |
+| **SETTINGS**  | The note at 0 V, screen timeout, boot menu         |
 | **PRESETS**   | Preset slot, save, load, randomize                 |
 
 ## Parameters
@@ -222,6 +224,7 @@ Note that both containers stay separate instruments even when merged: each keeps
   Fewer balls thins it further — a single ball at GRAVITY 5 speaks about once every three seconds, which is where the slow ambient settings live.
 
   Note that a fast **SPIN** competes with this. The rotating wall is its own energy source and does not scale with gravity, so at SPIN `1` or `1/2` the wall is stirring the container harder than gravity is pulling on it and GRAVITY loses most of its authority over the density. SPIN `4` and slower leave it in charge.
+
 - **BOUNCE** (10–98 %) — How much energy survives an impact. High values keep the balls lively and the pattern busy; low values let them settle toward the bottom of the container and tick along more sparsely.
 - **GRIP** (0–100 %) — How much of the rotating wall's motion is transferred to a ball on contact. This is what makes a rotating container actually stir the balls instead of just spinning a decorative ring behind them. At 0 % rotation only moves the pegs under the balls; at high values the balls get carried around the rim.
 - **SPIN** — Rotation rate in **beats per revolution**: `1/2`, `1`, `2`, `4`, `8`, `16`. Tied to the clock, so rotation stays musically related to the patch. Faster spin sweeps the peg ring under the balls more quickly and moves the melody around more.
@@ -233,22 +236,27 @@ Note that both containers stay separate instruments even when merged: each keeps
 ![Notes page](images/display/Notes.png)
 
 - **SCALE** — One of 15 scales: Chromatic, Major, Minor, Dorian, Phrygian, Lydian, Mixolydian, Locrian, Pentatonic Minor, Pentatonic Major, Harmonic Minor, Melodic Minor, Whole tone, Diminished, Blues.
-- **ROOT** — The root note, C through B.
-- **SPREAD** (1–5 oct) — How many octaves the peg ring covers, independent of the peg count. The span is centred in the module's output range and snapped to whole octaves, so the lowest peg always lands on the root. At the default of 2 the ring runs C2–C4.
+- **ROOT** (`C4` … `B8`) — The root note _with its octave_, and the note the peg ring starts on. This is the container's register: the ring opens upward from here, so `ROOT C4` puts the channel at the bottom of the module's range and `ROOT C7` puts it near the top. One detent is a semitone; spin faster to cover octaves. The octave shown follows **0V NOTE**, so it is the note your oscillator plays.
+
+  The ceiling depends on SPREAD, since the whole ring has to fit under 5 V: a 2-octave ring stops at `C7`, a 5-octave ring can only start at `C4`. Widening SPREAD walks ROOT down rather than letting the top of the ring flatten out.
+
+- **SPREAD** (1–5 oct) — How many octaves the peg ring covers, counted upward from ROOT, independent of the peg count. `ROOT C4` + `SPREAD 2` gives a ring from C4 to C6 (0–2 V); `SPREAD 5` uses the whole 0–5 V range.
 - **BIAS** (`LO100` … `EVEN` … `HI100`) — Where inside that span the notes crowd. `EVEN` spaces the pegs evenly; `LO` bunches them into the low notes, `HI` into the high ones. The lowest and highest pegs never move, so SPREAD keeps meaning exactly what it says.
 
-  With 8 pegs in C major and SPREAD 2:
+  With 8 pegs in C major, `ROOT C4` and SPREAD 2:
 
   | BIAS    | Notes around the ring   |
   | ------- | ----------------------- |
-  | `EVEN`  | C2 E2 G2 B2 D3 F3 A3 C4 |
-  | `LO100` | C2 D2 E2 F2 G2 A2 C3 C4 |
-  | `HI100` | C2 C3 E3 F3 G3 A3 B3 C4 |
+  | `EVEN`  | C4 E4 G4 B4 D5 F5 A5 C6 |
+  | `LO100` | C4 D4 E4 F4 G4 A4 C5 C6 |
+  | `HI100` | C4 C5 E5 F5 G5 A5 B5 C6 |
 
 - **PEGS** (3–16) — How many pegs are on the ring. Fewer pegs means bigger intervals between neighbouring notes and a more angular melody; more pegs means smaller steps and a more scalar one. Changing the count re-maps every peg's pitch, since the count is what decides where each peg falls within SPREAD.
 - **DENSITY** (0–100 %) — The chance that a strike actually speaks. At 100 % every valid hit becomes a note, which is the module's original behaviour. Lower it and notes drop out at random while the balls carry on exactly as before — this is the only thinning control that leaves the motion untouched, so the screen stays as lively as it was and only the output gets sparser. At 0 % the container is silent but still bouncing, still coupling and still driving the display.
 
-There is deliberately no octave control — SPREAD and BIAS do more with the same panel space.
+ROOT, SPREAD and BIAS between them say exactly where every peg is: where the ring starts, how far it reaches, and how the notes bunch inside it. Nothing is inferred — earlier firmware centred the ring in the output range, which parked a one-octave ring two octaves up with no way to move it.
+
+**0V NOTE** is not a fourth pitch control: it renames the range, it does not move it.
 
 ### Gate (per container)
 
@@ -307,6 +315,18 @@ Spin is modulated as a continuous multiplier rather than by stepping through the
 
 ![Settings page](images/display/Settings.png)
 
+- **0V NOTE** (`C0`–`C5`, default `C4`) — Which note the module should _call_ its 0 V. The row shows the note and the range that follows from it:
+
+  ```text
+  0V NOTE   C4   C4-C9
+  ```
+
+  This is a display preference — the modular equivalent of a DAW asking whether middle C is called C3 or C4. **It changes no voltage and no sound.** The outputs are 0–5 V at every setting; all it decides is what the home screen, the ROOT row and the Rack menu call them.
+
+  Set it to whatever the oscillator you are patched into calls 0 V (`C4` in VCV Rack and on most hardware VCOs) and every note name on the module becomes the note you actually hear. If you tune by ear and never look at the note names, you can ignore this row entirely.
+
+  The control that _moves_ the pitch is **ROOT**, on the NOTES page.
+
 - **TIMEOUT** — Return to the physics screen after `OFF`, `2s`, `5s`, `10s` or `20s` of inactivity.
 - **BOOT MENU** — Hand the hardware back to the module selector, so you can run a different Forge module — or the calibration wizard — without power-cycling. GravityForge flushes anything it owes to flash first, then the module reboots into the selector. Holding the encoder for two seconds does the same thing from anywhere in the menu.
 
@@ -323,14 +343,14 @@ Spin is modulated as a continuous multiplier rather than by stepping through the
 
 The factory patch is deliberately **two different instruments**, one per container, with PROXIMITY at 0 so they run independently. Patch both pairs of jacks and you have the module's whole range in front of you before you change anything:
 
-| | **A** — OUT 1 / OUT 3 | **B** — OUT 2 / OUT 4 |
-| --- | --- | --- |
-| Character | The sequencer | The ambient voice |
-| Rate | ~6 notes/sec | ~1 note every 2 s |
-| Notes | C major, two octaves | C pentatonic major, one octave, high |
-| Physics | GRAVITY 220, 3 balls, SPIN 8 | GRAVITY 20, 1 ball, SPIN 16 |
-| Gate | 100 ms decay | 120 ms attack, 750 ms decay |
-| Thinning | none | DENSITY 85 %, SPACE `2` |
+|           | **A** — OUT 1 / OUT 3           | **B** — OUT 2 / OUT 4                                                  |
+| --------- | ------------------------------- | ---------------------------------------------------------------------- |
+| Character | The sequencer                   | The ambient voice                                                      |
+| Rate      | ~6 notes/sec                    | ~1 note every 2 s                                                      |
+| Notes     | C major, `ROOT C4`, two octaves | C pentatonic major, `ROOT C6`, one octave — on top of A, not inside it |
+| Physics   | GRAVITY 220, 3 balls, SPIN 8    | GRAVITY 20, 1 ball, SPIN 16                                            |
+| Gate      | 100 ms decay                    | 120 ms attack, 750 ms decay                                            |
+| Thinning  | none                            | DENSITY 85 %, SPACE `2`                                                |
 
 B is the worked example for everything in [Slow, ambient patterns](#slow-ambient-patterns) below — its settings are exactly what that section builds, so you can read the recipe off the menu pages rather than typing it in. Its scale is a subset of A's on purpose: the two containers drift into every possible alignment, so B's notes have to be ones that cannot clash with A's whatever lands together.
 

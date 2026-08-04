@@ -94,6 +94,13 @@ int main() {
               biasGet(a, 0) == -60,
           "A: scale + root + spread + bias set");
 
+    // The register. Its ceiling follows SPREAD, which is 4 octaves here, so a
+    // 4-octave ring can start no higher than octave 1.
+    CHECK(rootOctaveMax(a, 0) == 1, "A: root octave ceiling follows spread");
+    rootOctaveSet(a, 0, 1);
+    CHECK(rootOctaveGet(a, 0) == 1, "A: root octave set");
+    CHECK(rootOctaveGet(b, 0) == 0, "B: root octave untouched");
+
     // ── Note thinning is per-instance ───────────────────────────────────────
     densitySet(a, 0, 35);
     spaceSet(a, 0, 3); // one beat
@@ -114,6 +121,12 @@ int main() {
           "A: IN 1 role + CV matrix set");
     CHECK(in1RoleGet(b) == 0 && cvDepthGet(b, 0) == 0,
           "B: IN 1 role + CV matrix untouched");
+
+    // The 0V NOTE setting lives on the channels, so it rides their engine_state.def
+    // entry — but only if it is a member and not a static.
+    cvZeroOctaveSet(a, 1);
+    CHECK(cvZeroOctaveGet(a) == 1, "A: 0V NOTE set");
+    CHECK(cvZeroOctaveGet(b) == 4, "B: 0V NOTE untouched (C4 default)");
 
     // ── Clock state is per-instance ─────────────────────────────────────────
     bpmSet(a, 200);
@@ -224,8 +237,8 @@ int main() {
     CHECK(ballsGet(b, 0) == 8 && pegsGet(b, 0) == 16,
           "B: balls + pegs restored from A's blob");
     CHECK(scaleGet(b, 0) == 8 && rootGet(b, 0) == 3 && spreadGet(b, 0) == 4 &&
-              biasGet(b, 0) == -60,
-          "B: scale + root + spread + bias restored from A's blob");
+              biasGet(b, 0) == -60 && rootOctaveGet(b, 0) == 1,
+          "B: scale + root + octave + spread + bias restored from A's blob");
     CHECK(densityGet(b, 0) == 35 && spaceGet(b, 0) == 3,
           "B: density + space restored from A's blob");
     CHECK(proximityGet(b) == 100 && couplingGet(b) == 25,
@@ -239,6 +252,9 @@ int main() {
           "B: loop settings restored from A's blob");
     CHECK(in1RoleGet(b) == 2 && cvTargetGet(b, 0) == 3 && cvDepthGet(b, 0) == 77,
           "B: IN 1 role + CV matrix restored from A's blob");
+    // Missing from CollectParams() and the patch would reload playing the right
+    // voltages under the wrong note names.
+    CHECK(cvZeroOctaveGet(b) == 1, "B: 0V NOTE restored from A's blob");
 
     CHECK(gravityGet(a, 0) == 700, "A: gravity still 700 after B deserialized");
     CHECK(proximityGet(a) == 100, "A: proximity still 100 after B deserialized");

@@ -167,6 +167,25 @@ class Quantizer {
         return best;
     }
 
+    // The first table position at or above `semitone`, clamped to the ends.
+    //
+    // IndexOf() answers "nearest", which is what quantizing wants; this answers
+    // "no lower than", which is what anchoring a range wants — GravityForge
+    // starts its peg ring on a note the user picked, and rounding that DOWN to a
+    // nearer neighbour would put the bottom of the ring below the note the menu
+    // says it starts on.
+    int IndexAtOrAbove(int semitone) const {
+        if (_count == 0) {
+            return -1;
+        }
+        for (int i = 0; i < _count; i++) {
+            if (_table[i] >= semitone) {
+                return i;
+            }
+        }
+        return _count - 1;
+    }
+
     // Is `semitone` one of the notes this quantizer can emit?
     bool Emits(int semitone) const {
         if (semitone < 0 || semitone > QUANT_MAX_SEMITONE) {

@@ -829,6 +829,23 @@ void rootSet(Engine *e, int c, int root) {
     REQUEST_DISPLAY_REFRESH();
 }
 
+// The octave half of ROOT: which octave of the output range the peg ring starts
+// in. The maximum depends on SPREAD, so it is per container and read live.
+int rootOctaveMax(Engine *e, int c) {
+    EngineScope scope(e);
+    return channels[clampC(c)].MaxRootOctave();
+}
+int rootOctaveGet(Engine *e, int c) {
+    EngineScope scope(e);
+    return channels[clampC(c)].GetRootOctave();
+}
+void rootOctaveSet(Engine *e, int c, int octave) {
+    EngineScope scope(e);
+    channels[clampC(c)].SelectRootOctave(octave);
+    MarkUnsaved();
+    REQUEST_DISPLAY_REFRESH();
+}
+
 int spreadMin() { return CHANNEL_SPREAD_MIN; }
 int spreadMax() { return CHANNEL_SPREAD_MAX; }
 int spreadGet(Engine *e, int c) {
@@ -943,6 +960,21 @@ int cvDepthGet(Engine *e, int input) {
 void cvDepthSet(Engine *e, int input, int pct) {
     EngineScope scope(e);
     cvDepth[clampIn(input)] = (unsigned char)constrain(pct, 0, 100);
+    MarkUnsaved();
+    REQUEST_DISPLAY_REFRESH();
+}
+
+// ── Output tuning ──
+int cvZeroOctaveMin() { return GEN_CV_ZERO_OCTAVE_MIN; }
+int cvZeroOctaveMax() { return GEN_CV_ZERO_OCTAVE_MAX; }
+int cvZeroOctaveGet(Engine *e) {
+    EngineScope scope(e);
+    return channels[0].GetCvZeroOctave(); // both channels are kept in step
+}
+void cvZeroOctaveSet(Engine *e, int octave) {
+    EngineScope scope(e);
+    for (int i = 0; i < NUM_CHANNELS; i++)
+        channels[i].SetCvZeroOctave(octave);
     MarkUnsaved();
     REQUEST_DISPLAY_REFRESH();
 }

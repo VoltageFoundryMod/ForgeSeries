@@ -125,6 +125,10 @@ inline void RandomizeParams(uint32_t entropy) {
         channels[c].SelectRoot(_RndInt(0, 11));
         channels[c].SetSpread(_RndInt(CHANNEL_SPREAD_MIN, 3));
         channels[c].SetBias(_RndInt(-60, 60));
+        // Register, rolled after SPREAD because SPREAD is what caps it. Kept off
+        // the top of the range: a roll that put both containers in the last
+        // octave would be five octaves of hardware playing one of them.
+        channels[c].SelectRootOctave(_RndInt(0, 2));
 
         // ── Gate ──
         // Decay stays far below ENVELOPE_MAX_DECAY: a container at these settings

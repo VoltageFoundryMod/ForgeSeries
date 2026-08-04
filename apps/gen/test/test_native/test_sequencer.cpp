@@ -70,12 +70,14 @@ TEST(Sequencer, BiasCrowdsTheNotesWithoutMovingTheEnds) {
 // scalewise run then a leap, crowding high gives a leap then a scalewise run.
 // Neither may stack pegs onto a duplicate note.
 TEST(Sequencer, BiasTableMatchesTheDocumentedNotes) {
-    //                    C2  D2  E2  F2  G2  A2  C3  C4
-    const int low[8]  = {24, 26, 28, 29, 31, 33, 36, 48};
-    //                    C2  E2  G2  B2  D3  F3  A3  C4
-    const int even[8] = {24, 28, 31, 35, 38, 41, 45, 48};
-    //                    C2  C3  E3  F3  G3  A3  B3  C4
-    const int high[8] = {24, 36, 40, 41, 43, 45, 47, 48};
+    // Semitones above the module's lowest note. With ROOT at octave 0 the ring
+    // starts at 0 V, which the default 0V NOTE names C4.
+    //                    C4  D4  E4  F4  G4  A4  C5  C6
+    const int low[8]  = {0,  2,  4,  5,  7,  9,  12, 24};
+    //                    C4  E4  G4  B4  D5  F5  A5  C6
+    const int even[8] = {0,  4,  7,  11, 14, 17, 21, 24};
+    //                    C4  C5  E5  F5  G5  A5  B5  C6
+    const int high[8] = {0,  12, 16, 17, 19, 21, 23, 24};
 
     GravityChannel chLow = MakeChannel(1, 0, 2, -100);
     GravityChannel chEven = MakeChannel(1, 0, 2, 0);
@@ -98,15 +100,78 @@ TEST(Sequencer, EvenBiasIsActuallyEven) {
     // With BIAS 0 the pegs are equally spaced in scale degrees: 8 pegs across the
     // 14 degrees of two C-major octaves is one peg every two degrees.
     //
-    // The span sits at C2–C4 rather than at the bottom of the range, because it
-    // is centred in the 0–5 V output and snapped to whole octaves. That is what
-    // makes the default land in a usable register with no octave control.
+    // The ring starts on ROOT — octave 0 here — and opens upward by SPREAD.
     GravityChannel ch = MakeChannel(1, 0, 2, 0);
-    //                       C2  E2  G2  B2  D3  F3  A3  C4
-    const int expected[8] = {24, 28, 31, 35, 38, 41, 45, 48};
+    //                       C4  E4  G4  B4  D5  F5  A5  C6
+    const int expected[8] = {0,  4,  7,  11, 14, 17, 21, 24};
     for (int peg = 0; peg < 8; peg++) {
         EXPECT_EQ(expected[peg], ch.SemitoneForPeg(peg, 8)) << "peg " << peg;
     }
+}
+
+// ── ROOT as the ring's anchor ────────────────────────────────────────────────
+
+TEST(Sequencer, RootOctaveMovesTheWholeRing) {
+    // The register the user asked for, not one inferred from SPREAD. Two pegs
+    // and one octave used to be parked two octaves up with no way to move it —
+    // this is the fix, and it is the same ring transposed exactly.
+    GravityChannel low = MakeChannel(1, 0, 1);
+    GravityChannel high = MakeChannel(1, 0, 1);
+    high.SelectRootOctave(3);
+
+    EXPECT_EQ(0, low.SemitoneForPeg(0, 2));
+    EXPECT_EQ(12, low.SemitoneForPeg(1, 2));
+    EXPECT_EQ(36, high.SemitoneForPeg(0, 2));
+    EXPECT_EQ(48, high.SemitoneForPeg(1, 2));
+}
+
+TEST(Sequencer, RootStartsTheRingInEveryScale) {
+    // The ring starts ON the root, whatever the scale and wherever the octave —
+    // this is what makes ROOT readable as "the lowest note".
+    for (int scale = 0; scale < numScales; scale++) {
+        for (int root = 0; root < 12; root++) {
+            for (int oct = 0; oct <= 3; oct++) {
+                GravityChannel ch = MakeChannel(scale, root, 2);
+                ch.SelectRootOctave(oct);
+                EXPECT_EQ(oct * 12 + root, ch.SemitoneForPeg(0, 8))
+                    << "scale " << scale << " root " << root << " octave " << oct;
+            }
+        }
+    }
+}
+
+TEST(Sequencer, SpreadCapsTheRootOctaveSoTheRingFits) {
+    // Five octaves of range: a 2-octave ring can start no higher than octave 3,
+    // and widening it to 5 has to walk the root back down to 0 rather than let
+    // the top of the ring flatten against the ceiling.
+    GravityChannel ch = MakeChannel(1, 0, 2);
+    EXPECT_EQ(QUANT_OCTAVES - 2, ch.MaxRootOctave());
+
+    ch.SelectRootOctave(4);
+    EXPECT_EQ(3, ch.GetRootOctave()) << "root octave was not capped by SPREAD";
+
+    ch.SetSpread(5);
+    EXPECT_EQ(0, ch.GetRootOctave()) << "widening SPREAD must pull the root down";
+    EXPECT_EQ(0, ch.SemitoneForPeg(0, 8));
+    EXPECT_EQ(QUANT_MAX_SEMITONE, ch.SemitoneForPeg(7, 8));
+}
+
+TEST(Sequencer, RootSemitoneIsOneContinuousControl) {
+    // The menu edits ROOT as a single number so one detent is one semitone and
+    // the row reads "C4" — pitch class and octave have to stay consistent.
+    GravityChannel ch = MakeChannel(1, 0, 2);
+    ch.SelectRootSemitone(15); // D#, octave 1
+    EXPECT_EQ(3, ch.GetRootIndex());
+    EXPECT_EQ(1, ch.GetRootOctave());
+    EXPECT_EQ(15, ch.GetRootSemitone());
+    EXPECT_EQ(15, ch.SemitoneForPeg(0, 8)) << "the ring must start on the root";
+
+    // Clamped at both ends, and the scale follows the pitch class.
+    ch.SelectRootSemitone(-4);
+    EXPECT_EQ(0, ch.GetRootSemitone());
+    ch.SelectRootSemitone(999);
+    EXPECT_LE(ch.GetRootSemitone(), ch.MaxRootSemitone() + 11);
+    EXPECT_TRUE(ch.GetActiveNote(ch.GetRootIndex())) << "the root fell outside its own scale";
 }
 
 TEST(Sequencer, EveryPegLandsInTheScale) {
@@ -185,6 +250,87 @@ TEST(Sequencer, EmitsNotesFromPhysicsHits) {
     EXPECT_GE(ch.GetSemitone(), 0);
     // The CV jack should agree with the note the channel says it is playing.
     EXPECT_NEAR((float)ch.GetCVOutput(), SemitonesToCounts((float)ch.GetSemitone()), 1.0f);
+}
+
+// ── 0V NOTE ──────────────────────────────────────────────────────────────────
+
+namespace {
+
+// Run a container until the channel has emitted a note, so the pitch outputs
+// have something to report.
+void PlayUntilFirstNote(GravityChannel &ch, PhysicsWorld &w, const Clock &clk) {
+    w.Get(0).SetPegCount(8);
+    w.Get(0).SetBallCount(3);
+    for (int i = 0; i < 6000 && ch.GetSemitone() < 0; i++) {
+        unsigned long t = 1000UL + (unsigned long)i * 1000UL;
+        w.Advance(t);
+        ch.Process(w.Get(0), t, clk, false);
+    }
+    ASSERT_GE(ch.GetSemitone(), 0) << "no note was ever emitted";
+}
+
+} // namespace
+
+TEST(Sequencer, ZeroReferenceDefaultsToC4AndIsClamped) {
+    GravityChannel ch;
+    EXPECT_EQ(GEN_CV_ZERO_OCTAVE_DEFAULT, ch.GetCvZeroOctave());
+
+    ch.SetCvZeroOctave(GEN_CV_ZERO_OCTAVE_MAX + 3);
+    EXPECT_EQ(GEN_CV_ZERO_OCTAVE_MAX, ch.GetCvZeroOctave());
+    ch.SetCvZeroOctave(GEN_CV_ZERO_OCTAVE_MIN - 3);
+    EXPECT_EQ(GEN_CV_ZERO_OCTAVE_MIN, ch.GetCvZeroOctave());
+}
+
+TEST(Sequencer, ZeroReferenceNamesTheVoltageItDoesNotMoveIt) {
+    // The reference says which C the patch calls 0 V. The jack is 0–5 V whatever
+    // it is set to — if the reference moved the output as well, it would fight
+    // SPREAD for control of the pitch.
+    PhysicsWorld w;
+    Clock clk;
+    GravityChannel ch = MakeChannel(1, 0, 2);
+    PlayUntilFirstNote(ch, w, clk);
+
+    const uint16_t counts = ch.GetCVOutput();
+    const int semitone = ch.GetSemitone();
+
+    for (int ref = GEN_CV_ZERO_OCTAVE_MIN; ref <= GEN_CV_ZERO_OCTAVE_MAX; ref++) {
+        ch.SetCvZeroOctave(ref);
+        EXPECT_EQ(counts, ch.GetCVOutput()) << "0V NOTE C" << ref << " moved the jack";
+        EXPECT_EQ(semitone, ch.GetSemitone());
+
+        // The one thing it does move is the name, by one octave number per
+        // octave of reference.
+        EXPECT_EQ(ref + semitone / 12, ch.GetOctaveOut());
+    }
+}
+
+TEST(Sequencer, TheNoteOnScreenIsTheVoltageOnTheJack) {
+    // The invariant the setting exists for: volts == octave - 0V NOTE (plus the
+    // pitch class). Tell the module what its VCO calls 0 V and the note on the
+    // screen is the note that VCO plays.
+    PhysicsWorld w;
+    Clock clk;
+    GravityChannel ch = MakeChannel(1, 0, 3);
+    PlayUntilFirstNote(ch, w, clk);
+
+    for (int ref = GEN_CV_ZERO_OCTAVE_MIN; ref <= GEN_CV_ZERO_OCTAVE_MAX; ref++) {
+        ch.SetCvZeroOctave(ref);
+        float named = (float)(ch.GetOctaveOut() - ref) + (float)ch.GetNoteIndex() / 12.0f;
+        float jack = (float)ch.GetCVOutput() / QUANT_COUNTS_PER_SEMITONE / 12.0f;
+        EXPECT_NEAR(named, jack, 0.02f) << "0V NOTE C" << ref;
+    }
+}
+
+TEST(Sequencer, TheNoteSpanFillsTheOutputRange) {
+    // The widest spread uses every octave the jack has: the lowest note sits at
+    // 0 V — the reference note itself — and the highest at 5 V, five octaves up.
+    // Anything else would leave part of the range unreachable.
+    GravityChannel ch = MakeChannel(1, 0, CHANNEL_SPREAD_MAX);
+    ch.SetCvZeroOctave(4);
+
+    EXPECT_EQ(0, ch.SemitoneForPeg(0, 8)) << "the widest spread must start at 0 V";
+    EXPECT_EQ(QUANT_MAX_SEMITONE, ch.SemitoneForPeg(7, 8));
+    EXPECT_EQ(QUANT_OCTAVES, QUANT_MAX_SEMITONE / 12);
 }
 
 TEST(Sequencer, QuantizeHoldsNotesUntilTheBoundary) {

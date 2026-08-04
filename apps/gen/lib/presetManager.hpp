@@ -42,7 +42,10 @@ extern uint8_t cvDepth[NUM_CV_INS];           // lib/cvInputs.hpp
 // 0xE2: per-channel OCTAVE replaced by SPREAD + BIAS.
 // 0xE3: loop / phrase mode (beats, wake, nap, per-container shift).
 // 0xE4: per-container DENSITY and SPACE.
-#define VALID_MAGIC 0xE4 // 0xFF = erased flash, 0x00 = zeroed RAM
+// 0xE5: 0V NOTE — the note the module's 0 V stands for.
+// 0xE6: ROOT carries an octave — the peg ring starts on it instead of being
+//       centred in the output range.
+#define VALID_MAGIC 0xE6 // 0xFF = erased flash, 0x00 = zeroed RAM
 
 struct LoadSaveParams {
     uint8_t valid; // VALID_MAGIC = valid data; any other = use defaults
@@ -51,8 +54,9 @@ struct LoadSaveParams {
     uint16_t noteMask[NUM_CHANNELS]; // bit i = note i enabled (0 = C)
     uint8_t scaleIndex[NUM_CHANNELS];
     uint8_t rootIndex[NUM_CHANNELS];
-    uint8_t spread[NUM_CHANNELS]; // octaves the peg ring covers
-    int8_t bias[NUM_CHANNELS];    // -100 crowd low .. +100 crowd high
+    uint8_t rootOctave[NUM_CHANNELS]; // which octave of the range the ring starts in
+    uint8_t spread[NUM_CHANNELS];     // octaves the peg ring covers
+    int8_t bias[NUM_CHANNELS];        // -100 crowd low .. +100 crowd high
     uint8_t gateMode[NUM_CHANNELS];
     uint16_t attackMs[NUM_CHANNELS];
     uint16_t decayMs[NUM_CHANNELS];
@@ -88,6 +92,10 @@ struct LoadSaveParams {
     uint8_t quantize;
 
     // ── Routing ──
+    // 0V NOTE — the note the module's 0 V stands for. One value for the module,
+    // not per channel: it describes the rack the module is patched into, and
+    // both pitch jacks go into the same rack.
+    uint8_t cvZeroOctave;
     uint8_t in1Role;
     uint8_t cvTarget[NUM_CV_INS];
     uint8_t cvDepth[NUM_CV_INS];
@@ -137,6 +145,7 @@ LoadSaveParams LoadDefaultParams() {
     // ── A: the sequencer ─────────────────────────────────────────────────────
     p.noteMask[0] = 0x0AB5; // C major
     p.scaleIndex[0] = 1;    // Major
+    p.rootOctave[0] = 0;    // from the bottom of the range up: C4–C6 at 0V NOTE C4
     p.spread[0] = 2;        // two octaves, evenly spaced
     p.bias[0] = 0;
     p.gravity[0] = 220.0f;
@@ -167,12 +176,17 @@ LoadSaveParams LoadDefaultParams() {
     // have to be ones that cannot clash with A's whatever lands together. A
     // pentatonic has no semitone in it at all, which is what makes it sit under
     // a busy major sequence without ever fighting it.
-    p.spread[1] = 1;  // one octave, high — well clear of A's two
-    p.bias[1] = 30;
-    // GRAVITY is the tempo. 20 is a speed scale of 0.30, so this container runs
+    // Two octaves above A's root, so B's one octave sits on top of A's two
+    // instead of inside them. Before ROOT carried an octave this had to be
+    // approximated with BIAS, because both containers were centred in the same
+    // range whatever their spread.
+    p.rootOctave[1] = 0; // C4–C5 at 0V NOTE C4
+    p.spread[1] = 1;     // one octave, high — well clear of A's two
+    p.bias[1] = -30;
+    // GRAVITY is the tempo. 25 is a speed scale of 0.30, so this container runs
     // at just under a third of A's, and with a single ball it speaks about once
     // every 1.5 s against A's six times a second.
-    p.gravity[1] = 20.0f;
+    p.gravity[1] = 25.0f;
     p.bounce[1] = 0.45f; // damped, so it settles rather than rattling
     // SPIN stays slow on purpose: the rotating wall is an energy source that does
     // NOT scale with gravity, so a fast spin here would stir the container harder
@@ -214,6 +228,9 @@ LoadSaveParams LoadDefaultParams() {
     p.ppqn = Ppqn4;
     p.quantize = QOff;
 
+    // C4 = 0 V, VCV Rack's convention and the common one on hardware VCOs.
+    p.cvZeroOctave = GEN_CV_ZERO_OCTAVE_DEFAULT;
+
     p.in1Role = In1Clock;
     p.cvTarget[0] = CVProximity;
     p.cvTarget[1] = CVGravityBoth;
@@ -248,6 +265,7 @@ LoadSaveParams CollectParams() {
         p.noteMask[i] = mask;
         p.scaleIndex[i] = (uint8_t)channels[i].GetScaleIndex();
         p.rootIndex[i] = (uint8_t)channels[i].GetRootIndex();
+        p.rootOctave[i] = (uint8_t)channels[i].GetRootOctave();
         p.spread[i] = (uint8_t)channels[i].GetSpread();
         p.bias[i] = (int8_t)channels[i].GetBias();
         p.gateMode[i] = (uint8_t)channels[i].envelope.GetMode();
@@ -284,6 +302,7 @@ LoadSaveParams CollectParams() {
     p.ppqn = (uint8_t)clockEngine.GetPpqn();
     p.quantize = (uint8_t)clockEngine.GetQuantize();
 
+    p.cvZeroOctave = (uint8_t)channels[0].GetCvZeroOctave(); // both channels agree
     p.in1Role = in1Role;
     for (int i = 0; i < NUM_CV_INS; i++) {
         p.cvTarget[i] = cvTarget[i];
@@ -310,13 +329,17 @@ void UpdateParameters(LoadSaveParams p) {
         channels[i].SetActiveNotes(notes);
         channels[i].SetScaleIndex(p.scaleIndex[i]);
         channels[i].SetRootIndex(p.rootIndex[i]);
+        // SPREAD first: it caps how high the root octave may sit, and loading
+        // them the other way round would clamp a valid preset down an octave.
         channels[i].SetSpread(p.spread[i]);
+        channels[i].SelectRootOctave((int)p.rootOctave[i]);
         channels[i].SetBias(p.bias[i]);
         channels[i].envelope.SetMode(p.gateMode[i]);
         channels[i].envelope.SetAttack(p.attackMs[i]);
         channels[i].envelope.SetDecay(p.decayMs[i]);
         channels[i].SetGateLevel(p.gateLevel[i]);
         channels[i].SetAccent(p.accent[i]);
+        channels[i].SetCvZeroOctave((int)p.cvZeroOctave); // SetCvZeroOctave clamps
     }
 
     for (int i = 0; i < 2; i++) {

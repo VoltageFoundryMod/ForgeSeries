@@ -128,6 +128,27 @@ fresh phrase for free.
 one rather than stacking. Stacking would release a burst of retriggers at the
 boundary instead of something that sounds like the physics that made it.
 
+**ROOT is an absolute note, and it anchors the peg ring.** `GravityChannel` keeps
+a pitch class *and* an octave; `SemitoneForPeg()` starts the ring at that note
+(`Quantizer::IndexAtOrAbove`, never the nearest degree) and opens upward by
+SPREAD. The ring used to be *centred* in the output range instead, which meant a
+one-octave ring was parked two octaves up with nothing able to move it — the
+register is the first thing a player wants to state, so it is a control, folded
+into the ROOT row because the page has no seventh line. `MaxRootOctave()` is
+`QUANT_OCTAVES - spread`, and `SetSpread()` re-clamps the root so widening the
+ring walks it down rather than flattening the top against the ceiling.
+
+**0V NOTE names the outputs, it never moves them.** The pitch jacks are the
+MCP4728's 0–5 V — five octaves at 1 V/oct, no negative rail — so the only thing
+the module can get wrong is what those volts are *called*. `SETTINGS ▸ 0V NOTE`
+(C0–C5, default C4, `GEN_CV_ZERO_OCTAVE_DEFAULT` in
+[lib/sequencer.hpp](lib/sequencer.hpp)) records which note the patch treats as
+0 V, and `GetOctaveOut()` numbers from it, so
+`volts == octave - 0V NOTE`. Do not make it transpose: the counts written to the
+DAC must stay identical at every setting, or it starts fighting SPREAD for
+control of the register. It was fixed at C0 before, which is why a note the
+screen called C2 came out of a Rack VCO as C6.
+
 **CV.** Every modulation target reads through `CvNorm()` (0..1) or `CvBipolar()`
 (-1..1) in [lib/cvInputs.hpp](lib/cvInputs.hpp), which layer over the shared
 `core/cvInput.hpp` adapters. Keep it that way — the ±5 V hardware change must stay

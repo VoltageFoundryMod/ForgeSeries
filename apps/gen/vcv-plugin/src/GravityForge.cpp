@@ -235,7 +235,20 @@ struct GravityForgeWidget : ModuleWidget {
                 [=]() { return (size_t)gfengine::rootGet(e, c); },
                 [=](size_t r) { gfengine::rootSet(e, c, (int)r); }));
 
-            // How many octaves the peg ring covers.
+            // ...and which octave that root sits in — the peg ring starts there
+            // and opens upward, so this is the container's register. Named with
+            // the 0V reference applied, so it matches the panel and the VCO.
+            std::vector<std::string> rootOcts;
+            for (int o = 0; o <= gfengine::rootOctaveMax(e, c); o++)
+                rootOcts.push_back(string::f("%s%d", gfengine::noteName(gfengine::rootGet(e, c)).c_str(),
+                                             gfengine::cvZeroOctaveGet(e) + o));
+            menu->addChild(createIndexSubmenuItem(
+                "Root octave", rootOcts,
+                [=]() { return (size_t)gfengine::rootOctaveGet(e, c); },
+                [=](size_t o) { gfengine::rootOctaveSet(e, c, (int)o); }));
+
+            // How many octaves the peg ring covers, counted up from the root.
+            // Widening it past the ceiling walks the root octave back down.
             std::vector<std::string> spreads;
             for (int o = gfengine::spreadMin(); o <= gfengine::spreadMax(); o++)
                 spreads.push_back(string::f("%d octave%s", o, o == 1 ? "" : "s"));
@@ -329,6 +342,20 @@ struct GravityForgeWidget : ModuleWidget {
                 "Input CV Range", {"0..5V", "-5..5V", "0..10V"}, &m->cvRange));
             menu->addChild(createIndexPtrSubmenuItem(
                 "Encoder Sensitivity", {"Low", "Medium", "High"}, &m->encoderSensitivity));
+
+            // The note this module's 0 V stands for. Rack's own convention is C4
+            // and that is the default; the entry exists because a rack full of
+            // hardware emulations may not agree. The jacks are 0..5 V either
+            // way — this names those volts, so the notes on the screen are the
+            // ones the oscillator plays: a note shown as C5 leaves at (5 - n) V.
+            const int refMin = gfengine::cvZeroOctaveMin();
+            std::vector<std::string> refs;
+            for (int o = refMin; o <= gfengine::cvZeroOctaveMax(); o++)
+                refs.push_back(string::f("C%d", o));
+            menu->addChild(createIndexSubmenuItem(
+                "Note names: 0 V is", refs,
+                [=]() { return (size_t)(gfengine::cvZeroOctaveGet(e) - refMin); },
+                [=](size_t i) { gfengine::cvZeroOctaveSet(e, (int)i + refMin); }));
         }));
 
         menu->addChild(new MenuSeparator);
