@@ -1,6 +1,6 @@
 # ForgeSeries — AI Coding Agent Instructions
 
-Eurorack module firmware for the **Seeed XIAO RP2040**, four modules in one
+Eurorack module firmware for the **Seeed XIAO RP2040**, five modules in one
 image, each also shipping as a VCV Rack plugin that runs the same code.
 
 **[README.md](README.md) is the architecture document and it is current.** Its
@@ -21,6 +21,7 @@ apps/clk/       ClockForge    — clock generator / modulation source
 apps/dq/        NoteForge     — dual quantizer
 apps/gen/       GravityForge  — physics-based generative sequencer
 apps/scp/       ForgeView     — oscilloscope / spectrum analyser
+apps/att/       ChaosForge    — dual chaotic-attractor modulation source
 vcv/            the consolidated Rack plugin (all modules, one binary)
 vcvlib/         shared Rack layer (Arduino shim, ForgeModule, IEngine, widgets)
 tools/env.ps1   optional PATH helper for Windows
@@ -42,7 +43,8 @@ firmware and owns the native test environments (`test_dir = apps`). It has two
 flavours of hardware image, from the same shell and the same module sources:
 
 - `env:xiao_rp2040` — the unified image, every module, selector picks.
-- `env:xiao_clk` / `xiao_dq` / `xiao_gen` / `xiao_scp` — one module each.
+- `env:xiao_clk` / `xiao_dq` / `xiao_gen` / `xiao_scp` / `xiao_att` — one
+  module each.
 
 The single-module envs differ in exactly two options: `-DFORGE_ONLY_APP=<Factory>`
 and a `build_src_filter` naming one app TU. **`FORGE_ONLY_APP` is read in exactly
@@ -53,8 +55,8 @@ entry, with no per-module conditional anywhere.
 
 `kAppCount == 1` is what makes the selector show one module plus **CALIBRATE**;
 everything else falls out of that. In particular `FORGE_UNIFIED` stays defined in
-these builds — it means "there is a shell behind this app", not "all four
-modules" — and the four `<app>_app.hpp` includes stay unconditional, since a
+these builds — it means "there is a shell behind this app", not "every
+module" — and the `<app>_app.hpp` includes stay unconditional, since a
 declared-but-uncalled factory is not a link reference.
 
 `lib/engine.hpp` holds the module's per-iteration engine step and **both hosts
@@ -66,7 +68,7 @@ lost its LOOP▸NAP muting.
 ```sh
 make                # the unified firmware — this is what you flash
 make upload         # build + flash   (double-tap reset for the UF2 bootloader)
-make modules        # the four single-module images
+make modules        # the single-module images, one per module
 make fw-clk         # one of them  (== pio run -e xiao_clk); fw-upload-clk flashes
 make test           # native tests, every module
 make test-dq        # one module  (== pio test -e native_dq)
@@ -115,7 +117,7 @@ selector, owns calibration, then drives one app through
 ## Rules for a module TU
 
 - Each module TU wraps itself in `namespace forge::<app>`. That is what lets
-  four firmwares sharing one binary all define `menuMode`, `switchState` and
+  several firmwares sharing one binary all define `menuMode`, `switchState` and
   `param` at file scope.
 - **Include order is load-bearing.** Standard library, third-party and `core/`
   headers at *global* scope first; only then the module's own headers, inside the

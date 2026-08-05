@@ -51,6 +51,7 @@ repository.
 | <img src="apps/dq/images/Front.png" width="70" alt="NoteForge front panel">     | **NoteForge**<br><sub>`apps/dq`</sub>     | Dual quantizer. Two independent channels, each with its own editable 12-note scale mask, octave shift, glide, sample & hold and a gate/envelope output.                                                           | [Overview](apps/dq/Readme.md) · [Manual](apps/dq/Manual.md) · [VCV port](apps/dq/docs/VCVRack_Plugin.md) · [ModularGrid](https://modulargrid.net/e/other-unknown-noteforge-by-voltage-foundry-modular)     |
 | <img src="apps/gen/images/Front.png" width="70" alt="GravityForge front panel"> | **GravityForge**<br><sub>`apps/gen`</sub> | Physics-based generative sequencer. Balls fall inside two rotating containers and ring scale-tuned pegs; a proximity control slides the two from independent sequencers into one entangled instrument.            | [Overview](apps/gen/Readme.md) · [Manual](apps/gen/Manual.md) · [Design notes](apps/gen/docs/Design.md)                                                                                                    |
 | <img src="apps/scp/images/Front.png" width="70" alt="ForgeView front panel">    | **ForgeView**<br><sub>`apps/scp`</sub>    | Oscilloscope and analysis. Dual-trace and single-trace scope, triggered capture, spectrum analyzer, X-Y display and a tuner — with buffered pass-through so it can sit mid-patch.                                 | [Overview](apps/scp/Readme.md) · [Manual](apps/scp/Manual.md) · [VCV port](apps/scp/docs/VCVRack_Plugin.md) · [ModularGrid](https://modulargrid.net/e/other-unknown-forgeview-by-voltage-foundry-modular)  |
+| <img src="apps/att/images/Front.png" width="70" alt="ChaosForge front panel">   | **ChaosForge**<br><sub>`apps/att`</sub>   | Dual chaotic-attractor modulation source. Twelve strange attractors; each generator sends two of its three state variables to a pair of jacks, and a couple control takes the two from unrelated to locked.       | [Overview](apps/att/Readme.md) · [Manual](apps/att/Manual.md) · [Design notes](apps/att/docs/Design.md)                                                                                                    |
 
 Each **Manual** is the complete user guide — every menu page, screenshot,
 calibration and wiring detail. Browsable versions with images live on
@@ -75,7 +76,8 @@ calibration and wiring detail. Browsable versions with images live on
 #### Single-module images
 
 `ForgeSeries-<version>-modules.zip` on the same release holds one image per
-module — `ClockForge`, `NoteForge`, `GravityForge`, `ForgeView` — for a build of
+module — `ClockForge`, `NoteForge`, `GravityForge`, `ForgeView`, `ChaosForge` —
+for a build of
 the hardware that is only ever going to be one of them. Flashing works exactly
 as above, and everything else in this section still applies: the module boots
 straight in, and holding the encoder at power-on (or **BOOT MENU** on its
@@ -83,7 +85,7 @@ SETTINGS page) opens the same screen with that one module and **CALIBRATE** on
 it, which is how you reach the wizard.
 
 They are the same shell and the same module sources as the unified image, just
-linked with one module instead of four, so a given release behaves identically
+linked with one module instead of all of them, so a given release behaves identically
 either way. Presets and calibration live in the same files, so you can move
 between the two images without losing either.
 
@@ -92,7 +94,7 @@ between the two images without losing either.
 
 ### In VCV Rack
 
-The plugin bundles all four modules under the **Voltage Foundry Modular** brand.
+The plugin bundles every module under the **Voltage Foundry Modular** brand.
 Until it lands in the VCV library, build it from source — see
 [Building](#building) — or take the packaged `.vcvplugin` from the [latest release](https://github.com/VoltageFoundryMod/ForgeSeries/releases) or a [dev build](https://github.com/VoltageFoundryMod/ForgeSeries/actions) from CI run's artifacts (enter one of the workflow runs and the artifacts are at the bottom).
 
@@ -134,6 +136,7 @@ apps/
   dq/      NoteForge     — dual quantizer
   gen/     GravityForge  — physics-based generative sequencer
   scp/     ForgeView     — oscilloscope / spectrum analyser
+  att/     ChaosForge    — dual chaotic-attractor modulation source
 vcv/       the consolidated VCV Rack plugin (all modules, one binary)
 vcvlib/    shared VCV Rack layer (Arduino shim, ForgeModule, IEngine, widgets)
 tools/     env.ps1 — optional PATH helper for Windows
@@ -167,7 +170,7 @@ Prerequisites: [PlatformIO](https://platformio.org/) for the firmware, and the
 make                # the firmware (unified image, every module)
 make upload         # build + flash
 make upload-monitor # ...and open the serial monitor
-make modules        # the four single-module images
+make modules        # the single-module images, one per module
 make fw-clk         # one of them  (== pio run -e xiao_clk)
 make fw-upload-clk  # ...and flash it
 make test           # native unit tests for every module
@@ -341,11 +344,11 @@ module boots straight in, the selector lists it and **CALIBRATE**, and
 `FORGE_UNIFIED` stays defined so **BOOT MENU** is still on the module's SETTINGS
 page. Stripping the selector out instead is what would have cost something — it
 is the only entry point to the wizard, so removing it means either an `#ifdef`
-axis through four modules' `menuHandlers.hpp` or no field calibration.
+axis through every module's `menuHandlers.hpp` or no field calibration.
 
 Naming the factory rather than setting a per-module flag is what keeps that to
 one `#ifdef`: it covers every module, present and future, so adding one is still
-just an include and an array entry. The four `<app>_app.hpp` includes stay
+just an include and an array entry. The `<app>_app.hpp` includes stay
 unconditional even in a single-module image, because they only _declare_ a
 factory — an unused declaration is not a link reference, so nothing is paid for
 the three that are not there.
@@ -357,7 +360,7 @@ decide what index 2 means.
 
 **Storage** is LittleFS, not the emulated EEPROM. That sector is a single 4096
 bytes and its `begin()` clamps silently — which is how ClockForge shipped with
-permanently broken calibration and three dead preset slots. Four modules could
+permanently broken calibration and three dead preset slots. Several modules could
 never have shared it.
 
 ```
@@ -372,7 +375,7 @@ every read checks a magic and an exact length, and anything that fails reads as
 absent so the caller falls back to defaults.
 
 **Namespaces.** Each module TU wraps itself in `namespace forge::<app>`, which
-is what lets four firmwares share one binary — they all define `menuMode`,
+is what lets several firmwares share one binary — they all define `menuMode`,
 `switchState`, `param` and friends at file scope.
 
 > **Include order in a module TU is load-bearing.** Standard library,
@@ -399,11 +402,11 @@ sources stay with their module rather than being copied. Only each module's
 sibling's header. (It once did — GravityForge resolved `quantizer.hpp` to
 NoteForge's copy purely because `dq` came first in the include path.)
 
-Current size, all four modules in one image:
+Current size, every module in one image:
 
 |         | RAM            | Flash           |
 | ------- | -------------- | --------------- |
-| unified | 28888 (11.0 %) | 239628 (13.1 %) |
+| unified | 30592 (11.7 %) | 263296 (14.4 %) |
 
 Flash is measured against 1830912 bytes — 256 KB of the 2 MB part is reserved
 for the LittleFS region, and that size must stay fixed across releases or the
@@ -423,7 +426,7 @@ which is paid once. What a module actually adds is its own translation unit's
 | dq     | ~0.7 KB   | ~19 KB      |
 | shell  | ~0.2 KB   | ~2 KB       |
 
-Baseline is ~17.8 KB. Four modules is ~11 % of RAM, so ten ClockForge-weight
+Baseline is ~17.8 KB. Five modules is ~11 % of RAM, so ten ClockForge-weight
 ones would be ~34 % and ten typical ones ~15 %. Flash is looser still.
 
 ClockForge is the outlier at 10× NoteForge — if RAM ever gets tight, that one
@@ -433,7 +436,7 @@ If it did get tight, the escape hatch is half-built: each module's
 `vcv-plugin/src/engine/engine_state.def` already enumerates every mutable global
 it owns, because the Rack port needs per-instance state. The same X-macro could
 size a shared arena and make RAM `max(module)` rather than `sum(modules)`. Not
-needed at four, probably not at ten — but the enumeration exists, and it is
+needed at five, probably not at ten — but the enumeration exists, and it is
 worth keeping accurate as modules are added, since only the Rack build catches a
 stale entry.
 

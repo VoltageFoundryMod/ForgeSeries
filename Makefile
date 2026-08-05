@@ -89,7 +89,7 @@ ifneq ($(filter plugins plugin-% everything,$(or $(MAKECMDGOALS),all)),)
 endif
 endif
 
-APPS  := clk dq gen scp
+APPS  := clk dq gen scp att
 PIO   ?= pio
 ENV   ?= xiao_rp2040
 

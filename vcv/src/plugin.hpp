@@ -15,3 +15,4 @@ extern Model* modelClockForge;   // ../apps/clk
 extern Model* modelNoteForge;    // ../apps/dq
 extern Model* modelForgeView;    // ../apps/scp
 extern Model* modelGravityForge; // ../apps/gen
+extern Model* modelChaosForge;   // ../apps/att

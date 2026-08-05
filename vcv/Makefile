@@ -23,7 +23,7 @@ RACK_DIR ?= ../../Rack-SDK
 #
 # Not every module belongs here: a hardware-only one (fully analog, no firmware
 # to emulate) has no VCV build, so leave it out.
-VFM_MODULES := clk dq scp gen
+VFM_MODULES := clk dq scp gen att
 VFM_DIRS := $(addprefix ../apps/,$(VFM_MODULES))
 
 # The shared ForgeSeries VCV layer (shim + forgevcv/ headers + forgevcv.mk).
