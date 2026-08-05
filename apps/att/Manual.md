@@ -11,9 +11,9 @@ The module is built with a catalogue of published chaotic systems, each with its
 
 The module hosts two attractors at a time and the user can adjust the constants, speed, output axes, level, offset and smoothing for each. The attractors are drawn on the screen in real time, and the user can assign two modulation inputs to control speed, constants, level, offset or coupling.
 
-Check the module on [ModularGrid](https://modulargrid.net/e/other-unknown-clockforge-by-voltage-foundry-modular).
-
 <img alt="ChaosForge Module" src="./images/Front.png" width="20%">
+
+Check the module on [ModularGrid](https://modulargrid.net/e/voltage-foundry-modular-chaosforge).
 
 ## Features
 

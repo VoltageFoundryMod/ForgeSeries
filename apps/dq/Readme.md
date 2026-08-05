@@ -19,7 +19,7 @@ actual firmware running inside Rack with the OLED emulated pixel for pixel. See
 
 <img src="./images/Front.png" alt="NoteForge Module" style="width:20%"/>
 
-Check it out on [ModularGrid](https://modulargrid.net/e/other-unknown-noteforge-by-voltage-foundry-modular).
+Check it out on [ModularGrid](https://modulargrid.net/e/voltage-foundry-modular-noteforge).
 
 ## Features
 

@@ -10,6 +10,10 @@ two systems pull on each other.
 Part of the [ForgeSeries](../../README.md) — same board, same shell, same
 calibration as every other module in the family.
 
+<img alt="ChaosForge Module" src="./images/Front.png" width="20%">
+
+Check the module on [ModularGrid](https://modulargrid.net/e/voltage-foundry-modular-chaosforge).
+
 ---
 
 ## What it is for
@@ -27,15 +31,15 @@ are somewhere else entirely within seconds.
 
 ## At a glance
 
-|                   |                                                                                                                         |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| **Systems**       | Lorenz, Rössler, Thomas, Chua, Halvorsen, Chen, Burke-Shaw, Aizawa, Dadras, Sprott B, Sprott C, Finance                 |
-| **Outputs**       | 4 × 0–5 V CV — two per generator, each following a chosen axis                                                          |
-| **Inputs**        | IN 1 re-seed / freeze · IN 2 + IN 3 assignable modulation                                                               |
-| **Per generator** | system, speed (0.01×–100×), up to four of that system's constants, output axes, level, offset, smoothing, range mode    |
-| **Link**          | COUPLE, from unrelated through entrained to locked together                                                             |
-| **Screen**        | live Lissajous plot of each generator's output pair                                                                     |
-| **Presets**       | 10 slots, slot 0 auto-loaded at boot, plus RANDOM                                                                       |
+|                   |                                                                                                                      |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **Systems**       | Lorenz, Rössler, Thomas, Chua, Halvorsen, Chen, Burke-Shaw, Aizawa, Dadras, Sprott B, Sprott C, Finance              |
+| **Outputs**       | 4 × 0–5 V CV — two per generator, each following a chosen axis                                                       |
+| **Inputs**        | IN 1 re-seed / freeze · IN 2 + IN 3 assignable modulation                                                            |
+| **Per generator** | system, speed (0.01×–100×), up to four of that system's constants, output axes, level, offset, smoothing, range mode |
+| **Link**          | COUPLE, from unrelated through entrained to locked together                                                          |
+| **Screen**        | live Lissajous plot of each generator's output pair                                                                  |
+| **Presets**       | 10 slots, slot 0 auto-loaded at boot, plus RANDOM                                                                    |
 
 ## The controls that matter
 

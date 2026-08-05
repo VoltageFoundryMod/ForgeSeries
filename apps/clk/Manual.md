@@ -14,7 +14,7 @@ The hardware schematics and design files are completely open-source and availabl
 
 <img alt="ClockForge 2 Module" src="./images/Front.png" width="20%">
 
-Check the module on [ModularGrid](https://modulargrid.net/e/other-unknown-clockforge-by-voltage-foundry-modular).
+Check the module on [ModularGrid](https://modulargrid.net/e/voltage-foundry-modular-clockforge).
 
 ## Features
 

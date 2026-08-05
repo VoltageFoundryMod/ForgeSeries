@@ -14,7 +14,7 @@ The hardware schematics and design files are completely open-source and availabl
 
 ![ForgeView Module Front Panel](./images/Front.png)
 
-Check it out on [ModularGrid](https://modulargrid.net/e/other-unknown-forgeview-by-voltage-foundry-modular).
+Check it out on [ModularGrid](https://modulargrid.net/e/voltage-foundry-modular-forgeview).
 
 ## Features
 

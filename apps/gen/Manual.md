@@ -10,6 +10,8 @@ Part of the **Forge** series of modules which share a single hardware platform. 
 
 <img alt="GravityForge Module" src="./images/Front.png" width="20%">
 
+Check the module on [ModularGrid](https://modulargrid.net/e/voltage-foundry-modular-gravityforge).
+
 ---
 
 ## User Manual

@@ -6,7 +6,7 @@
 
 GravityForge is a **dual physics-based generative sequencer**. Two virtual containers hold bouncing balls. Gravity pulls them down, the containers rotate, and every time a ball strikes one of the **pegs** ringing a container wall, that peg plays a note.
 
-Each peg *is* a note. The ring is laid out in ascending pitch, and every peg is a degree of the container's selected scale — so where a ball happens to land decides what you hear, and nothing it can hit is out of key. Three controls shape that ring: **ROOT** is an absolute note (`C4`, not `C`) and the ring starts on it, **SPREAD** sets how many octaves it covers from there (1 to 5), and **BIAS** decides whether the notes are spaced evenly around it or crowd into the low or the high end. The **peg count** (3 to 16) then sets how finely that span is divided: a few pegs give wide intervals and an angular, arpeggio-like melody, while a full ring of sixteen gives small steps and something closer to a run. Individual pegs can be muted to open holes in the pattern — a muted peg still bounces the ball, it just stays silent.
+Each peg _is_ a note. The ring is laid out in ascending pitch, and every peg is a degree of the container's selected scale — so where a ball happens to land decides what you hear, and nothing it can hit is out of key. Three controls shape that ring: **ROOT** is an absolute note (`C4`, not `C`) and the ring starts on it, **SPREAD** sets how many octaves it covers from there (1 to 5), and **BIAS** decides whether the notes are spaced evenly around it or crowd into the low or the high end. The **peg count** (3 to 16) then sets how finely that span is divided: a few pegs give wide intervals and an angular, arpeggio-like melody, while a full ring of sixteen gives small steps and something closer to a run. Individual pegs can be muted to open holes in the pattern — a muted peg still bounces the ball, it just stays silent.
 
 Because the balls are never stepped by a clock, the notes land where the physics puts them: a rhythm that is repetitive enough to feel composed but never quite loops.
 
@@ -19,6 +19,8 @@ Most of this manual applies to both the hardware and the VCV Rack plugin, with t
 The hardware schematics and design files are completely open-source and available in the [GitHub repository](https://github.com/VoltageFoundryMod/ForgeSeries-Hardware).
 
 <img alt="GravityForge Module" src="./images/Front.png" width="20%">
+
+Check the module on [ModularGrid](https://modulargrid.net/e/voltage-foundry-modular-gravityforge).
 
 ## Features
 
