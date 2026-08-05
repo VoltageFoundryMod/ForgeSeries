@@ -4,6 +4,8 @@
 //   EncoderKnob        : drag-to-rotate / click-to-push hardware encoder.
 //   EngineIntQuantity  : a rack::Quantity over an integer firmware parameter.
 //   IntSlider          : a wide horizontal slider driving that quantity.
+//   EngineFloatQuantity: the same over a continuous firmware parameter.
+//   FloatSlider        : a wide horizontal slider driving that one.
 //
 // The first two couple only to forgevcv::ForgeModule (fb + the encoder event
 // queue + encoderPixelsPerDetent), so any firmware's module works with them
@@ -561,5 +563,61 @@ struct IntSlider : ui::Slider {
 
 // Was the tempo-only slider before it grew into the generic one above.
 using BpmSlider = IntSlider;
+
+// ── Continuous firmware parameter as a rack::Quantity ────────────────────────
+// The float counterpart of EngineIntQuantity, for engines whose parameters are
+// genuinely continuous — ChaosForge's attractor constants, where a system's
+// legal range can be 0.05 wide or 30 wide and rounding to integers would leave
+// most of them with one usable value.
+//
+// Much simpler than the integer version, and for one reason: there is no
+// rounding, so the engine can hold exactly what the drag asked for and reading
+// it straight back is lossless. That means no drag-position cache is needed and
+// the engine is unconditionally the source of truth — encoder turns, CV and
+// preset loads all show up on an open slider for free.
+struct EngineFloatQuantity : rack::Quantity {
+    std::function<float()> getFn;
+    std::function<void(float)> setFn;
+    float minV = 0.f, maxV = 1.f, defV = 0.f;
+    std::string label, unit;
+    int precision = 4;
+
+    void setValue(float nv) override {
+        if (setFn)
+            setFn(clamp(nv, minV, maxV));
+    }
+    float getValue() override { return getFn ? getFn() : defV; }
+    float getMinValue() override { return minV; }
+    float getMaxValue() override { return maxV; }
+    float getDefaultValue() override { return defV; }
+    int getDisplayPrecision() override { return precision; }
+    std::string getLabel() override { return label; }
+    std::string getUnit() override { return unit; }
+};
+
+// ── Wide horizontal slider for a continuous value ────────────────────────────
+// Rack's ui::Slider costs a fixed 1000 px of mouse travel for a full sweep. That
+// is merely slow on a knob, but on a parameter where the whole interesting
+// region is a few percent of the range it means the useful part is unreachable
+// without the keyboard.
+//
+// A continuous parameter has no step count to derive travel from, the way
+// IntSlider does, so this simply uses a shorter fixed sweep and leans on
+// Shift-drag for precision — matching Rack's own knob convention.
+struct FloatSlider : ui::Slider {
+    float travel = 420.f;    // px for a full sweep
+    float fineScale = 0.15f; // Shift-drag multiplier
+
+    FloatSlider() { box.size.x = 200.f; }
+
+    void onDragMove(const event::DragMove &e) override {
+        if (quantity) {
+            int mods = APP->window ? APP->window->getMods() : 0;
+            float s = ((mods & RACK_MOD_MASK) == GLFW_MOD_SHIFT) ? fineScale : 1.f;
+            quantity->moveScaledValue(s * e.mouseDelta.x / travel);
+        }
+        OpaqueWidget::onDragMove(e);
+    }
+};
 
 } // namespace forgevcv

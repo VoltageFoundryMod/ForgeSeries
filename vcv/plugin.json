@@ -63,6 +63,18 @@
         "Hardware clone",
         "Dual"
       ]
+    },
+    {
+      "slug": "ChaosForge",
+      "name": "Chaos Forge",
+      "description": "Dual chaotic attractor modulation source with four related CV outputs",
+      "tags": [
+        "Low-frequency oscillator",
+        "Random",
+        "Digital",
+        "Hardware clone",
+        "Dual"
+      ]
     }
   ]
 }

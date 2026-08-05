@@ -1,0 +1,29 @@
+{
+  "slug": "ChaosForge",
+  "name": "Chaos Forge",
+  "version": "2.0.0",
+  "license": "VCV Rack EULA",
+  "brand": "Voltage Foundry Modular",
+  "author": "Carlos Eduardo de Paula",
+  "authorEmail": "me@carlosedp.com",
+  "authorUrl": "",
+  "pluginUrl": "https://github.com/VoltageFoundryMod/VFM-Modules",
+  "manualUrl": "https://github.com/VoltageFoundryMod/VFM-Modules/blob/main/Readme.md",
+  "sourceUrl": "https://github.com/VoltageFoundryMod/VFM-Modules",
+  "donateUrl": "https://patreon.com/carlosedp",
+  "changelogUrl": "",
+  "modules": [
+    {
+      "slug": "ChaosForge",
+      "name": "Chaos Forge",
+      "description": "Dual chaotic attractor modulation source with four related CV outputs",
+      "tags": [
+        "Low-frequency oscillator",
+        "Random",
+        "Digital",
+        "Hardware clone",
+        "Dual"
+      ]
+    }
+  ]
+}

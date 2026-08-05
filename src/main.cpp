@@ -63,6 +63,7 @@ CalibrationData cal = {};
 // still boots straight into the module, still honours SETTINGS ▸ BOOT MENU, and
 // still reaches the calibration wizard — the selector simply lists one module
 // and CALIBRATE. See kMenuTitle for the one place kAppCount == 1 is visible.
+#include "att_app.hpp"
 #include "clk_app.hpp"
 #include "dq_app.hpp"
 #include "gen_app.hpp"
@@ -81,6 +82,7 @@ static forge::IApp *const kApps[] = {
     forge::DqApp(),
     forge::GenApp(),
     forge::ScpApp(),
+    forge::AttApp(),
 #endif
 };
 static constexpr int kAppCount = (int)(sizeof(kApps) / sizeof(kApps[0]));

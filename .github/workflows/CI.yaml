@@ -127,6 +127,7 @@ jobs:
           cp .pio/build/xiao_dq/firmware.uf2  _modules/NoteForge.uf2
           cp .pio/build/xiao_gen/firmware.uf2 _modules/GravityForge.uf2
           cp .pio/build/xiao_scp/firmware.uf2 _modules/ForgeView.uf2
+          cp .pio/build/xiao_att/firmware.uf2 _modules/ChaosForge.uf2
           ls -l _modules
 
       - name: Upload single-module firmwares
@@ -342,7 +343,8 @@ jobs:
             mv "$uf2" "stage/${name}-${GITHUB_REF_NAME}.uf2"
           done
           (cd stage && zip -j "../dist/ForgeSeries-${GITHUB_REF_NAME}-modules.zip" \
-             ClockForge-*.uf2 NoteForge-*.uf2 GravityForge-*.uf2 ForgeView-*.uf2)
+             ClockForge-*.uf2 NoteForge-*.uf2 GravityForge-*.uf2 ForgeView-*.uf2 \
+             ChaosForge-*.uf2)
 
           # The .vcvplugin names already carry slug, plugin version, os and cpu,
           # so they are flattened in as they are.
