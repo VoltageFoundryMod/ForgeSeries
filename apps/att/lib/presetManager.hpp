@@ -70,17 +70,19 @@ struct LoadSaveParams {
 // generators are completely independent at COUPLE 0 — it boots to TWO worked
 // examples rather than one:
 //
-//   A (OUT 1 / OUT 2) — Lorenz X and Y at 1.00x. The iconic double wing, and the
+//   A (OUT 1 / OUT 2) — Lorenz X and Y at 5.00x. The iconic double wing, and the
 //                       module's identity: a pair of voltages that circle each
 //                       other for minutes without ever repeating. Fast enough to
 //                       watch on the screen and to hear as motion.
-//   B (OUT 3 / OUT 4) — Rössler Y and Z at 0.30x with a little SMOOTH. The other
-//                       end of the range: a slow, almost-flat drift with an
-//                       occasional sharp fold on Z, which is the closest thing
-//                       the module has to an event output.
+//   B (OUT 3 / OUT 4) — Rössler X and Y at 8.00x with a little SMOOTH. A smooth
+//                       drift broken by a sharp fold, which is the closest thing
+//                       the module has to an event output — and the fold reads as
+//                       an event only because the drift around it is featureless.
 //
-// So the first patch cable already demonstrates both what this module does that
-// an LFO cannot, and that it will also sit still for a whole phrase.
+// The two are set to circle at about the same rate, so the first patch cable
+// demonstrates what this module does that an LFO cannot twice over, in two
+// different shapes, rather than demonstrating fast against slow. SPEED is one
+// knob away on either side.
 //
 // COUPLE starts at 0. It is the signature control, but it is also the one that
 // makes the four outputs stop being independent — booting with it up would hide
@@ -101,13 +103,16 @@ LoadSaveParams LoadDefaultParams() {
     p.smooth[0] = 0;
     p.autoRange[0] = 0;
 
-    // ── B: the slow fold ──
+    // ── B: the fold ──
     p.system[1] = AttRossler;
     for (int k = 0; k < ATT_MAX_PARAMS; k++)
         p.param[1][k] = (k < AttSpec(AttRossler).paramCount) ? AttSpec(AttRossler).params[k].def : 0.0f;
-    // Half of A's rate: about one circuit of the spiral every twelve seconds,
-    // against A's four-second wing. Slow enough to read as a drift rather than a
-    // wobble, quick enough that the plot draws a figure while you watch.
+    // Rössler is catalogued four times faster than Lorenz (rate 9.6 against 2.4),
+    // so this is set against A in circuits rather than in multiples of SPEED:
+    // 8.00x is about one turn of the spiral every three quarters of a second,
+    // which lands next to A's wing. Matching the two that way is what makes the
+    // difference between them a difference in SHAPE — A circles, B drifts and
+    // then folds — rather than one side simply being slower.
     p.speed[1] = 8.0f;
     p.src[1][0] = AxisX;
     p.src[1][1] = AxisY;

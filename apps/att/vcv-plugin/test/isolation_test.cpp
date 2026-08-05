@@ -89,7 +89,7 @@ int main() {
     CHECK(srcGet(a, 0, 0) == 2 && srcGet(a, 0, 1) == 1, "A: output axes set");
     CHECK(coupleGet(a) == 65, "A: couple set");
 
-    CHECK(std::fabs(speedGet(b, 0) - 1.0f) < 1e-4f, "B: speed still at its default");
+    CHECK(std::fabs(speedGet(b, 0) - 5.0f) < 1e-4f, "B: speed still at its default");
     CHECK(levelGet(b, 0) == 100 && offsetGet(b, 0) == 0, "B: output shaping untouched");
     CHECK(!autoRangeGet(b, 1), "B: auto range untouched");
     CHECK(coupleGet(b) == 0, "B: couple untouched");
@@ -255,8 +255,8 @@ int main() {
     reset(a);
     CHECK(systemGet(a, 0) == 0 && systemGet(a, 1) == 1 && coupleGet(a) == 0,
           "A: reset() restores the factory defaults");
-    CHECK(std::fabs(speedGet(a, 1) - 0.50f) < 1e-4f && smoothGet(a, 1) == 15,
-          "A: reset() restores the factory patch's slow B side");
+    CHECK(std::fabs(speedGet(a, 1) - 8.0f) < 1e-4f && smoothGet(a, 1) == 15,
+          "A: reset() restores the factory patch's B side");
     CHECK(systemGet(b, 0) == 3 && coupleGet(b) == 65, "B: unaffected by A's reset()");
 
     // Checked as separate invariants rather than one flag: a single "in range"

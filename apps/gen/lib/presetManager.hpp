@@ -183,10 +183,10 @@ LoadSaveParams LoadDefaultParams() {
     p.rootOctave[1] = 0; // C4–C5 at 0V NOTE C4
     p.spread[1] = 1;     // one octave, high — well clear of A's two
     p.bias[1] = -30;
-    // GRAVITY is the tempo. 25 is a speed scale of 0.30, so this container runs
+    // GRAVITY is the tempo. 20 is a speed scale of 0.30, so this container runs
     // at just under a third of A's, and with a single ball it speaks about once
     // every 1.5 s against A's six times a second.
-    p.gravity[1] = 25.0f;
+    p.gravity[1] = 20.0f;
     p.bounce[1] = 0.45f; // damped, so it settles rather than rattling
     // SPIN stays slow on purpose: the rotating wall is an energy source that does
     // NOT scale with gravity, so a fast spin here would stir the container harder
