@@ -99,7 +99,7 @@ jobs:
       - name: Upload firmware
         uses: actions/upload-artifact@v7
         with:
-          name: forgeseries-firmware-uf2
+          name: forgeseries-unified-firmware-uf2
           path: .pio/build/xiao_rp2040/firmware.uf2
           if-no-files-found: error
 
@@ -133,7 +133,7 @@ jobs:
       - name: Upload single-module firmwares
         uses: actions/upload-artifact@v7
         with:
-          name: forgeseries-module-uf2
+          name: forgeseries-individual-modules-uf2
           path: _modules/*.uf2
           if-no-files-found: error
 
@@ -331,18 +331,18 @@ jobs:
           # because the four single-module images are one decision, not four.
           # The version goes in the filenames inside the zip too, since that is
           # what survives extraction.
-          mv _artifacts/forgeseries-firmware-uf2/firmware.uf2 \
+          mv _artifacts/forgeseries-unified-firmware-uf2/firmware.uf2 \
              "stage/ForgeSeries-${GITHUB_REF_NAME}.uf2"
           (cd stage && zip -j "../dist/ForgeSeries-${GITHUB_REF_NAME}-unified.zip" \
              "ForgeSeries-${GITHUB_REF_NAME}.uf2")
 
           # <Module>.uf2 was named upstream by the firmware job; the tag is added
           # here, where it is known without being threaded through an artifact.
-          for uf2 in _artifacts/forgeseries-module-uf2/*.uf2; do
+          for uf2 in _artifacts/forgeseries-individual-modules-uf2/*.uf2; do
             name="$(basename "$uf2" .uf2)"
             mv "$uf2" "stage/${name}-${GITHUB_REF_NAME}.uf2"
           done
-          (cd stage && zip -j "../dist/ForgeSeries-${GITHUB_REF_NAME}-modules.zip" \
+          (cd stage && zip -j "../dist/ForgeSeries-${GITHUB_REF_NAME}-individual-modules.zip" \
              ClockForge-*.uf2 NoteForge-*.uf2 GravityForge-*.uf2 ForgeView-*.uf2 \
              ChaosForge-*.uf2)
 
