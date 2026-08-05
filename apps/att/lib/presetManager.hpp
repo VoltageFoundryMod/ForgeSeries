@@ -22,11 +22,11 @@
 #include "generator.hpp"
 #include "params.hpp"
 
-extern GenParams genParams[2];   // src/att_app.cpp
-extern WorldParams worldParams;  // src/att_app.cpp
-extern int menuScreenTimeout;    // src/att_app.cpp
-extern uint8_t homeView;         // src/att_app.cpp
-extern uint8_t in1Role;          // lib/cvInputs.hpp
+extern GenParams genParams[2];       // src/att_app.cpp
+extern WorldParams worldParams;      // src/att_app.cpp
+extern int menuScreenTimeout;        // src/att_app.cpp
+extern uint8_t homeView;             // src/att_app.cpp
+extern uint8_t in1Role;              // lib/cvInputs.hpp
 extern uint8_t cvTarget[NUM_CV_INS]; // lib/cvInputs.hpp
 extern uint8_t cvDepth[NUM_CV_INS];  // lib/cvInputs.hpp
 
@@ -93,7 +93,7 @@ LoadSaveParams LoadDefaultParams() {
     p.system[0] = AttLorenz;
     for (int k = 0; k < ATT_MAX_PARAMS; k++)
         p.param[0][k] = (k < AttSpec(AttLorenz).paramCount) ? AttSpec(AttLorenz).params[k].def : 0.0f;
-    p.speed[0] = 1.0f;
+    p.speed[0] = 5.0f;
     p.src[0][0] = AxisX;
     p.src[0][1] = AxisY;
     p.level[0] = 100;
@@ -105,11 +105,12 @@ LoadSaveParams LoadDefaultParams() {
     p.system[1] = AttRossler;
     for (int k = 0; k < ATT_MAX_PARAMS; k++)
         p.param[1][k] = (k < AttSpec(AttRossler).paramCount) ? AttSpec(AttRossler).params[k].def : 0.0f;
-    // Slow enough that OUT 3 reads as a shape rather than a wobble — about one
-    // circuit of the spiral every ten seconds.
-    p.speed[1] = 0.30f;
-    p.src[1][0] = AxisY;
-    p.src[1][1] = AxisZ;
+    // Half of A's rate: about one circuit of the spiral every twelve seconds,
+    // against A's four-second wing. Slow enough to read as a drift rather than a
+    // wobble, quick enough that the plot draws a figure while you watch.
+    p.speed[1] = 8.0f;
+    p.src[1][0] = AxisX;
+    p.src[1][1] = AxisY;
     p.level[1] = 100;
     p.offset[1] = 0;
     // Just enough lag to round the leading edge of the z fold. Any more and the
@@ -125,7 +126,7 @@ LoadSaveParams LoadDefaultParams() {
     p.cvDepth[0] = 0;
     p.cvDepth[1] = 0;
 
-    p.homeView = 0; // both plots
+    p.homeView = 0;          // both plots
     p.menuScreenTimeout = 2; // 5 s
     return p;
 }

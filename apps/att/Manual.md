@@ -112,10 +112,14 @@ the next group.
 system's published constants, because parameter 1 means SIGMA on Lorenz and ALPHA
 on Chua; the old numbers would mean nothing in the new equation.
 
-**SPEED** — 0.01× to 16×, as a multiplier on the rate the system was catalogued
-at. 1.00× is comparable motion on every system. The control is geometric, so a
-detent is a percentage rather than a fixed amount, and turning faster moves
-further.
+**SPEED** — 0.01× to 100×, and 1.00× is comparable motion on every system: a
+Lorenz wing takes about four seconds there, a Rössler circuit about six. The
+control is geometric, so a detent is a percentage rather than a fixed amount, and
+turning faster moves further.
+
+1.00× is deliberately a tenth of the rate these systems are usually _shown_ at —
+that rate is a good one to look at and a fast one to modulate with, so the middle
+of the dial sits well below it and the top of the range reaches it and beyond.
 
 **P1 – P4** — that system's own constants, shown with the names the literature
 uses. A system with fewer than four shows the unused rows as `-`; Sprott B and C

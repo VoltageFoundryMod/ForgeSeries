@@ -62,9 +62,9 @@ TEST(Generator, SpeedScalesHowFastTheFigureIsTraced) {
     // has to rise monotonically and substantially with the control, which is
     // what the ATT_MAX_SUBSTEPS cap could silently break.
     Rig slow(AttLorenz), mid(AttLorenz), fast(AttLorenz);
-    slow.gp[0].speed = 0.5f;
-    mid.gp[0].speed = 1.0f;
-    fast.gp[0].speed = 4.0f;
+    slow.gp[0].speed = 1.0f;
+    mid.gp[0].speed = 4.0f;
+    fast.gp[0].speed = 16.0f;
 
     const int a = CrossingsPerRun(slow, 60);
     const int b = CrossingsPerRun(mid, 60);
@@ -186,6 +186,9 @@ TEST(Generator, AutoRangeRecoversTheSwingWhenParametersShrinkTheOrbit) {
         Rig rig(AttRossler);
         rig.gp[0].param[2] = 2.5f;
         rig.gp[0].autoRange = autoRange ? 1 : 0;
+        // At the catalogued rate: the tracker's relax is scaled by SPEED, so the
+        // settle below is a fixed amount of orbit rather than of wall time.
+        rig.gp[0].speed = 1.0f / ATT_RATE_SCALE;
         rig.Run(40 * kStepsPerSecond); // let the tracker close in on the new orbit
         float lo = 1e9f, hi = -1e9f;
         for (int i = 0; i < 60 * kStepsPerSecond; i++) {
@@ -304,7 +307,12 @@ TEST(Generator, CouplingLeavesDifferentSystemsBoundedAndAlive) {
 // ── The trail (what the screen draws) ────────────────────────────────────────
 
 TEST(Generator, TheTrailFillsAndStaysInsideThePlot) {
+    // At the catalogued rate, because a trail point is worth a fixed amount of
+    // ARC (see ATT_TRAIL_HZ): at SPEED 1.00 a full 256-point buffer is a minute
+    // of drawing, which is the honest consequence of the module being slow, not
+    // something to assert against here.
     Rig rig;
+    rig.gp[0].speed = 1.0f / ATT_RATE_SCALE;
     rig.Run(30 * kStepsPerSecond);
     EXPECT_EQ(rig.world.Get(0).TrailCount(), ATT_TRAIL_LEN);
 
@@ -330,6 +338,8 @@ TEST(Generator, TheTrailKeepsMovingEvenAtTheSlowestSpeed) {
 
 TEST(Generator, ReseedClearsTheTrail) {
     Rig rig;
+    rig.gp[0].speed = 1.0f / ATT_RATE_SCALE;
+    rig.gp[1].speed = 1.0f / ATT_RATE_SCALE;
     rig.Run(30 * kStepsPerSecond);
     rig.world.Reseed(0);
     EXPECT_EQ(rig.world.Get(0).TrailCount(), 0);

@@ -21,6 +21,15 @@ namespace {
 // this way the simulated duration is exact.
 const int kStepsPerSecond = 1000;
 
+// The SPEED at which a system runs at the rate it is catalogued at.
+//
+// These are tests OF THE SYSTEMS — how much of an attractor gets explored, how
+// fast two orbits separate — so they are stated in the systems' own terms rather
+// than in the module's. SPEED 1.00 is deliberately a tenth of this (see
+// ATT_RATE_SCALE), and running a two-minute test there would cover a tenth of
+// the orbit and say a tenth as much.
+const float kCatalogueSpeed = 1.0f / ATT_RATE_SCALE;
+
 // A world with one system on both generators, nothing coupled, defaults applied.
 struct Rig {
     ChaosWorld world;
@@ -29,8 +38,10 @@ struct Rig {
     ModBus mod;
 
     explicit Rig(int system = AttLorenz) {
-        for (int i = 0; i < 2; i++)
+        for (int i = 0; i < 2; i++) {
             LoadSystemDefaults(gp[i], system);
+            gp[i].speed = kCatalogueSpeed;
+        }
         Apply();
         world.Reseed();
     }

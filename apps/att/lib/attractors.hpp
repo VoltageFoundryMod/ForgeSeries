@@ -87,10 +87,14 @@ struct AttractorSpec {
     // integrator subdivides to stay at or under it however fast the module runs.
     float hMax;
 
-    // Attractor time units per real second at SPEED 1.00. This is what makes
-    // SPEED mean the same thing on every system: Thomas advances 24 units a
-    // second and Chua 0.96, yet both trace their figure at a comparable, musical
-    // rate. Without it, switching system would be a wild jump in output rate.
+    // Attractor time units per real second at the rate this system is normally
+    // *catalogued* at. This is what makes SPEED mean the same thing on every
+    // system: Thomas advances 24 units a second here and Chua 0.96, yet both
+    // trace their figure at a comparable rate. Without it, switching system would
+    // be a wild jump in output rate.
+    //
+    // SPEED 1.00 is deliberately slower than this — see ATT_RATE_SCALE in
+    // generator.hpp, which is the one place the two are related.
     float rate;
 
     // ── Fixed output normalisation ──────────────────────────────────────────

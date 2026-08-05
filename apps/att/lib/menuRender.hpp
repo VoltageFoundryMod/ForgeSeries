@@ -44,6 +44,14 @@ inline void MenuHeader(const char *header) { displayMgr.DrawMenuHeader(header); 
 #define PLOT_TOP 10
 #define PLOT_H 54
 
+// Redraw interval for this module, in ms. Faster than the 50 ms every other
+// module uses, because every other module's home screen is a page that changes
+// when you touch something, and this one is an animation that has to look like
+// motion. 30 fps is where the head stops visibly stepping at the middle of the
+// SPEED range; below about 20 fps it reads as a stutter even though the jacks
+// are perfectly smooth. See DisplayManager::SetUpdateInterval for what it costs.
+#define ATT_DISPLAY_INTERVAL_MS 33
+
 struct PlotBox {
     int x, y, w, h;
 };
@@ -81,12 +89,25 @@ static void PLOT_DrawGenerator(int g, const PlotBox &b) {
         ly = py;
     }
 
-    // The head. Drawn last and filled, because on a 1bpp screen a plain line is
-    // ambiguous about which end is now — and "which end is now" is the only way
-    // to see which direction the orbit is travelling.
+    // ── The live end ────────────────────────────────────────────────────────
+    // The head is drawn from the generator's CURRENT output, not from the newest
+    // stored trail point, and the last segment runs from that point to here.
+    //
+    // This is what makes the plot look alive. Trail points are pushed on the
+    // orbit's clock — at SPEED 1.00 that is one every 250 ms — so a plot drawn
+    // only from the buffer changes four times a second however fast the renderer
+    // runs, and the whole screen reads as a stuttering 4 fps animation while the
+    // jacks are perfectly smooth. Drawing the live position instead costs one
+    // line and one dot, and the picture then moves on every frame.
+    PLOT_Map(b, gen.OutNorm(0), gen.OutNorm(1), px, py);
     if (n > 0) {
-        display.fillCircle(px, py, 1, WHITE);
+        display.drawLine(lx, ly, px, py, WHITE);
     }
+
+    // Filled, because on a 1bpp screen a plain line is ambiguous about which end
+    // is now — and "which end is now" is the only way to see which direction the
+    // orbit is travelling.
+    display.fillCircle(px, py, 1, WHITE);
 }
 
 static void HOME_DrawPage() {

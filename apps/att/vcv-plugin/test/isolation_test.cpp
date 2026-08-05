@@ -183,6 +183,14 @@ int main() {
     // bug, because a render still happens early on. Count distinct frames over a
     // stretch of time instead.
     {
+        // Wound up to the systems' catalogued rate first. This is a test of the
+        // RENDER loop, not of how fast an orbit moves: at SPEED 1.00 the head
+        // travels well under a pixel per frame, so identical consecutive frames
+        // are the correct answer there and would say nothing about the freeze
+        // this guards.
+        speedSet(b, 0, 10.0f);
+        speedSet(b, 1, 10.0f);
+
         unsigned long prevHash = 0;
         int distinctFrames = 0;
         for (int i = 0; i < 20; ++i) {
@@ -247,7 +255,7 @@ int main() {
     reset(a);
     CHECK(systemGet(a, 0) == 0 && systemGet(a, 1) == 1 && coupleGet(a) == 0,
           "A: reset() restores the factory defaults");
-    CHECK(std::fabs(speedGet(a, 1) - 0.30f) < 1e-4f && smoothGet(a, 1) == 15,
+    CHECK(std::fabs(speedGet(a, 1) - 0.50f) < 1e-4f && smoothGet(a, 1) == 15,
           "A: reset() restores the factory patch's slow B side");
     CHECK(systemGet(b, 0) == 3 && coupleGet(b) == 65, "B: unaffected by A's reset()");
 

@@ -174,6 +174,17 @@ by them, not by ear.
   their own legal range about one roll in fifty.
 - **The home screen must self-mark dirty** — it is an animation, so
   `HandleDisplay()` marks it dirty every pass rather than waiting for an event.
+- **Draw the head from the generator's live output, not from the newest trail
+  point.** Trail points are pushed on the orbit's clock — one every 250 ms at
+  SPEED 1.00 — so a plot drawn only from the buffer changes four times a second
+  however fast the renderer runs. It reads as a stuttering animation while the
+  jacks are perfectly smooth, which is exactly how it was first reported.
+- **This module raises the redraw rate to 30 fps** (`ATT_DISPLAY_INTERVAL_MS`)
+  through `DisplayManager::SetUpdateInterval()`, called from `Begin()` and from
+  the Rack port's instance init. It is a runtime setter rather than a build flag
+  because the unified firmware links one shared `DisplayManager`, and a
+  per-translation-unit macro would give two TUs different definitions of the same
+  class.
 - **The trail is sampled on the orbit's clock, not the frame clock**, so the drawn
   figure covers the same amount of trajectory at every SPEED. It also has a
   wall-time floor, or SPEED 0.01 leaves the screen frozen for seconds and reads

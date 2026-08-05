@@ -25,6 +25,13 @@ class DisplayManager {
     unsigned long lastUpdateTime = 0;
     unsigned long lastInteractionTime = 0;
     static const unsigned long UPDATE_INTERVAL_MS = 50; // 20Hz max refresh
+    // Live rate limit. A member rather than the constant above so a module whose
+    // home screen is an ANIMATION can ask for a faster one — see
+    // SetUpdateInterval(). It has to be settable at runtime rather than by a
+    // build flag: the unified firmware links one shared DisplayManager, so a
+    // per-translation-unit macro would give two TUs different definitions of the
+    // same class.
+    unsigned long updateIntervalMs = UPDATE_INTERVAL_MS;
     unsigned long timeoutMs = 5000;                     // Return to home screen (0 = disabled)
 
     // State tracking
@@ -58,8 +65,18 @@ class DisplayManager {
     // Check if display needs updating based on rate limiting
     bool ShouldUpdate() {
         unsigned long now = millis();
-        return isDirty && (now - lastUpdateTime >= UPDATE_INTERVAL_MS);
+        return isDirty && (now - lastUpdateTime >= updateIntervalMs);
     }
+
+    // Minimum interval between redraws, in ms. The 50 ms default suits a menu,
+    // where a frame only follows an encoder detent; a module whose home screen
+    // animates continuously can ask for less.
+    //
+    // The cost is Core 1's duty cycle and nothing else: a full 1 KB flush at the
+    // 1 MHz display bus takes ~9 ms, Core 1 has no other work, and the DAC lives
+    // on the other bus behind Core 0 — so a faster screen cannot slow the
+    // outputs down. If a core cannot keep up it simply renders late.
+    void SetUpdateInterval(unsigned long ms) { updateIntervalMs = ms ? ms : 1; }
 
     // Set the menu timeout duration (0 = disabled)
     void SetMenuTimeout(unsigned long ms) { timeoutMs = ms; }

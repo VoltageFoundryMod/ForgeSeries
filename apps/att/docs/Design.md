@@ -61,23 +61,46 @@ Each system carries two constants for this:
 
 - `hMax` — the largest RK4 step it stays accurate at, taken from the reference
   simulators these systems were tuned in.
-- `rate` — attractor time units per real second at SPEED 1.00. This is what makes
-  SPEED mean the same thing on every system: Thomas advances 24 units a second
-  and Chua 0.96, yet both trace their figure at a comparable, musical rate.
-  Without it, changing system would be a wild jump in output rate.
+- `rate` — attractor time units per real second at the rate the system is
+  normally *catalogued* at. This is what makes SPEED mean the same thing on every
+  system: Thomas advances 24 units a second there and Chua 0.96, yet both trace
+  their figure at a comparable rate. Without it, changing system would be a wild
+  jump in output rate.
 
-**The substep cap.** A 1 ms slice is split into `ceil(rate x speed x 1 ms / hMax)`
-substeps, capped at `ATT_MAX_SUBSTEPS` (8). When the cap binds, the step grows
-past `hMax` instead of time slowing down. That is the right way round: an honest
-clock with degraded accuracy is a worse-sounding orbit, while a SPEED control that
-silently stops speeding up is a broken control. At `ATT_SPEED_MAX` (16x) the worst
-overshoot across the twelve systems is 1.2x `hMax`, which all of them survive;
-anything past that is caught by `AttDiverged()` and re-seeded.
+**SPEED 1.00 is a tenth of the catalogued rate** (`ATT_RATE_SCALE`). Those rates
+come from simulators built to be *watched*, and a rate that looks good on a
+screen is a fast one to modulate with: at the catalogued rate a Lorenz wing takes
+a third of a second, which is a 3 Hz LFO. At SPEED 1.00 it takes about four
+seconds, which is where a modulation source wants to sit. The range runs to 100x,
+so the catalogued rate and beyond are still reachable — only the middle of the
+dial moved.
 
-**Budget.** At SPEED 1 each generator runs ~1000 RK4 steps/s; a step is roughly
-70 soft-float operations, so two generators cost a few percent of one M0+ core.
-At the top of the SPEED range with both generators maxed it is ~8000 steps/s
-each — the worst case the cap exists to bound.
+It is one constant rather than twelve edited `rate` values, so the table keeps
+meaning "as catalogued" and the decision stays reversible in one place.
+
+**Everything else that is a rate scales with SPEED too.** The auto-range relax
+and the coupling strength are both "per second" quantities, and leaving them in
+plain wall time would mean a slow patch had its window closed and its orbits
+dragged ten times harder relative to the motion feeding them. Both are multiplied
+by SPEED so they describe an amount of *orbit* rather than an amount of time. The
+one deliberate exception is SMOOTH, which is a filter and belongs in
+milliseconds — but its maximum had to grow with the slowdown, since 200 ms
+rounded nothing off a fold that now takes over a second.
+
+**The substep cap.** A 1 ms slice is split into `ceil(rate x scale x speed x
+1 ms / hMax)` substeps, capped at `ATT_MAX_SUBSTEPS` (8). If the cap ever binds,
+the step grows past `hMax` instead of time slowing down — an honest clock with
+degraded accuracy beats a SPEED control that silently stops speeding up. At the
+current ranges it never binds: the worst case at `ATT_SPEED_MAX` is seven
+substeps, and every system is at or under its own `hMax` there. The cap remains as
+a bound on what one module step can cost. Anything that does escape is caught by
+`AttDiverged()` and re-seeded.
+
+**Budget.** At SPEED 1 each generator runs 1000 RK4 steps/s — one per module step,
+since the wanted step is well under `hMax` there. A step is roughly 70 soft-float
+operations, so two generators cost a few percent of one M0+ core. At the top of
+the SPEED range with both maxed it is ~7000 steps/s each, which is the worst case
+the cap exists to bound.
 
 **Divergence is caught, not clamped.** The parameter ranges are wide enough to
 include settings where a system has no bounded attractor at all, and a divergent
@@ -148,7 +171,7 @@ at the parameters they are usually published with. Measuring the largest Lyapuno
 exponent by the two-orbit renormalisation method (two copies separated by 1e-9,
 re-normalised every step, the mean log growth rate) gives:
 
-| system | λ | e-folds/sec at SPEED 1 |
+| system | λ | e-folds/sec at the catalogued rate |
 | --- | --- | --- |
 | Lorenz | +0.91 | 2.2 |
 | Rössler | +0.07 | 0.7 |
@@ -219,11 +242,29 @@ plotted against each other. It is the only view that shows what the module is
 doing — one trace against time shows a wobble, the pair shows the attractor.
 
 The trail is sampled **on the orbit's own clock**, not the frame clock: a point
-every 1/40th of the attractor time the system covers in a second at SPEED 1. So
-the drawn arc covers the same amount of *trajectory* at every SPEED, and the
-figure looks like itself whether it is being traced in a second or in a minute. A
-wall-time floor sits under that, or SPEED 0.01 would leave the screen unchanged
-for seconds at a time and read as a hung module.
+every 1/40th of the attractor time the system covers in a second at its
+catalogued rate. So the drawn arc covers the same amount of *trajectory* at every
+SPEED, and the figure looks like itself whether it is being traced in ten seconds
+or in a minute — at SPEED 1.00 a full 256-point buffer is about a minute of
+drawing, which is simply how long a slow orbit takes to go round. A wall-time
+floor sits under that, or SPEED 0.01 would leave the screen unchanged for seconds
+at a time and read as a hung module.
+
+**The head is drawn from the live output, not from the newest stored point**, and
+the last segment runs from that point to it. Without that the whole picture only
+changes when a trail point is pushed — four times a second at SPEED 1.00 — and
+the screen stutters while the jacks are perfectly smooth. That was the first
+thing anyone noticed about it. Measured on the emulated panel, the fix took the
+plot from 4 to 8 distinct frames per second at SPEED 1.00, where the remaining
+limit is that the head moves less than a pixel per frame, and from 16 to 24 at
+SPEED 10.
+
+This module also asks `DisplayManager` for a 30 fps redraw instead of the 20 fps
+every other module uses. Their home screens are pages that change when you touch
+something; this one is an animation, and 20 fps is visibly steppy at the middle
+of the SPEED range. It costs Core 1 duty cycle and nothing else — the display bus
+belongs to Core 1 alone, and the DAC is on the other bus behind Core 0, so a
+faster screen cannot slow the outputs down.
 
 What is plotted is the value **before** LEVEL and OFFSET, so the figure keeps
 filling the frame however the jacks are scaled. The screen is for the shape; the

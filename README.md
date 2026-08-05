@@ -406,7 +406,7 @@ Current size, every module in one image:
 
 |         | RAM            | Flash           |
 | ------- | -------------- | --------------- |
-| unified | 30588 (11.7 %) | 263112 (14.4 %) |
+| unified | 30592 (11.7 %) | 263296 (14.4 %) |
 
 Flash is measured against 1830912 bytes — 256 KB of the 2 MB part is reserved
 for the LittleFS region, and that size must stay fixed across releases or the

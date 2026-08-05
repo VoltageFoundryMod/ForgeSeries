@@ -277,6 +277,10 @@ static void globalOneTimeInit() {
 static void engineInstanceInit() {
     EEPROMInit();
     InitIO();
+    // Same faster redraw the panel firmware asks for — the plot is an animation
+    // on both hosts. displayMgr is shared scratch here rather than per-instance
+    // state, so this simply lands on the one renderer every instance uses.
+    displayMgr.SetUpdateInterval(ATT_DISPLAY_INTERVAL_MS);
     cal = LoadCalibration();
     LoadSaveParams p = Load(0);
     UpdateParameters(p);

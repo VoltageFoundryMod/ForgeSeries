@@ -32,7 +32,7 @@ are somewhere else entirely within seconds.
 | **Systems**       | Lorenz, Rössler, Thomas, Chua, Halvorsen, Chen, Burke-Shaw, Aizawa, Dadras, Sprott B, Sprott C, Finance                 |
 | **Outputs**       | 4 × 0–5 V CV — two per generator, each following a chosen axis                                                          |
 | **Inputs**        | IN 1 re-seed / freeze · IN 2 + IN 3 assignable modulation                                                               |
-| **Per generator** | system, speed (0.01×–16×), up to four of that system's own constants, output axes, level, offset, smoothing, range mode |
+| **Per generator** | system, speed (0.01×–100×), up to four of that system's constants, output axes, level, offset, smoothing, range mode    |
 | **Link**          | COUPLE, from unrelated through entrained to locked together                                                             |
 | **Screen**        | live Lissajous plot of each generator's output pair                                                                     |
 | **Presets**       | 10 slots, slot 0 auto-loaded at boot, plus RANDOM                                                                       |
@@ -44,9 +44,10 @@ Lorenz's double wing switches lobes at irregular intervals; Rössler drifts smoo
 then folds sharply on Z; Thomas is the gentlest, with no spikes at all; Chen is the
 fastest and widest.
 
-**SPEED** is a multiplier on the rate that system was catalogued at, so 1.00×
-means the same kind of motion whichever system is selected. From 0.01× (a drift
-that takes minutes to go anywhere) to 16× (audible-adjacent noise).
+**SPEED** means the same kind of motion whichever system is selected — at 1.00×
+a Lorenz wing takes about four seconds. From 0.01× (a drift that takes an hour to
+go anywhere) up to 100×, which is well past the rate these systems are usually
+shown animating at and into audible-adjacent territory.
 
 **The constants** — SIGMA, RHO, ALPHA, and so on, named as the literature names
 them — reshape the attractor itself. Some ranges include periodic windows where

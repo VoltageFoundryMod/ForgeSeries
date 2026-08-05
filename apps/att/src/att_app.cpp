@@ -135,6 +135,10 @@ class ChaosForgeApp final : public IApp {
         cal = LoadCalibration();
         UpdateParameters(Load(0));
 
+        // The home screen is an animation, so it wants a faster redraw than the
+        // menu-shaped default — see ATT_DISPLAY_INTERVAL_MS.
+        displayMgr.SetUpdateInterval(ATT_DISPLAY_INTERVAL_MS);
+
         // Push the loaded patch into the simulation before the first step, so
         // the systems and their parameters are right on the very first frame
         // rather than one loop late.
