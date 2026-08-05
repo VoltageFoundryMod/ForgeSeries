@@ -119,9 +119,10 @@ static void HOME_DrawPage() {
     // ── Header ──
     if (view == 0) {
         display.setCursor(2, 0);
-        display.print(AttSpec(genParams[0].system).shortName);
-        const char *bn = AttSpec(genParams[1].system).shortName;
-        display.setCursor(SCREEN_WIDTH - 2 - (int)strlen(bn) * 6, 0);
+        String leftAttr = String(AttSpec(genParams[0].system).shortName) + "(" + String(genParams[0].speed, 1) + "x)";
+        display.print(leftAttr);
+        String bn = String(AttSpec(genParams[1].system).shortName) + "(" + String(genParams[1].speed, 1) + "x)";
+        display.setCursor(SCREEN_WIDTH - 2 - (int)bn.length() * 6, 0);
         display.print(bn);
     } else {
         // One generator gets the whole screen, so the header has room for the
@@ -166,15 +167,15 @@ static void HOME_DrawPage() {
 
 // ── Main display renderer ─────────────────────────────────────
 static const char *const groupTitles[] = {
-    "",          // 0 — the plot (custom renderer)
-    "A SYSTEM",  // 1
-    "A OUTPUT",  // 2
-    "B SYSTEM",  // 3
-    "B OUTPUT",  // 4
-    "LINK",      // 5
-    "CV IN",     // 6
-    "SETTINGS",  // 7
-    "PRESETS",   // 8
+    "",         // 0 — the plot (custom renderer)
+    "A SYSTEM", // 1
+    "A OUTPUT", // 2
+    "B SYSTEM", // 3
+    "B OUTPUT", // 4
+    "LINK",     // 5
+    "CV IN",    // 6
+    "SETTINGS", // 7
+    "PRESETS",  // 8
 };
 
 // ── Live parameter strip ──────────────────────────────────────
