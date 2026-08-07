@@ -52,6 +52,7 @@ repository.
 | <img src="apps/gen/images/Front.png" width="70" alt="GravityForge front panel"> | **GravityForge**<br><sub>`apps/gen`</sub> | Physics-based generative sequencer. Balls fall inside two rotating containers and ring scale-tuned pegs; a proximity control slides the two from independent sequencers into one entangled instrument.            | [Overview](apps/gen/Readme.md) · [Manual](apps/gen/Manual.md) · [Design notes](apps/gen/docs/Design.md) · [ModularGrid](https://modulargrid.net/e/voltage-foundry-modular-gravityforge)   |
 | <img src="apps/scp/images/Front.png" width="70" alt="ForgeView front panel">    | **ForgeView**<br><sub>`apps/scp`</sub>    | Oscilloscope and analysis. Dual-trace and single-trace scope, triggered capture, spectrum analyzer, X-Y display and a tuner — with buffered pass-through so it can sit mid-patch.                                 | [Overview](apps/scp/Readme.md) · [Manual](apps/scp/Manual.md) · [VCV port](apps/scp/docs/VCVRack_Plugin.md) · [ModularGrid](https://modulargrid.net/e/voltage-foundry-modular-forgeview)  |
 | <img src="apps/att/images/Front.png" width="70" alt="ChaosForge front panel">   | **ChaosForge**<br><sub>`apps/att`</sub>   | Dual chaotic-attractor modulation source. Twelve strange attractors; each generator sends two of its three state variables to a pair of jacks, and a couple control takes the two from unrelated to locked.       | [Overview](apps/att/Readme.md) · [Manual](apps/att/Manual.md) · [Design notes](apps/att/docs/Design.md) · [ModularGrid](https://modulargrid.net/e/voltage-foundry-modular-chaosforge)     |
+| <img src="apps/wea/images/Front.png" width="70" alt="WeaveForge front panel">   | **WeaveForge**<br><sub>`apps/wea`</sub>   | Dual shift-register sequencer. Two Turing Machines side by side, and one WEAVE control that slides them from independent to chained into a single ring; four jacks assignable to notes, modulation, gates or triggers.                     | [Overview](apps/wea/Readme.md) · [Manual](apps/wea/Manual.md) · [Design notes](apps/wea/docs/Design.md)                                                                                                                                    |
 
 Each **Manual** is the complete user guide — every menu page, screenshot,
 calibration and wiring detail. Browsable versions with images live on
@@ -76,7 +77,8 @@ calibration and wiring detail. Browsable versions with images live on
 #### Single-module images
 
 `ForgeSeries-<version>-modules.zip` on the same release holds one image per
-module — `ClockForge`, `NoteForge`, `GravityForge`, `ForgeView`, `ChaosForge` —
+module — `ClockForge`, `NoteForge`, `GravityForge`, `ForgeView`, `ChaosForge`,
+`WeaveForge` —
 for a build of
 the hardware that is only ever going to be one of them. Flashing works exactly
 as above, and everything else in this section still applies: the module boots
@@ -137,6 +139,7 @@ apps/
   gen/     GravityForge  — physics-based generative sequencer
   scp/     ForgeView     — oscilloscope / spectrum analyser
   att/     ChaosForge    — dual chaotic-attractor modulation source
+  wea/     WeaveForge    — dual shift-register sequencer
 vcv/       the consolidated VCV Rack plugin (all modules, one binary)
 vcvlib/    shared VCV Rack layer (Arduino shim, ForgeModule, IEngine, widgets)
 tools/     env.ps1 — optional PATH helper for Windows
@@ -259,6 +262,7 @@ shared:
 | `displayManager.hpp` `menuDisplay.hpp` `appDisplay.hpp` `splash.hpp`  | UI plumbing                                                  |
 | `encoder.hpp` `encoderAccel.hpp` `encoderMenu.hpp`                    | encoder, acceleration, menu driver                           |
 | `envelope.hpp` `scales.hpp` `quantizer.hpp` `utils.hpp` `metrics.hpp` | shared DSP/theory                                            |
+| `clockSource.hpp`                                                     | internal BPM, external clock at IN 1, the changeover         |
 | `IApp.hpp`                                                            | the shell↔app contract                                       |
 
 What stays in a module's `lib/` is genuinely its own: menu definitions, preset
@@ -267,6 +271,17 @@ schema, `engine.hpp`, and the DSP that makes it that module.
 ClockForge's quantizer is deliberately not shared: it is a separate
 implementation reached through `Output` rather than a channel, so folding it in
 would be a port rather than a merge.
+
+**Neither is ClockForge's clock**, for the same reason and with more at stake.
+`core/clockSource.hpp` is a passed-in-time value object — nothing in it calls
+`micros()`, which is what makes it host-testable and the Rack ports
+deterministic. `apps/clk/lib/clockEngine.hpp` is a 960-PPQN hardware-timer ISR
+with file-scope `BPM` and `tickCounter` globals driving that whole module from
+the interrupt. They share a word, not an architecture. `clockSource.hpp` was
+lifted out of GravityForge when WeaveForge needed the same internal/external
+changeover, and GravityForge holds one as a member rather than having been
+rewritten around it — its `Clock` still owns the quantize grid, SPACE and the
+spin rates, and its 21 clock tests were the guard that the lift changed nothing.
 
 Two rules govern anything living here, and both have bitten:
 
@@ -406,7 +421,7 @@ Current size, every module in one image:
 
 |         | RAM            | Flash           |
 | ------- | -------------- | --------------- |
-| unified | 30592 (11.7 %) | 263296 (14.4 %) |
+| unified | 31108 (11.9 %) | 280508 (15.3 %) |
 
 Flash is measured against 1830912 bytes — 256 KB of the 2 MB part is reserved
 for the LittleFS region, and that size must stay fixed across releases or the
@@ -424,10 +439,16 @@ which is paid once. What a module actually adds is its own translation unit's
 | gen    | ~1.9 KB   | ~28 KB      |
 | scp    | ~1.2 KB   | ~14 KB      |
 | dq     | ~0.7 KB   | ~19 KB      |
+| wea    | ~0.5 KB   | ~17 KB      |
 | shell  | ~0.2 KB   | ~2 KB       |
 
-Baseline is ~17.8 KB. Five modules is ~11 % of RAM, so ten ClockForge-weight
+Baseline is ~17.8 KB. Six modules is ~12 % of RAM, so ten ClockForge-weight
 ones would be ~34 % and ten typical ones ~15 %. Flash is looser still.
+
+WeaveForge is the cheapest so far and shows where the cost actually is: its
+engine is two `uint16_t` and a few dozen bytes of parameters, and essentially all
+of its ~17 KB of flash is menu, render and preset code — the plumbing every
+module pays, not the DSP that makes it that module.
 
 ClockForge is the outlier at 10× NoteForge — if RAM ever gets tight, that one
 module is the lever, not the module count.

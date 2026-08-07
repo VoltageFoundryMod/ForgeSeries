@@ -22,6 +22,7 @@ apps/dq/        NoteForge     — dual quantizer
 apps/gen/       GravityForge  — physics-based generative sequencer
 apps/scp/       ForgeView     — oscilloscope / spectrum analyser
 apps/att/       ChaosForge    — dual chaotic-attractor modulation source
+apps/wea/       WeaveForge    — dual shift-register sequencer
 vcv/            the consolidated Rack plugin (all modules, one binary)
 vcvlib/         shared Rack layer (Arduino shim, ForgeModule, IEngine, widgets)
 tools/env.ps1   optional PATH helper for Windows
@@ -43,8 +44,8 @@ firmware and owns the native test environments (`test_dir = apps`). It has two
 flavours of hardware image, from the same shell and the same module sources:
 
 - `env:xiao_rp2040` — the unified image, every module, selector picks.
-- `env:xiao_clk` / `xiao_dq` / `xiao_gen` / `xiao_scp` / `xiao_att` — one
-  module each.
+- `env:xiao_clk` / `xiao_dq` / `xiao_gen` / `xiao_scp` / `xiao_att` /
+  `xiao_wea` — one module each.
 
 The single-module envs differ in exactly two options: `-DFORGE_ONLY_APP=<Factory>`
 and a `build_src_filter` naming one app TU. **`FORGE_ONLY_APP` is read in exactly

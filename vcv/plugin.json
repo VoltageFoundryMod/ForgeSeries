@@ -75,6 +75,19 @@
         "Hardware clone",
         "Dual"
       ]
+    },
+    {
+      "slug": "WeaveForge",
+      "name": "Weave Forge",
+      "description": "Dual shift-register sequencer with a continuous coupling between the two registers",
+      "tags": [
+        "Sequencer",
+        "Random",
+        "Digital",
+        "Hardware clone",
+        "Dual",
+        "Quantizer"
+      ]
     }
   ]
 }

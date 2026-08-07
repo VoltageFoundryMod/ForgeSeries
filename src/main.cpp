@@ -68,6 +68,7 @@ CalibrationData cal = {};
 #include "dq_app.hpp"
 #include "gen_app.hpp"
 #include "scp_app.hpp"
+#include "wea_app.hpp"
 
 // The order here is the boot menu's order, and the index persisted in /boot
 // (fsStore's SaveBootApp/LoadBootApp) — which is why the array is written out
@@ -83,6 +84,7 @@ static forge::IApp *const kApps[] = {
     forge::GenApp(),
     forge::ScpApp(),
     forge::AttApp(),
+    forge::WeaApp(),
 #endif
 };
 static constexpr int kAppCount = (int)(sizeof(kApps) / sizeof(kApps[0]));

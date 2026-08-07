@@ -89,9 +89,20 @@ ifneq ($(filter plugins plugin-% everything,$(or $(MAKECMDGOALS),all)),)
 endif
 endif
 
-APPS  := clk dq gen scp att
+APPS  := clk dq gen scp att wea
 PIO   ?= pio
 ENV   ?= xiao_rp2040
+
+# A module arrives in pieces — the pure lib/ and its host tests first, the
+# firmware TU and the Rack port later — so the aggregate targets ask the
+# filesystem what exists rather than assuming every app has everything. Same
+# reasoning as TEST_APPS below, which has always worked this way: `make
+# everything` should build what is there, not fail on what is not yet.
+#
+# The per-app targets stay on APPS, so `make fw-wea` before wea has a firmware
+# still runs and fails with PlatformIO naming the missing environment.
+FW_APPS     := $(foreach a,$(APPS),$(if $(wildcard apps/$(a)/src/$(a)_app.cpp),$(a)))
+PLUGIN_APPS := $(foreach a,$(APPS),$(if $(wildcard apps/$(a)/vcv-plugin/Makefile),$(a)))
 
 .PHONY: all list
 .DEFAULT_GOAL := all
@@ -145,7 +156,7 @@ $(addprefix isolation-,$(APPS)): isolation-%:
 # Needs a Rack-SDK checkout; override RACK_DIR if it is not beside the repo.
 .PHONY: plugins $(addprefix plugin-,$(APPS))
 
-plugins: $(addprefix plugin-,$(APPS))
+plugins: $(addprefix plugin-,$(PLUGIN_APPS))
 
 $(addprefix plugin-,$(APPS)): plugin-%:
 	$(MAKE) -C apps/$*/vcv-plugin $(if $(RACK_DIR),RACK_DIR=$(RACK_DIR),)
@@ -233,7 +244,7 @@ upload-monitor:
 #   make fw-upload-clk    build + flash it
 .PHONY: modules $(addprefix fw-,$(APPS)) $(addprefix fw-upload-,$(APPS))
 
-modules: $(addprefix fw-,$(APPS))
+modules: $(addprefix fw-,$(FW_APPS))
 
 $(addprefix fw-,$(APPS)): fw-%:
 	$(PIO) run -e xiao_$*

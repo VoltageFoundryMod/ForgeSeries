@@ -1,0 +1,30 @@
+{
+  "slug": "WeaveForge",
+  "name": "Weave Forge",
+  "version": "2.0.0",
+  "license": "VCV Rack EULA",
+  "brand": "Voltage Foundry Modular",
+  "author": "Carlos Eduardo de Paula",
+  "authorEmail": "me@carlosedp.com",
+  "authorUrl": "",
+  "pluginUrl": "https://github.com/VoltageFoundryMod/ForgeSeries",
+  "manualUrl": "https://github.com/VoltageFoundryMod/ForgeSeries/blob/main/apps/wea/Readme.md",
+  "sourceUrl": "https://github.com/VoltageFoundryMod/ForgeSeries",
+  "donateUrl": "https://patreon.com/carlosedp",
+  "changelogUrl": "",
+  "modules": [
+    {
+      "slug": "WeaveForge",
+      "name": "Weave Forge",
+      "description": "Dual shift-register sequencer with a continuous coupling between the two registers",
+      "tags": [
+        "Sequencer",
+        "Random",
+        "Digital",
+        "Hardware clone",
+        "Dual",
+        "Quantizer"
+      ]
+    }
+  ]
+}

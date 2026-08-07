@@ -35,6 +35,10 @@
 #include "boardIO.hpp"
 #include "boardPinouts.hpp"
 #include "calibrationData.hpp"
+// clockSource.hpp at global scope, ahead of the namespace: lib/clock.hpp
+// includes it from inside forge::gen, and a core type has no business being
+// declared in an app's namespace just because that is where it was first seen.
+#include "clockSource.hpp"
 #include "cvInput.hpp"
 #include "displayManager.hpp"
 // fsStore.hpp here at global scope: storage.hpp includes it from inside the
