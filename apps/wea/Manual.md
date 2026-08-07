@@ -14,7 +14,7 @@ way. At one end of that control the pattern is locked forever; at the other it
 never repeats; in between it is a loop that changes a note now and then.
 
 What makes this module its own thing is **WEAVE** — one control deciding how
-much of each register's incoming bit comes from the *other* register. At zero
+much of each register's incoming bit comes from the _other_ register. At zero
 they are two independent sequencers. Turned up, motifs leak across and drift
 back. At full, the two registers chain tail-to-head into a single ring as long
 as both of them together, and the screen draws the braid while it happens.
@@ -38,9 +38,16 @@ voices, one voice plus two correlated modulations, or a four-track drum machine.
 - Internal clock or external, with multiplication and division either way
 - Two assignable CV inputs; ten preset slots that store the patterns themselves
 
+Check the module on [ModularGrid](https://modulargrid.net/e/voltage-foundry-modular-weaveforge).
+
+---
+
+## User Manual
+
 - [WeaveForge — A Dual Shift-Register Sequencer](#weaveforge--a-dual-shift-register-sequencer)
   - [Overview](#overview)
   - [Features](#features)
+  - [User Manual](#user-manual)
   - [Front panel](#front-panel)
   - [The screen](#the-screen)
   - [Menu map](#menu-map)
@@ -55,17 +62,25 @@ voices, one voice plus two correlated modulations, or a four-track drum machine.
   - [PRESETS](#presets)
   - [Patch ideas](#patch-ideas)
   - [In VCV Rack](#in-vcv-rack)
-
----
+  - [Hardware Calibration](#hardware-calibration)
+    - [What you need](#what-you-need)
+    - [Running calibration](#running-calibration)
+  - [Firmware Update](#firmware-update)
+  - [Troubleshooting](#troubleshooting)
+  - [Powering](#powering)
+  - [Specifications](#specifications)
+  - [Contact](#contact)
+  - [Acknowledgements](#acknowledgements)
+  - [License](#license)
 
 ## Front panel
 
-| Jack                | What it is                                                                             |
-| ------------------- | -------------------------------------------------------------------------------------- |
-| **IN 1**            | **Clock.** Always — this jack has no role menu. A rising edge advances the sequencer.   |
-| **IN 2**, **IN 3**  | Assignable modulation CV, 0–5 V. Destination and depth are set on the CV IN page.       |
-| **A 1**, **A 2**    | The left column of outputs, 0–5 V.                                                      |
-| **B 1**, **B 2**    | The right column.                                                                       |
+| Jack               | What it is                                                                            |
+| ------------------ | ------------------------------------------------------------------------------------- |
+| **IN 1**           | **Clock.** Always — this jack has no role menu. A rising edge advances the sequencer. |
+| **IN 2**, **IN 3** | Assignable modulation CV, 0–5 V. Destination and depth are set on the CV IN page.     |
+| **A 1**, **A 2**   | The left column of outputs, 0–5 V.                                                    |
+| **B 1**, **B 2**   | The right column.                                                                     |
 
 The **encoder** turns to move through the menu, clicks to enter or leave a
 value, and — held for two seconds — returns to the module selector.
@@ -99,11 +114,11 @@ left end. You can follow one round it with a finger.
 
 Each cell is one bit:
 
-| Drawn        | Means                                                        |
-| ------------ | ------------------------------------------------------------ |
-| filled block | bit = 1, inside the active length                            |
-| hollow block | bit = 0, inside the active length                            |
-| small dot    | past the feedback point — see below                          |
+| Drawn        | Means                               |
+| ------------ | ----------------------------------- |
+| filled block | bit = 1, inside the active length   |
+| hollow block | bit = 0, inside the active length   |
+| small dot    | past the feedback point — see below |
 
 So **LENGTH is a boundary you can see**, not a number to read: the point where
 blocks turn into dots. The dots are still moving, and an output rotated out
@@ -136,19 +151,19 @@ to the page a few seconds after you stop.
 
 Click the encoder to enter a value, turn to change it, click again to leave.
 
-| Page                             | Rows                                          |
-| -------------------------------- | --------------------------------------------- |
-| **home**                         | the loom                                      |
-| **REG A**                        | LENGTH · CHANCE · RANDOMIZE · INVERT · CLEAR · FILL |
-| **REG B**                        | as A                                          |
-| **WEAVE**                        | AMOUNT · DIR                                  |
-| **CLOCK**                        | BPM · IN PPQN · RATE                          |
-| **SCALE**                        | ROOT · SCALE · TRANSPOSE                      |
-| **ROUTING**                      | ROUTING                                       |
-| **OUT A1 / B1 / A2 / B2**        | SOURCE · TYPE · DEPTH · ROTATE · + two more   |
-| **CV IN**                        | IN2 DEST · IN2 DEPTH · IN3 DEST · IN3 DEPTH   |
-| **SETTINGS**                     | TIMEOUT · BOOT MENU                           |
-| **PRESETS**                      | SLOT · SAVE · LOAD · RANDOM                   |
+| Page                      | Rows                                                |
+| ------------------------- | --------------------------------------------------- |
+| **home**                  | the loom                                            |
+| **REG A**                 | LENGTH · CHANCE · RANDOMIZE · INVERT · CLEAR · FILL |
+| **REG B**                 | as A                                                |
+| **WEAVE**                 | AMOUNT · DIR                                        |
+| **CLOCK**                 | BPM · IN PPQN · RATE                                |
+| **SCALE**                 | ROOT · SCALE · TRANSPOSE                            |
+| **ROUTING**               | ROUTING                                             |
+| **OUT A1 / B1 / A2 / B2** | SOURCE · TYPE · DEPTH · ROTATE · + two more         |
+| **CV IN**                 | IN2 DEST · IN2 DEPTH · IN3 DEST · IN3 DEPTH         |
+| **SETTINGS**              | TIMEOUT · BOOT MENU                                 |
+| **PRESETS**               | SLOT · SAVE · LOAD · RANDOM                         |
 
 ## REG A / REG B
 
@@ -162,15 +177,15 @@ LENGTH−1 is the one fed back round to the start, so LENGTH is the number of
 steps before the pattern comes round again.
 
 **CHANCE** (0–100 %) — the probability that the bit coming round the loop flips
-on the way. This one control is the whole character of the module, and *both
-ends of it are settings*, not extremes to avoid:
+on the way. This one control is the whole character of the module, and _both
+ends of it are settings_, not extremes to avoid:
 
-| CHANCE  | What you get                                                    |
-| ------- | --------------------------------------------------------------- |
-| 0 %     | **Locked.** The pattern repeats every LENGTH steps, forever.     |
-| 10–30 % | A loop that changes a note now and then.                        |
-| ~50 %   | Maximum drift — a new sequence every time round.                |
-| 100 %   | **Locked, inverting.** A pattern *twice* LENGTH long.           |
+| CHANCE  | What you get                                                 |
+| ------- | ------------------------------------------------------------ |
+| 0 %     | **Locked.** The pattern repeats every LENGTH steps, forever. |
+| 10–30 % | A loop that changes a note now and then.                     |
+| ~50 %   | Maximum drift — a new sequence every time round.             |
+| 100 %   | **Locked, inverting.** A pattern _twice_ LENGTH long.        |
 
 That last row is worth knowing: always-flip is exactly as deterministic as
 never-flip. At LENGTH 16 and CHANCE 100 you get a locked 32-step phrase.
@@ -191,7 +206,7 @@ are the two starting points to hand-build from once the bit editor lands.
 The module's signature control, and the one the screen draws literally.
 
 **AMOUNT** (0–100 %) — the probability, evaluated fresh for each register on
-every clock, that its incoming bit is taken from the *other* register's outgoing
+every clock, that its incoming bit is taken from the _other_ register's outgoing
 bit instead of its own. CHANCE still applies afterwards, to whichever bit was
 chosen.
 
@@ -214,7 +229,7 @@ contaminate it. A stays the theme; B is the answer.
 ![Clock](./images/Panel/Clock.png)
 
 **BPM** (20–300) — the internal tempo, used whenever no external clock is
-running. When one *is* running, this row shows the derived tempo with an `E`
+running. When one _is_ running, this row shows the derived tempo with an `E`
 after it, and the number you set is remembered for when the cable comes out.
 
 **IN PPQN** (1, 2, 4, 8, 24) — how many pulses the clock arriving at IN 1 sends
@@ -225,11 +240,11 @@ the internal clock is running.
 **RATE** — steps per beat, and it means the same thing whether the tempo comes
 from IN 1 or from BPM:
 
-| RATE                          | One step every…             |
-| ----------------------------- | --------------------------- |
-| `/16` `/8` `/6` `/4` `/3` `/2` | 16, 8, 6, 4, 3 or 2 beats  |
-| `x1`                          | beat — the tempo as set     |
-| `x2` `x3` `x4` `x6` `x8` `x16` | 1/2, 1/3, 1/4 … of a beat  |
+| RATE                           | One step every…           |
+| ------------------------------ | ------------------------- |
+| `/16` `/8` `/6` `/4` `/3` `/2` | 16, 8, 6, 4, 3 or 2 beats |
+| `x1`                           | beat — the tempo as set   |
+| `x2` `x3` `x4` `x6` `x8` `x16` | 1/2, 1/3, 1/4 … of a beat |
 
 `x1` is the tempo on the header, so the module boots stepping at exactly the
 number it displays. The table is symmetric, so a click one way is the mirror of
@@ -256,15 +271,15 @@ Together they build the set of notes the outputs can land on.
 
 ![Routing](./images/Panel/Routing.png)
 
-One row, and it is the fastest way to change what the module *is*. Picking a
+One row, and it is the fastest way to change what the module _is_. Picking a
 layout configures all four jacks at once, and the four lines below the row show
 what it did.
 
-| ROUTING | A1     | B1             | A2     | B2             | The module is…                        |
-| ------- | ------ | -------------- | ------ | -------------- | ------------------------------------- |
-| `DUO`   | NOTE A | NOTE B         | GATE A | GATE B         | two voices                            |
-| `MONO`  | NOTE A | GATE A         | MOD A  | MOD B          | one voice plus two modulations        |
-| `PULSE` | TRIG A | TRIG A (rot 8) | TRIG B | TRIG B (rot 8) | a four-track drum machine             |
+| ROUTING | A1     | B1             | A2     | B2             | The module is…                 |
+| ------- | ------ | -------------- | ------ | -------------- | ------------------------------ |
+| `DUO`   | NOTE A | NOTE B         | GATE A | GATE B         | two voices                     |
+| `MONO`  | NOTE A | GATE A         | MOD A  | MOD B          | one voice plus two modulations |
+| `PULSE` | TRIG A | TRIG A (rot 8) | TRIG B | TRIG B (rot 8) | a four-track drum machine      |
 
 **Picking a layout stamps the jacks and then steps out of the way.** Every field
 on every OUT page stays editable afterwards, and once you change one this row
@@ -286,18 +301,18 @@ ring, which is what WEAVE at 100 % actually makes them.
 
 **TYPE**
 
-| TYPE   | Emits                                                                |
-| ------ | -------------------------------------------------------------------- |
-| `NOTE` | A quantized pitch, 1 V/oct.                                          |
-| `MOD`  | A stepped voltage — the original Turing Machine's main CV output.     |
-| `GATE` | High while the jack fires, low at the first step where it does not.  |
-| `TRIG` | A fixed-width pulse each time the jack fires.                        |
+| TYPE   | Emits                                                               |
+| ------ | ------------------------------------------------------------------- |
+| `NOTE` | A quantized pitch, 1 V/oct.                                         |
+| `MOD`  | A stepped voltage — the original Turing Machine's main CV output.   |
+| `GATE` | High while the jack fires, low at the first step where it does not. |
+| `TRIG` | A fixed-width pulse each time the jack fires.                       |
 
 **DEPTH** (1–8 bits) — how many bits this jack reads. More bits, finer
 resolution.
 
 **ROTATE** — where in the register it reads. This is the highest-value control
-on the page: four jacks tapping the *same* register at different offsets are
+on the page: four jacks tapping the _same_ register at different offsets are
 four phase-shifted copies of one pattern. Set a gate four steps behind its note
 and you have a canon; do it across a drum kit and you have four tracks that
 cannot drift apart. Its range follows SOURCE — 0–15 for a single register, 0–31
@@ -312,7 +327,7 @@ for `AB`.
 - `MOD` ▸ **LEVEL** (0–100 %) — output scaling.
 - `GATE` / `TRIG` ▸ **THRESH** (0–100 %) — how often it fires. The bits are
   compared against this threshold rather than a single bit being read, so a gate
-  output has a *density* control: 12 % is a sparse kick, 88 % a busy hat — and
+  output has a _density_ control: 12 % is a sparse kick, 88 % a busy hat — and
   both are still locked to the same register as the melody. At DEPTH 1 and
   THRESH 50 % it is exactly the classic behaviour.
 
@@ -328,19 +343,19 @@ for `AB`.
 
 **IN2 DEST / IN3 DEST** — what that input modulates:
 
-| Destination                              | Notes                                              |
-| ---------------------------------------- | -------------------------------------------------- |
-| `OFF`                                    | nothing                                            |
-| `LEN A` `LEN B` `LEN AB`                 | pattern length                                     |
-| `CHNC A` `CHNC B` `CHNC AB`              | probability                                        |
-| `WEAVE`                                  | the coupling                                       |
-| `TRANS`                                  | transposition of every note output                 |
-| `ROTATE`                                 | every jack's rotation together — moves all the taps |
-| `RESET`                                  | gate: restarts both patterns from a known state    |
-| `LOCK`                                   | gate: holds the patterns while high                |
+| Destination                 | Notes                                               |
+| --------------------------- | --------------------------------------------------- |
+| `OFF`                       | nothing                                             |
+| `LEN A` `LEN B` `LEN AB`    | pattern length                                      |
+| `CHNC A` `CHNC B` `CHNC AB` | probability                                         |
+| `WEAVE`                     | the coupling                                        |
+| `TRANS`                     | transposition of every note output                  |
+| `ROTATE`                    | every jack's rotation together — moves all the taps |
+| `RESET`                     | gate: restarts both patterns from a known state     |
+| `LOCK`                      | gate: holds the patterns while high                 |
 
 **IN2 DEPTH / IN3 DEPTH** (0–100 %) — how much. Length, probability and weave
-are *trims* around whatever the menu is set to, so a centred CV leaves the panel
+are _trims_ around whatever the menu is set to, so a centred CV leaves the panel
 setting alone.
 
 `RESET` and `LOCK` act on the level of the input and ignore depth. `LOCK` forces
