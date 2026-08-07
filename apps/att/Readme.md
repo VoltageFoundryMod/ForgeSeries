@@ -71,9 +71,10 @@ you have moved the constants far enough that the figure no longer fills the jack
 
 ## Patch ideas
 
-- **The default patch.** OUT 1 and OUT 2 (Lorenz X and Y) to filter cutoff and a
-  wavefolder; OUT 3 and OUT 4 (a slow Rössler) to a reverb size and a pan. One
-  fast pair, one slow pair, nothing repeating.
+- **The default patch.** A1 and A2 (Lorenz X and Y) to filter cutoff and a
+  wavefolder; B1 and B2 (a slow Rössler) to a reverb size and a pan. One
+  fast pair, one slow pair, nothing repeating. Each generator owns a column of
+  the panel — A down the left, B down the right.
 - **One voice, two hands.** Both jacks of a generator into two parameters of the
   same voice. They will never agree and never fight.
 - **Entrained pair.** Two generators on the same system, COUPLE around 30–50 %.

@@ -96,9 +96,9 @@ the next group.
 | ------------ | ------------------------------------------------ |
 | **plot**     | the home screen                                  |
 | **A SYSTEM** | SYSTEM · SPEED · P1 · P2 · P3 · P4               |
-| **A OUTPUT** | OUT 1 · OUT 2 · LEVEL · OFFSET · SMOOTH · RANGE  |
+| **A OUTPUT** | A1 · A2 · LEVEL · OFFSET · SMOOTH · RANGE        |
 | **B SYSTEM** | as A                                             |
-| **B OUTPUT** | OUT 3 · OUT 4 · LEVEL · OFFSET · SMOOTH · RANGE  |
+| **B OUTPUT** | B1 · B2 · LEVEL · OFFSET · SMOOTH · RANGE        |
 | **LINK**     | COUPLE · IN 1 · RESEED A · RESEED B · RESEED ALL |
 | **CV IN**    | IN2 DEST · IN2 DEPTH · IN3 DEST · IN3 DEPTH      |
 | **SETTINGS** | VIEW · TIMEOUT · BOOT MENU                       |
@@ -136,8 +136,12 @@ restart; back the constant off.
 
 ![Output](./images/Panel/Output.png)
 
-**OUT 1 / OUT 2** (and OUT 3 / OUT 4 for generator B) — which state variable each
-jack follows: X, Y or Z. Every system's three axes have different characters;
+**A1 / A2** (and B1 / B2 for generator B) — which state variable each
+jack follows: X, Y or Z.
+
+The four jacks are two rows of two, and **each generator owns a column**:
+A1 above A2 down the left, B1 above B2 down the right. Which pair is which is
+therefore readable at a glance, which two identical-looking rows would not be. Every system's three axes have different characters;
 Rössler's Z, for example, is flat with occasional sharp folds while its X and Y
 drift smoothly.
 

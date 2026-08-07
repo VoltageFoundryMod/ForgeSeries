@@ -54,8 +54,21 @@ struct ChaosForge : forgevcv::ForgeModule {
         bool trig = inputs[TRIG_INPUT].getVoltage() > 1.f;
         stepEngine(args.sampleTime, cv, 2, trig, 4);
 
-        for (int i = 0; i < 4; i++)
-            outputs[A1_OUTPUT + i].setVoltage(outHold[i]);
+        // outHold is in DAC/jack order — top-left, top-right, bottom-left,
+        // bottom-right — and the generators are columns, so it is not the enum's
+        // order. Mapped by name rather than by `A1_OUTPUT + i`, because the two
+        // orders genuinely differ and a loop would silently cross the pairs.
+        //
+        // The PORT IDS are deliberately left alone. A Rack patch stores cables by
+        // port id, so keeping A2 as id 1 means a patch made before the columns
+        // change still has its cable on generator A's second axis — it is drawn
+        // in a different place on the panel, but it is carrying the same signal.
+        // Renumbering instead would have preserved the position and swapped the
+        // signal, which is the worse half to keep.
+        outputs[A1_OUTPUT].setVoltage(outHold[0]); // top-left
+        outputs[B1_OUTPUT].setVoltage(outHold[1]); // top-right
+        outputs[A2_OUTPUT].setVoltage(outHold[2]); // bottom-left
+        outputs[B2_OUTPUT].setVoltage(outHold[3]); // bottom-right
     }
 
     json_t *dataToJson() override {
@@ -138,9 +151,12 @@ struct ChaosForgeWidget : ModuleWidget {
         addInput(createInputCentered<PJ301MPort>(mm2px(Vec(7.153, 80.797)), module, ChaosForge::CV1_INPUT));
         addInput(createInputCentered<PJ301MPort>(mm2px(Vec(22.647, 80.797)), module, ChaosForge::CV2_INPUT));
 
+        // Generator A down the left column, B down the right — see the jack map
+        // in lib/engine.hpp. The panel silkscreen reads A1/A2 on the left and
+        // B1/B2 on the right to match.
         addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.412, 95.068)), module, ChaosForge::A1_OUTPUT));
-        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.652, 95.068)), module, ChaosForge::A2_OUTPUT));
-        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.407, 109.34)), module, ChaosForge::B1_OUTPUT));
+        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.652, 95.068)), module, ChaosForge::B1_OUTPUT));
+        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.407, 109.34)), module, ChaosForge::A2_OUTPUT));
         addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.647, 109.34)), module, ChaosForge::B2_OUTPUT));
 
         // Emulated OLED over the display cutout.
@@ -190,7 +206,7 @@ struct ChaosForgeWidget : ModuleWidget {
     // Per-generator submenu, mirroring the firmware's own two pages.
     void appendGeneratorMenu(Menu *menu, ChaosForge *m, int g) {
         chengine::Engine *e = m->cf->raw();
-        const char *name = (g == 0) ? "Generator A (out 1+2)" : "Generator B (out 3+4)";
+        const char *name = (g == 0) ? "Generator A (A1 + A2)" : "Generator B (B1 + B2)";
 
         menu->addChild(createSubmenuItem(
             name, chengine::systemName(chengine::systemGet(e, g)), [=](Menu *menu) {

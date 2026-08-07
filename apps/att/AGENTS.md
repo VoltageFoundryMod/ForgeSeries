@@ -60,12 +60,22 @@ All four outputs go through the MCP4728, written positionally in
 [lib/engine.hpp](lib/engine.hpp). The pairing is the module's proposition, so it
 is fixed:
 
-| DAC index | Jack | Signal |
-| --------- | ---- | ------ |
-| 0 | 1 | generator A, the axis chosen for its first jack |
-| 1 | 2 | generator A, the axis chosen for its second jack |
-| 2 | 3 | generator B, first jack |
-| 3 | 4 | generator B, second jack |
+**Generators are columns, not rows.** The four jacks sit in two rows of two, and
+generator A takes the left column with B on the right — so which pair belongs to
+which generator is readable from across a room. A top-row/bottom-row split is
+not: the two rows look alike and nothing in the layout says which is which.
+
+| DAC index | Position | Panel | Signal |
+| --------- | -------- | ----- | ------ |
+| 0 | top-left | A1 | generator A, the axis chosen for its first jack |
+| 1 | top-right | B1 | generator B, first jack |
+| 2 | bottom-left | A2 | generator A, second jack |
+| 3 | bottom-right | B2 | generator B, second jack |
+
+The Rack port keeps its **port ids** in the old order (A1=0, A2=1, B1=2, B2=3)
+and maps `outHold` by name instead. Rack stores cables by port id, so a patch
+made before this change keeps its cable on the same *signal* — drawn somewhere
+else on the panel, but still generator A's second axis.
 
 ## Key subsystems
 

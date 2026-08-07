@@ -31,6 +31,8 @@
 //   0  HOME       — the Lissajous plot (custom renderer in menuRender.hpp)
 //   1  A SYSTEM   — attractor, speed, its four parameters
 //   2  A OUTPUT   — which axis each jack follows, level, offset, smooth, range
+//                   Rows are named for the panel: A1/A2 are generator A's two
+//                   jacks, down the LEFT column. B1/B2 are B's, down the right.
 //   3  B SYSTEM
 //   4  B OUTPUT
 //   5  LINK       — couple, IN 1 role, the re-seed gestures
@@ -391,8 +393,8 @@ const MenuItem MENU_ITEMS[] = {
     {"P4", getParamName<0, 3>, getParamValue<0, 3>, 34, 70, 1, ROW_TWOCOL, MENU_EDIT, setParam<0, 3>, nullptr, true},
 
     // ── 2 A OUTPUT ──
-    {"OUT 1", getSrc<0, 0>, nullptr, 100, 0, 2, ROW_SINGLE, MENU_EDIT, setSrc<0, 0>, nullptr, true},
-    {"OUT 2", getSrc<0, 1>, nullptr, 100, 0, 2, ROW_SINGLE, MENU_EDIT, setSrc<0, 1>, nullptr, true},
+    {"A1", getSrc<0, 0>, nullptr, 100, 0, 2, ROW_SINGLE, MENU_EDIT, setSrc<0, 0>, nullptr, true},
+    {"A2", getSrc<0, 1>, nullptr, 100, 0, 2, ROW_SINGLE, MENU_EDIT, setSrc<0, 1>, nullptr, true},
     {"LEVEL", getLevel<0>, nullptr, 82, 0, 2, ROW_SINGLE, MENU_EDIT, setLevel<0>, nullptr, true},
     {"OFFSET", getOffset<0>, nullptr, 82, 0, 2, ROW_SINGLE, MENU_EDIT, setOffset<0>, nullptr, true},
     {"SMOOTH", getSmooth<0>, nullptr, 82, 0, 2, ROW_SINGLE, MENU_EDIT, setSmooth<0>, nullptr, true},
@@ -407,8 +409,8 @@ const MenuItem MENU_ITEMS[] = {
     {"P4", getParamName<1, 3>, getParamValue<1, 3>, 34, 70, 3, ROW_TWOCOL, MENU_EDIT, setParam<1, 3>, nullptr, true},
 
     // ── 4 B OUTPUT ──
-    {"OUT 3", getSrc<1, 0>, nullptr, 100, 0, 4, ROW_SINGLE, MENU_EDIT, setSrc<1, 0>, nullptr, true},
-    {"OUT 4", getSrc<1, 1>, nullptr, 100, 0, 4, ROW_SINGLE, MENU_EDIT, setSrc<1, 1>, nullptr, true},
+    {"B1", getSrc<1, 0>, nullptr, 100, 0, 4, ROW_SINGLE, MENU_EDIT, setSrc<1, 0>, nullptr, true},
+    {"B2", getSrc<1, 1>, nullptr, 100, 0, 4, ROW_SINGLE, MENU_EDIT, setSrc<1, 1>, nullptr, true},
     {"LEVEL", getLevel<1>, nullptr, 82, 0, 4, ROW_SINGLE, MENU_EDIT, setLevel<1>, nullptr, true},
     {"OFFSET", getOffset<1>, nullptr, 82, 0, 4, ROW_SINGLE, MENU_EDIT, setOffset<1>, nullptr, true},
     {"SMOOTH", getSmooth<1>, nullptr, 82, 0, 4, ROW_SINGLE, MENU_EDIT, setSmooth<1>, nullptr, true},

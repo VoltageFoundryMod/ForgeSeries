@@ -64,8 +64,16 @@ inline void HandleOutputs() {
     world.SetFrozen(in1Role == In1Freeze && trigLevel);
     world.Advance(now);
 
-    DACWriteAll((uint16_t)lroundf(world.Get(0).Out01(0) * (float)MAXDAC),
-                (uint16_t)lroundf(world.Get(0).Out01(1) * (float)MAXDAC),
-                (uint16_t)lroundf(world.Get(1).Out01(0) * (float)MAXDAC),
-                (uint16_t)lroundf(world.Get(1).Out01(1) * (float)MAXDAC));
+    // ── Generators are COLUMNS, not rows ─────────────────────────────────────
+    // The four jacks sit in two rows of two: DAC 0 is top-left, 1 top-right,
+    // 2 bottom-left, 3 bottom-right. Generator A takes the left column and B the
+    // right, so which pair belongs to which generator is readable at a glance
+    // from across a room — where a top-row/bottom-row split is not, because the
+    // two rows look alike and nothing about the layout says which is which.
+    //
+    // The panel labels follow: A1 / A2 down the left, B1 / B2 down the right.
+    DACWriteAll((uint16_t)lroundf(world.Get(0).Out01(0) * (float)MAXDAC),  // A1
+                (uint16_t)lroundf(world.Get(1).Out01(0) * (float)MAXDAC),  // B1
+                (uint16_t)lroundf(world.Get(0).Out01(1) * (float)MAXDAC),  // A2
+                (uint16_t)lroundf(world.Get(1).Out01(1) * (float)MAXDAC)); // B2
 }
