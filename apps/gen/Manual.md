@@ -578,12 +578,12 @@ For support and inquiries, please open an issue on the [GitHub repository](https
 
 ## License
 
-Source code is GPL-3.0-or-later — see the [LICENSE](../../LICENSE) at the
-repository root.
+Source code is GPL-3.0-or-later — see the
+[LICENSE](https://github.com/VoltageFoundryMod/ForgeSeries/blob/main/LICENSE) in the source repository.
 
 Panel designs, graphics, module names and the Voltage Foundry Modular brand are
 copyright and are not covered by that licence; see
-[LICENSE-ASSETS.md](../../LICENSE-ASSETS.md).
+[LICENSE-ASSETS.md](https://github.com/VoltageFoundryMod/ForgeSeries/blob/main/LICENSE-ASSETS.md).
 
 ---
 
