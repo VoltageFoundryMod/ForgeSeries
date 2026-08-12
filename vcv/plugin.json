@@ -2,22 +2,22 @@
   "slug": "VoltageFoundryMod",
   "name": "Voltage Foundry Modular",
   "version": "2.0.0",
-  "license": "VCV Rack EULA",
+  "license": "GPL-3.0-or-later",
   "brand": "Voltage Foundry Modular",
   "author": "Carlos Eduardo de Paula",
   "authorEmail": "me@carlosedp.com",
-  "authorUrl": "",
-  "pluginUrl": "https://github.com/VoltageFoundryMod/VFM-Modules",
-  "manualUrl": "https://github.com/VoltageFoundryMod/VFM-Modules/blob/main/Readme.md",
-  "sourceUrl": "https://github.com/VoltageFoundryMod/VFM-Modules",
+  "authorUrl": "https://vfmod.com/",
+  "pluginUrl": "https://vfmod.com/",
+  "manualUrl": "https://vfmod.com/modules/",
+  "sourceUrl": "https://github.com/VoltageFoundryMod/ForgeSeries",
   "donateUrl": "https://patreon.com/carlosedp",
-  "changelogUrl": "",
+  "changelogUrl": "https://github.com/VoltageFoundryMod/ForgeSeries/releases",
   "modules": [
     {
       "slug": "ClockForge",
       "name": "Clock Forge",
       "description": "Advanced Clock Generator and Modulator",
-      "manualUrl": "https://github.com/VoltageFoundryMod/ForgeSeries-CLK/blob/main/Readme.md",
+      "manualUrl": "https://vfmod.com/modules/clockforge/",
       "tags": [
         "Clock modulator",
         "Clock generator",
@@ -29,7 +29,7 @@
       "slug": "NoteForge",
       "name": "Note Forge",
       "description": "Dual CV Quantizer with per-channel scales and envelopes",
-      "manualUrl": "https://github.com/VoltageFoundryMod/ForgeSeries-DQ/blob/main/Readme.md",
+      "manualUrl": "https://vfmod.com/modules/noteforge/",
       "tags": [
         "Quantizer",
         "Polyphonic",
@@ -43,7 +43,7 @@
       "slug": "ForgeView",
       "name": "Forge View",
       "description": "Oscilloscope and spectrum analyzer",
-      "manualUrl": "https://github.com/VoltageFoundryMod/ForgeSeries-SCP/blob/main/Readme.md",
+      "manualUrl": "https://vfmod.com/modules/forgeview/",
       "tags": [
         "Visual",
         "Digital",
@@ -56,6 +56,7 @@
       "slug": "GravityForge",
       "name": "Gravity Forge",
       "description": "Dual physics-based generative sequencer with proximity coupling",
+      "manualUrl": "https://vfmod.com/modules/gravityforge/",
       "tags": [
         "Sequencer",
         "Random",
@@ -68,6 +69,7 @@
       "slug": "ChaosForge",
       "name": "Chaos Forge",
       "description": "Dual chaotic attractor modulation source with four related CV outputs",
+      "manualUrl": "https://vfmod.com/modules/chaosforge/",
       "tags": [
         "Low-frequency oscillator",
         "Random",
@@ -80,6 +82,7 @@
       "slug": "WeaveForge",
       "name": "Weave Forge",
       "description": "Dual shift-register sequencer with a continuous coupling between the two registers",
+      "manualUrl": "https://vfmod.com/modules/weaveforge/",
       "tags": [
         "Sequencer",
         "Random",

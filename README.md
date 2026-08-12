@@ -76,7 +76,7 @@ calibration and wiring detail. Browsable versions with images live on
 
 #### Single-module images
 
-`ForgeSeries-<version>-modules.zip` on the same release holds one image per
+`ForgeSeries-<version>-individual-modules.zip` on the same release holds one image per
 module — `ClockForge`, `NoteForge`, `GravityForge`, `ForgeView`, `ChaosForge`,
 `WeaveForge` —
 for a build of
@@ -489,16 +489,35 @@ Issues and pull requests are welcome on the
 module misbehaves, its **Manual** has a troubleshooting section worth checking
 first.
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR. Commits need a
+`Signed-off-by` line (`git commit -s`) certifying the
+[DCO](DCO); contributions are under GPL-3.0-or-later, like the rest of the code.
+Panel and brand assets are not open to contribution — see
+[LICENSE-ASSETS.md](LICENSE-ASSETS.md).
+
 If these modules are useful to you, development is supported on
 [Patreon](https://patreon.com/carlosedp) and
 [GitHub Sponsors](https://github.com/sponsors/carlosedp).
 
 ## License
 
-Firmware and sources are MIT licensed (see each module's Readme). The
-consolidated VCV Rack plugin is distributed under the VCV Rack EULA, as required
-for publication in the VCV library. Hardware design files carry their own
-license in the
+Two licences, covering two different things.
+
+**The code — [GPL-3.0-or-later](LICENSE).** All of it: firmware, the VCV Rack
+port, the shared core, the tooling. Fork it, study it, build on it, ship your
+own version — provided your version is free software too. That is the whole
+point: the ideas here should be reusable, and a proprietary product should not
+be able to quietly absorb them.
+
+**The brand — [LICENSE-ASSETS.md](LICENSE-ASSETS.md).** Panel designs, graphics,
+the logo, and the names "Voltage Foundry Modular", "ForgeSeries" and the module
+names are copyright and not covered by the GPL. You may build and run the
+software with the artwork in place, and distribute modified versions that are
+clearly marked as unofficial; you may not manufacture hardware wearing these
+panels or ship something that looks like it came from us. Fork the code, put
+your own face on it.
+
+Hardware design files carry their own license in the
 [hardware repository](https://github.com/VoltageFoundryMod/ForgeSeries-Hardware).
 
 <div align="center">

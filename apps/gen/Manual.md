@@ -538,7 +538,7 @@ The wizard has 6 steps: output trim, output offset capture, then four CV input c
 
 ## Firmware Update
 
-1. Download the latest firmware from the Releases section of the [GitHub repository](https://github.com/VoltageFoundryMod/ForgeSeries-GEN/releases). The firmware file is named `CURRENT.UF2`.
+1. Download the latest firmware from the [releases page](https://github.com/VoltageFoundryMod/ForgeSeries/releases).
 2. Connect the module to your computer using a USB-C cable while holding the small BOOT (B) button. The CPU can be removed from the module as it's socketed to the main board if desired. Firmware loading can be done with the CPU removed.
 3. A new drive will show on your computer named RPI-RP2. Copy and overwrite the `CURRENT.UF2` file to the module USB drive. After the copy is finished, the module will reboot and the new firmware will be loaded.
 
@@ -574,11 +574,16 @@ The module uses only 5V internally. This can be provided directly by a Eurorack 
 
 ## Contact
 
-For support and inquiries, please open an issue on the [GitHub repository](https://github.com/VoltageFoundryMod/ForgeSeries-GEN).
+For support and inquiries, please open an issue on the [GitHub repository](https://github.com/VoltageFoundryMod/ForgeSeries/issues).
 
 ## License
 
-This project is licensed under the MIT License. See the `LICENSE` file for more information.
+Source code is GPL-3.0-or-later — see the [LICENSE](../../LICENSE) at the
+repository root.
+
+Panel designs, graphics, module names and the Voltage Foundry Modular brand are
+copyright and are not covered by that licence; see
+[LICENSE-ASSETS.md](../../LICENSE-ASSETS.md).
 
 ---
 

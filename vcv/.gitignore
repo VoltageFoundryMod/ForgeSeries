@@ -11,5 +11,5 @@
 /dep
 /dist
 
-# Panels staged from each submodule's vcv-plugin/res by the Makefile
+# Panels staged from each module's vcv-plugin/res by the Makefile
 /res

@@ -133,5 +133,9 @@ make wea        # its standalone VCV Rack plugin, installed into Rack
 
 ## License
 
-MIT. The consolidated VCV Rack plugin is distributed under the VCV Rack EULA, as
-required for publication in the VCV library.
+Source code is GPL-3.0-or-later — see the [LICENSE](../../LICENSE) at the
+repository root.
+
+Panel designs, graphics, module names and the Voltage Foundry Modular brand are
+copyright and are not covered by that licence; see
+[LICENSE-ASSETS.md](../../LICENSE-ASSETS.md).

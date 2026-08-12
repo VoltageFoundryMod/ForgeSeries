@@ -18,66 +18,103 @@ inside Rack, so you can try them before you build.
 
 ---
 
-This repository is the **meta repo**: it pulls every module in as a git
-submodule and links them into a single VCV Rack plugin,
-_Voltage Foundry Modular_. Each module keeps its own repository (hardware
-firmware + VCV port + manual); here they are assembled and published together.
+This directory builds the **aggregate VCV Rack plugin** — the one the VCV
+Library publishes. The Library ships one plugin per repository, so every module
+is linked into a single binary here.
+
+Sources come straight from `../apps/<module>/vcv-plugin/`. Each module also
+keeps its own standalone plugin, which is what you build while working on one
+module; this directory is what gets released.
 
 ## Modules
 
-| Module          | Series       | What it does                                                       | Links                                                                                                                    |
-| --------------- | ------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| **Clock Forge** | Forge Series | Advanced clock generator and modulator with four flexible outputs. | [Manual](modules/ForgeSeries-CLK/Manual.md) · [Repo](https://github.com/VoltageFoundryMod/ForgeSeries-CLK)               |
-| **Note Forge**  | Forge Series | Dual CV quantizer with per-channel scales, envelopes and glide.    | [Manual](modules/ForgeSeries-DQ/Manual.md) · [Repo](https://github.com/VoltageFoundryMod/ForgeSeries-DQ)                 |
-| **Forge View**  | Forge Series | Oscilloscope, spectrum analyzer, X-Y display and tuner in one.     | [Manual](modules/ForgeSeries-SCP/Manual.md) · [Repo](https://github.com/VoltageFoundryMod/ForgeSeries-SCP)               |
+| Module            | Series       | What it does                                                       | Links                                                                             |
+| ----------------- | ------------ | ------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| **Clock Forge**   | Forge Series | Advanced clock generator and modulator with four flexible outputs. | [Manual](../apps/clk/Manual.md) · [Page](https://vfmod.com/modules/clockforge/)   |
+| **Note Forge**    | Forge Series | Dual CV quantizer with per-channel scales, envelopes and glide.    | [Manual](../apps/dq/Manual.md) · [Page](https://vfmod.com/modules/noteforge/)     |
+| **Forge View**    | Forge Series | Oscilloscope, spectrum analyzer, X-Y display and tuner in one.     | [Manual](../apps/scp/Manual.md) · [Page](https://vfmod.com/modules/forgeview/)    |
+| **Gravity Forge** | Forge Series | Dual physics-based generative sequencer with proximity coupling.   | [Manual](../apps/gen/Manual.md) · [Page](https://vfmod.com/modules/gravityforge/) |
+| **Chaos Forge**   | Forge Series | Dual chaotic attractor modulation source, four related CV outputs. | [Manual](../apps/att/Manual.md) · [Page](https://vfmod.com/modules/chaosforge/)   |
+| **Weave Forge**   | Forge Series | Dual shift-register sequencer with continuous coupling.            | [Manual](../apps/wea/Manual.md) · [Page](https://vfmod.com/modules/weaveforge/)   |
 
 > The browsable versions of these manuals — with images — live on the
 > [website](https://vfmod.com/).
 
-## Building the plugin
+## Building
+
+Drive it from the repository root, which knows where the toolchain is on every
+platform:
 
 ```sh
-git clone --recursive https://github.com/VoltageFoundryMod/VFM-VCV
-cd VFM-VCV
-make            # build plugin.{so,dylib,dll}
-make install    # install into the local Rack user dir
-make dist       # package for the VCV library
+make vcv           # build plugin.{so,dylib,dll}
+make vcv-install   # install into the local Rack user dir
+make vcv-dist      # package the .vcvplugin for the VCV library
 ```
 
-Requires the [VCV Rack SDK](https://vcvrack.com/manual/Building) at
-`../Rack-SDK` (override with `RACK_DIR=/path/to/Rack-SDK`).
-
-## Updating the modules
-
-Pull the latest commit of every submodule, rebuild, and commit the new pins:
+Requires the [VCV Rack SDK](https://vcvrack.com/manual/Building). It is looked
+for as a sibling of the repository — `../Rack-SDK` from the repo root — and
+overridden with `RACK_DIR`:
 
 ```sh
-make repos-update    # bump the module repos to their branch tips
-make && make install
-
-git add -A
-git commit -m "Update submodules"
-git push
+make vcv RACK_DIR=/path/to/Rack-SDK
 ```
 
-`repos-update` (and `repos-pull`, which just checks out the pinned commits) works
-from a bare clone with no Rack SDK. Both operate on the `REPOS` list in the
-[`Makefile`](Makefile) — the submodules the plugin links in. To grab every
-submodule in the repo instead:
+`make -C vcv` and `make -C vcv dist` do the same thing directly. On Windows use
+the root targets instead: only the root Makefile knows where the msys2 tools
+are, and `plugin.mk` needs `jq` and a mingw64 `g++` on PATH. Run
+`. .\tools\env.ps1` first.
 
-```sh
-git submodule update --init --recursive
-```
+To build the per-module standalone plugins instead — the ones you want while
+working on a single module — `make plugins` at the root, or
+`make -C apps/<module>/vcv-plugin`.
+
+## Adding a module
+
+Three places, all in this directory:
+
+1. `VFM_MODULES` in the [`Makefile`](Makefile) — currently `clk dq scp gen att wea`.
+2. The Model declaration in [`src/plugin.hpp`](src/plugin.hpp) and its
+   registration in [`src/plugin.cpp`](src/plugin.cpp).
+3. An entry in [`plugin.json`](plugin.json).
+
+A hardware-only module — fully analog, no firmware to emulate — has no VCV build
+and belongs in none of them.
+
+## How it fits together
+
+Worth knowing before changing anything here:
+
+- **`res/` is generated.** Rack resolves panel assets against the plugin
+  directory, so each module's `vcv-plugin/res/` is staged into one top-level
+  `res/` at build time. It is gitignored — edit the panels in the module, not
+  here.
+
+- **The firmware really runs.** For modules with an
+  `vcv-plugin/src/engine/fw_engine.cpp`, that translation unit compiles the
+  actual RP2040 firmware against an Arduino shim from
+  [`../vcvlib`](../vcvlib) (override with `FORGEVCV`). It is the *only* file
+  that sees the shim and that module's hardware `lib/`, and it is wrapped in an
+  anonymous namespace — that internal linkage is what lets six modules'
+  identically-named globals (`micros()`, `Serial`, `display`, `MENU_ITEMS`)
+  coexist in one binary.
+
+- **`make isolation` at the root** is the check that catches firmware state
+  leaking between Rack instances. A green plugin build does not imply it passes.
 
 ## The website
 
 The company site and module catalog — [vfmod.com](https://vfmod.com) — lives in
 its own repository,
-[`VoltageFoundryMod/VFM-Website`](https://github.com/VoltageFoundryMod/VFM-Website).
-It pulls each module's manual and images from the module repos at build time, so
-nothing about the site is duplicated here.
+[`VoltageFoundryMod/VFM-Website`](https://github.com/VoltageFoundryMod/VFM-Website),
+and pulls the manuals and images out of this one at build time, so nothing about
+the site is duplicated here.
 
 ## License
 
-Module firmware and hardware are open-source under each module's own license.
-The assembled VCV Rack plugin is distributed under the VCV Rack EULA.
+Source code is GPL-3.0-or-later — see the [LICENSE](../LICENSE) at the
+repository root. Panel designs, graphics, module names and the Voltage Foundry
+Modular brand are copyright and are not covered by it; see
+[LICENSE-ASSETS.md](../LICENSE-ASSETS.md).
+
+Hardware design files carry their own license in the
+[hardware repository](https://github.com/VoltageFoundryMod/ForgeSeries-Hardware).
