@@ -74,10 +74,39 @@ make fw-clk         # one of them  (== pio run -e xiao_clk); fw-upload-clk flash
 make test           # native tests, every module
 make test-dq        # one module  (== pio test -e native_dq)
 make isolation      # VCV engine state-isolation tests
+make screen-wea     # print a module's OLED to the terminal — see below
 make vcv            # the consolidated Rack plugin
 make plugins        # every standalone per-module plugin
 make everything     # every firmware image + all standalone plugins
 ```
+
+## Looking at a module's screen
+
+**`make screen-<app>` dumps the module's 128×64 OLED to the terminal as ASCII,
+with an x ruler and numbered rows.** Host compiler only — no board, no Rack, no
+Rack SDK. Use it whenever you touch rendering code.
+
+```sh
+make screen-wea
+make screen-wea ARGS="--ms 2100 --turn 3 --click 1"   # drive it to a menu page
+make screen-att ARGS="--ms 1500 --clock 4 --cv 2.5 0" # clock it, hold CV
+```
+
+`--ms` is engine time, and it is exact rather than approximate: engine time comes
+from the passed-in `dt`, never a wall clock, so a given `--ms` always produces
+the same frame. That matters for anything phase-dependent — a mark drawn for the
+first third of a step is invisible at `--ms 2000` and obvious at `--ms 2100`.
+
+**Do not check screen geometry against a photo of a panel.** Every constant in a
+render file is a row or column number, and a photo cannot tell you whether a
+label sits over the cell it names — that exact bug lived in WeaveForge's loom
+until this tool was written. Read the pixels.
+
+The tool is `vcvlib/test/screenshot.cpp`, generic over `forgevcv::IEngine`. It
+also carries an adapter for ScopeForge, which predates that interface and exposes
+free functions with a per-sample `feedSample()` instead; the build script picks
+the shape by what the module's header declares and reads the engine namespace out
+of it, so neither is a list that can go stale.
 
 **Run `make everything` before calling a change done.** PlatformIO does not
 compile `vcv-plugin/`, so a green firmware build says nothing about the Rack
@@ -114,6 +143,15 @@ selector, owns calibration, then drives one app through
   way `calibration.hpp` takes `SaveCalibration()` from the shell.
 - What stays in a module's `lib/` is genuinely its own: menu definitions, preset
   schema, `engine.hpp`, and the DSP that makes it that module.
+- **[core/fonts/](core/fonts/) is the deliberate exception to the `inline` rule.**
+  GFX font headers are `const` glyph tables, and a module includes them from
+  *inside* its own namespace like any other app header — so each app that uses one
+  carries its own copy, which is what the per-namespace TU layout requires and what
+  keeps the unified firmware and the consolidated plugin from seeing several
+  definitions of one symbol. They live in `core/` to be edited once, not to be
+  stored once: ClockForge, ScopeForge and WeaveForge share `helvB12`/`helvB24`,
+  which were three byte-identical copies before. Budget ~40 KB of flash per app
+  that pulls both in.
 
 ## Rules for a module TU
 

@@ -19,6 +19,7 @@ between plugins.
 | `include/forgevcv/ForgeModule.hpp` | `rack::Module` base: owns the engine, holds the framebuffer, the CV-range and encoder-sensitivity host settings, the UI→audio encoder queue, the control-rate engine step, shared patch JSON, and the Initialize/Randomize actions. |
 | `include/forgevcv/widgets.hpp` | Shared UI: `FramebufferDisplay` (emulated OLED), `EncoderKnob` (drag/click), `BpmSlider`. |
 | `forgevcv.mk` | Makefile fragment: adds the include path, C++17, and exports `FORGEVCV_SHIM`. |
+| `test/screenshot.cpp` | Prints a module's emulated 128×64 OLED to the terminal as ASCII, on the host compiler — no Rack, no hardware. Generic over `IEngine`; run it with `make screen-<app>`. |
 
 Everything under `include/` is header-only (in-class definitions are inline, so
 including from multiple module TUs is ODR-safe).

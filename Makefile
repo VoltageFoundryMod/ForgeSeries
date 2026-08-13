@@ -146,6 +146,20 @@ isolation: $(addprefix isolation-,$(ISOLATION_APPS))
 $(addprefix isolation-,$(APPS)): isolation-%:
 	bash apps/$*/vcv-plugin/test/build_isolation_test.sh
 
+# ── OLED screenshots ─────────────────────────────────────────────────────────
+# Dump a module's 128x64 screen to the terminal as ASCII, on the host compiler.
+# The alternative is flashing a board or opening Rack and squinting at a photo,
+# which is not a way to check that a label lines up with the cell it names.
+#
+#   make screen-wea
+#   make screen-wea ARGS="--ms 2100 --turn 3 --click 1"
+#
+# Generic over forgevcv::IEngine, so it works for any app with a vcv-plugin;
+# `--` keeps ARGS out of the script's own argument parsing.
+.PHONY: $(addprefix screen-,$(APPS))
+$(addprefix screen-,$(APPS)): screen-%:
+	bash vcvlib/test/build_screenshot.sh $* -- $(ARGS)
+
 # ── VCV Rack plugins ─────────────────────────────────────────────────────────
 # PlatformIO does NOT compile vcv-plugin/, so `make all` passing says nothing
 # about the Rack ports. Any change to a firmware global has to be checked here
