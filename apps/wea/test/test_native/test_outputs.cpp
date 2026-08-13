@@ -17,12 +17,46 @@ namespace {
 
 // ── THRESH ───────────────────────────────────────────────────────────────────
 
+TEST(Thresh, AFilledCellPlaysAndAnEmptyOneDoesNot) {
+    // The polarity, pinned on its own because it shipped backwards once: the
+    // screen draws bit 1 as a FILLED cell, so a filled cell has to be the one
+    // that makes a sound. The original comparison fired on low window values, so
+    // an empty-looking row played and a full one was silent.
+    //
+    // Asserted across the depths rather than at one, because the window is a
+    // multi-bit value and "high" has to mean high at every width.
+    for (uint8_t d = 1; d <= WEA_MAX_DEPTH; d++) {
+        const uint16_t span = (uint16_t)1u << d;
+        EXPECT_FALSE(OutputBank::Fires(0, d, 50)) << "all-zero window, depth " << (int)d;
+        EXPECT_TRUE(OutputBank::Fires((uint8_t)(span - 1), d, 50))
+            << "all-ones window, depth " << (int)d;
+    }
+}
+
+TEST(Thresh, DensityIsTheThresholdNotItsComplement) {
+    // Flipping the polarity by comparing `window >= limit` would have inverted
+    // THRESH along with it: a sparse kick at 12 % would have become a busy one.
+    // The fraction of window values that fire must be thresh %, counted from the
+    // top of the range.
+    const uint8_t depth = 6;
+    const int span = 1 << depth;
+    for (int thresh = 0; thresh <= 100; thresh += 25) {
+        int fired = 0;
+        for (int w = 0; w < span; w++) {
+            if (OutputBank::Fires((uint8_t)w, depth, (uint8_t)thresh)) {
+                fired++;
+            }
+        }
+        EXPECT_EQ(fired, thresh * span / 100) << "thresh " << thresh;
+    }
+}
+
 TEST(Thresh, DepthOneAtFiftyPercentIsTheClassicBitZeroGate) {
     // The original module's gate: high when the bit is 1, low when it is 0. If
     // this ever stops holding, every patch built on the classic behaviour
     // changes character.
-    EXPECT_TRUE(OutputBank::Fires(0, 1, 50));
-    EXPECT_FALSE(OutputBank::Fires(1, 1, 50));
+    EXPECT_FALSE(OutputBank::Fires(0, 1, 50));
+    EXPECT_TRUE(OutputBank::Fires(1, 1, 50));
 }
 
 TEST(Thresh, ZeroNeverFiresAndFullAlwaysFires) {
@@ -47,6 +81,36 @@ TEST(Thresh, DensityRisesMonotonicallyWithTheThreshold) {
         previous = fired;
     }
     EXPECT_EQ(previous, 8); // 100 % fires on every window value
+}
+
+// ── Panel order ──────────────────────────────────────────────────────────────
+
+TEST(JackOrder, WalksDownTheColumnsNotAcrossTheRows) {
+    // Every list of the four jacks — the OUT menu pages, the ROUTING summary,
+    // the Rack context menu — walks them through this, and it is read while
+    // looking at a panel laid out in two columns. Pinned by NAME rather than by
+    // index, so it fails if either this array or OutJackNames moves.
+    const char *expected[WEA_NUM_OUTS] = {"A1", "A2", "B1", "B2"};
+    for (int k = 0; k < WEA_NUM_OUTS; k++) {
+        EXPECT_STREQ(OutJackNames[WEA_JACK_COLUMN_ORDER[k]], expected[k])
+            << "slot " << k;
+    }
+}
+
+TEST(JackOrder, IsAPermutationSoEveryJackIsListedExactlyOnce) {
+    // A typo here would drop a jack out of every menu in the module and show
+    // another one twice, which is the kind of thing that reads as "the menu is
+    // broken" rather than as an ordering mistake.
+    bool seen[WEA_NUM_OUTS] = {false, false, false, false};
+    for (int k = 0; k < WEA_NUM_OUTS; k++) {
+        const uint8_t j = WEA_JACK_COLUMN_ORDER[k];
+        ASSERT_LT(j, WEA_NUM_OUTS) << "slot " << k << " is out of range";
+        EXPECT_FALSE(seen[j]) << "jack " << (int)j << " listed twice";
+        seen[j] = true;
+    }
+    for (int j = 0; j < WEA_NUM_OUTS; j++) {
+        EXPECT_TRUE(seen[j]) << "jack " << j << " is never listed";
+    }
 }
 
 // ── ROUTING ──────────────────────────────────────────────────────────────────

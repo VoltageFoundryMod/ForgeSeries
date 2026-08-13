@@ -146,12 +146,24 @@ class WeavePair {
     ShiftRegister _reg[2];
     WeaveRandom _rng;
 
+    // Bit i: register i took the OTHER register's bit on the last Clock().
+    // Observation only — nothing in here reads it back, so it cannot change a
+    // sequence, and this file stays a pure function of its inputs.
+    uint8_t _crossed = 0;
+
   public:
     ShiftRegister &Reg(uint8_t i) { return _reg[i & 1]; }
     const ShiftRegister &Reg(uint8_t i) const { return _reg[i & 1]; }
     WeaveRandom &Rng() { return _rng; }
 
     void Seed(uint32_t s) { _rng.Seed(s); }
+
+    // Did register `i` receive a foreign bit on the last clock? WEAVE is a
+    // probability, so the screen showing the SETTING says what is likely and the
+    // screen showing this says what happened — and at 35 % those are different
+    // pictures on most steps. The loom draws a courier crossing the channel from
+    // it (menuRender.hpp).
+    bool Crossed(uint8_t i) const { return (_crossed >> (i & 1)) & 1u; }
 
     // One clock edge for both registers.
     //
@@ -166,6 +178,7 @@ class WeavePair {
         const bool tail[2] = {_reg[0].Tail(), _reg[1].Tail()};
 
         bool incoming[2];
+        _crossed = 0;
         for (uint8_t i = 0; i < 2; i++) {
             const uint8_t other = i ^ 1;
 
@@ -177,6 +190,9 @@ class WeavePair {
             // No draw at all when the register cannot receive, so a one-way
             // weave leaves the sender's stream bit-identical to running alone.
             const bool foreign = receives && _rng.Percent(weavePct);
+            if (foreign) {
+                _crossed |= (uint8_t)(1u << i);
+            }
 
             bool bit = foreign ? tail[other] : tail[i];
             if (_rng.Percent(chancePct[i])) {

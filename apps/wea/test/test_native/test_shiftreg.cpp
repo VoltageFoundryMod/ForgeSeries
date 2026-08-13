@@ -183,6 +183,59 @@ TEST(Weave, OneWayCouplingStillMovesTheReceiver) {
     EXPECT_TRUE(diverged);
 }
 
+// ── What the loom draws ──────────────────────────────────────────────────────
+// Crossed() is observation, not machinery — but the home screen animates a bit
+// travelling the channel from it, so a wrong answer draws a crossing that did
+// not happen, on the one screen sold as showing the actual wiring.
+
+TEST(Crossed, NothingCrossesAtZeroWeave) {
+    WeavePair p = OneHot(7, 5, 0x004B, 0x0037);
+    for (int i = 0; i < 64; i++) {
+        p.Clock(0, WeaveBoth, kNoChance);
+        ASSERT_FALSE(p.Crossed(0)) << "clock " << i;
+        ASSERT_FALSE(p.Crossed(1)) << "clock " << i;
+    }
+}
+
+TEST(Crossed, BothCrossEveryClockAtFullWeave) {
+    WeavePair p = OneHot(7, 5, 0x004B, 0x0037);
+    for (int i = 0; i < 64; i++) {
+        p.Clock(100, WeaveBoth, kNoChance);
+        ASSERT_TRUE(p.Crossed(0)) << "clock " << i;
+        ASSERT_TRUE(p.Crossed(1)) << "clock " << i;
+    }
+}
+
+TEST(Crossed, OnlyTheReceiverCrossesUnderOneWayCoupling) {
+    // The direction the courier is drawn in. A▸B means B receives, so the mark
+    // belongs to B — drawing it on A would show a bit flowing INTO the register
+    // the whole point of A▸B is that nothing can flow into.
+    WeavePair p = OneHot(7, 5, 0x004B, 0x0037);
+    for (int i = 0; i < 64; i++) {
+        p.Clock(100, WeaveAtoB, kNoChance);
+        ASSERT_FALSE(p.Crossed(0)) << "clock " << i;
+        ASSERT_TRUE(p.Crossed(1)) << "clock " << i;
+    }
+
+    WeavePair q = OneHot(7, 5, 0x004B, 0x0037);
+    for (int i = 0; i < 64; i++) {
+        q.Clock(100, WeaveBtoA, kNoChance);
+        ASSERT_TRUE(q.Crossed(0)) << "clock " << i;
+        ASSERT_FALSE(q.Crossed(1)) << "clock " << i;
+    }
+}
+
+TEST(Crossed, PartialWeaveCrossesSometimesAndNotAlways) {
+    WeavePair p = OneHot(7, 5, 0x004B, 0x0037);
+    int crossings = 0;
+    for (int i = 0; i < 256; i++) {
+        p.Clock(50, WeaveBoth, kNoChance);
+        crossings += p.Crossed(0) ? 1 : 0;
+    }
+    EXPECT_GT(crossings, 0);
+    EXPECT_LT(crossings, 256);
+}
+
 // ── Windows ──────────────────────────────────────────────────────────────────
 
 TEST(Window, ReadsDepthBitsFromTheRotateOffset) {

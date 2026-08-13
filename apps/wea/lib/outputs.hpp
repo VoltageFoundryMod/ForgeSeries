@@ -43,6 +43,17 @@
 // what comes out of it.
 static const char *const OutJackNames[] = {"A1", "B1", "A2", "B2"};
 
+// The jacks in PANEL order — down the left column, then down the right — as
+// indices into the arrays above, which are in DAC order (the rows).
+//
+// Anywhere the four jacks are listed as text goes through this: the OUT menu
+// pages, the ROUTING page summary, and the Rack context menu (via jackAt() on
+// the engine bridge, so the plugin cannot drift from the firmware). The panel is
+// laid out by column and each register owns one in the default routing, so a
+// list in DAC order puts B1 between A1 and A2 and interleaves the two halves of
+// the module. The DAC order itself must not change — it is the hardware.
+static const uint8_t WEA_JACK_COLUMN_ORDER[WEA_NUM_OUTS] = {0, 2, 1, 3};
+
 enum OutType : uint8_t { OutNote = 0, OutMod, OutGate, OutTrig, OutTypeLength };
 static const char *const OutTypeNames[] = {"NOTE", "MOD", "GATE", "TRIG"};
 
@@ -147,10 +158,28 @@ class OutputBank {
     // Does this jack fire on this step? The DEPTH-bit window compared against
     // THRESH, which is what gives a gate output a density control instead of the
     // fixed ~50 % that reading bit 0 alone would give (Design.md §5).
+    //
+    // FIRES ON A HIGH WINDOW, and the comparison is against the TOP `limit`
+    // values rather than the bottom ones. Both halves of that matter:
+    //
+    //   * A set bit means a gate. The screen draws bit 1 as a filled cell and
+    //     bit 0 as a hollow one, and every shift-register sequencer since the
+    //     Turing Machine has fired on the 1. The first version compared
+    //     `window < limit`, which fired on the LOW values — so a row of empty
+    //     cells played and a row of full ones was silent, and the panel, the
+    //     screen and the manual all disagreed with the jack.
+    //   * Counting down from the top is what keeps THRESH meaning what it says.
+    //     `limit` values out of `span` qualify either way, so the DENSITY is
+    //     thresh % whichever end is taken — 12 % a sparse kick, 88 % a busy hat.
+    //     Simply flipping to `window >= limit` would have fixed the polarity and
+    //     inverted the control.
+    //
+    // At DEPTH 1 / THRESH 50 this collapses to exactly the classic gate: span 2,
+    // limit 1, fires when window >= 1, i.e. when bit 0 is set.
     static bool Fires(uint8_t window, uint8_t depth, uint8_t thresh) {
         const uint16_t span = (uint16_t)1u << (depth == 0 ? 1 : depth);
         const uint16_t limit = (uint16_t)(((uint32_t)thresh * span) / 100u);
-        return window < limit;
+        return (uint16_t)window >= (uint16_t)(span - limit);
     }
 
     // One clock step: latch every jack's new value from the registers.

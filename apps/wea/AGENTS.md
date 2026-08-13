@@ -84,9 +84,27 @@ speed on an external clock and double on the internal one. `test_clock.cpp`
 asserts every rate against both sources *and* that the two agree — that last
 test is the one that catches it.
 
+**A GATE fires on a HIGH window, from the top of the range.** `OutputBank::Fires`
+is `window >= span - limit`, and both halves have a test on them. Firing on the
+low values (the original `window < limit`) makes a row of empty cells play and a
+row of full ones go silent, which contradicts the screen, the manual and every
+shift-register sequencer there has ever been; and repairing that as
+`window >= limit` inverts THRESH, turning the sparse kick at 12 % into a busy one.
+Density must stay `thresh` % whichever end the qualifying values come from.
+
 **ROUTING is recomputed, never stored.** `RoutingOf()` compares the four slots
 against the templates. A stored index goes stale the moment a slot is edited
 from the menu, from CV or from a preset load.
+
+**`StepClock::StepPhase()` is display-only, and `WeavePair::Crossed()` is
+observation-only.** The loom animates off both (Design.md §6 "What moves"):
+nothing that produces a voltage may read the phase, or the outputs would depend
+on the frame rate; and nothing in `shiftreg.hpp` may read the crossing flags
+back, or the file stops being a pure function of its inputs and the three hosts
+stop agreeing. `StepPhase()` also has one non-obvious case with a test on it — a
+DIVIDED EXTERNAL clock re-zeroes the accumulator every beat while the step spans
+several, so the whole elapsed beats have to be added back or the sweep stutters
+against a clock it is locked to.
 
 **The register contents are part of the preset.** Four bytes, and without them a
 preset restores a machine that makes a different pattern — which for this module

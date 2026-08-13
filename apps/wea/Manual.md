@@ -56,7 +56,7 @@ Check the module on [ModularGrid](https://modulargrid.net/e/voltage-foundry-modu
   - [CLOCK](#clock)
   - [SCALE](#scale)
   - [ROUTING](#routing)
-  - [OUT A1 / B1 / A2 / B2](#out-a1--b1--a2--b2)
+  - [OUT A1 / A2 / B1 / B2](#out-a1--a2--b1--b2)
   - [CV IN](#cv-in)
   - [SETTINGS](#settings)
   - [PRESETS](#presets)
@@ -114,32 +114,68 @@ left end. You can follow one round it with a finger.
 
 Each cell is one bit:
 
-| Drawn        | Means                               |
-| ------------ | ----------------------------------- |
-| filled block | bit = 1, inside the active length   |
-| hollow block | bit = 0, inside the active length   |
-| small dot    | past the feedback point — see below |
+| Drawn         | Means                                    |
+| ------------- | ---------------------------------------- |
+| filled block  | bit = 1, inside the active length        |
+| hollow block  | bit = 0, inside the active length        |
+| shaded block  | bit = 1, past the feedback point         |
+| small dot     | bit = 0, past the feedback point         |
 
 So **LENGTH is a boundary you can see**, not a number to read: the point where
-blocks turn into dots. The dots are still moving, and an output rotated out
-there is still reading them — but they are not part of the loop. They are a
-running copy of what has passed through the feedback point, which is why they
-are drawn small.
+the row goes dim. The dim cells are still moving, and an output rotated out
+there is still reading them — they show their bit value for exactly that reason
+— but they are not part of the loop. They are a running copy of what has passed
+through the feedback point, which is why they are drawn faint.
 
-**The channel between the rows is the weave.** At 0 % it is two flat parallel
-rails with nothing crossing. As WEAVE comes up, strands appear crossing between
-them, more of them the higher it goes, until at 100 % it is a full braid. The
-arrowheads follow DIR, so a one-way weave shows strands going one way only.
+**The newest bit is punched through** for the first part of each step: whichever
+cell just arrived gets a hole in its middle at the entering end of the row. On a
+locked pattern that is the only thing on the row that changes, and it is how you
+tell a running module from a stopped one at a glance.
+
+**The small caret above each row points at the feedback tap** — the last cell of
+the active length. That is the bit about to come round the loop, the one CHANCE
+decides whether to flip, and the one that leaves for the other register when the
+weave carries it across. Change LENGTH and the caret moves with the boundary
+where the row goes dim; they are the same fact seen two ways.
+
+**The channel between the rows is the weave.** At 0 % the two rails are dashed
+with nothing crossing. As WEAVE comes up, strands appear crossing between them,
+more of them the higher it goes, until at 100 % it is a full braid — and the
+whole braid travels, so you can see the cloth being drawn through. It moves one
+cell along per clock, the same rate the bits do, whatever WEAVE is set to. The
+strands follow DIR, so a one-way weave shows them going one way only.
+
+**A dot crossing the channel is a bit that actually jumped.** WEAVE is a
+probability, so the braid says how much crossing is likely and the dot says what
+happened: it leaves the sending register's feedback cell and arrives at the
+receiving register's entering end, where the next step draws it as the new bit.
+At a low WEAVE you get an open, quiet channel with something through it now and
+then; at 100 % there is one every clock, each way.
 
 **The labels under each row are the output jacks**, sitting at the cell they
 read. `A1` and `A2` under register A's row mean those two jacks are reading it.
-A label boxes while its jack's gate or trigger is high, so you can see which
-outputs are speaking as well as where they read from. Note and modulation
-outputs have a value at all times, so they never box — their label is a map, not
-a blinker. Set a jack's ROTATE and watch its label walk along the row.
+A label inverts to a solid block while its jack's gate or trigger is high, so you
+can see which outputs are speaking as well as where they read from. Note and
+modulation outputs have a value at all times, so they never light — their label
+is a map, not a blinker. Set a jack's ROTATE and watch its label walk along the
+row.
 
-**Header:** tempo on the left (with an `E` when an external clock is running),
-then the clock rate; weave amount on the right.
+**The bar between a row and its labels is where that output reads from.** A jack
+does not read one cell — it reads DEPTH of them, and the bar covers exactly those,
+starting at its ROTATE. That is the group of bits being turned into the note, the
+modulation, or the gate decision at that jack. Turn DEPTH and the bar grows;
+turn ROTATE and it walks along the row. When several jacks read the same cells the
+bars overlap into one, and while you are editing a jack its own bar is drawn
+solid so you can pick it out.
+
+**A dotted line joins each label to the cells it reads.** Two jacks reading the
+same place cannot both have their label printed there, so the second one sits
+along to the side — follow the dots rather than reading straight up from the
+label, and you will always land on the right cells.
+
+**Header:** the tempo large on the left, then the clock rate — prefixed `EXT`
+when an external clock is running and the number is the measured tempo rather
+than the one you set; weave amount on the right.
 **Status line:** the two lengths, and the two probabilities.
 
 Turning **LENGTH, CHANCE, WEAVE, DIR, BPM, RATE, DEPTH or ROTATE** hands the
@@ -160,7 +196,7 @@ Click the encoder to enter a value, turn to change it, click again to leave.
 | **CLOCK**                 | BPM · IN PPQN · RATE                                |
 | **SCALE**                 | ROOT · SCALE · TRANSPOSE                            |
 | **ROUTING**               | ROUTING                                             |
-| **OUT A1 / B1 / A2 / B2** | SOURCE · TYPE · DEPTH · ROTATE · + two more         |
+| **OUT A1 / A2 / B1 / B2** | SOURCE · TYPE · DEPTH · ROTATE · + two more         |
 | **CV IN**                 | IN2 DEST · IN2 DEPTH · IN3 DEST · IN3 DEPTH         |
 | **SETTINGS**              | TIMEOUT · BOOT MENU                                 |
 | **PRESETS**               | SLOT · SAVE · LOAD · RANDOM                         |
@@ -290,11 +326,15 @@ Each layout keeps WEAVE meaningful: in DUO it merges two voices into one long
 shared phrase, in MONO it slides the second modulation from unrelated to locked
 with the melody, and in PULSE it merges two independent drum patterns into one.
 
-## OUT A1 / B1 / A2 / B2
+## OUT A1 / A2 / B1 / B2
 
 ![Outputs](./images/Panel/Outs.png)
 
 One page per jack, six rows each. The last two change meaning with TYPE.
+
+The pages come in **panel order — down the left column, then down the right** —
+so turning the encoder past A1 lands on A2 below it rather than jumping across to
+B1. The ROUTING page's summary and the Rack context menu list them the same way.
 
 **SOURCE** — `A`, `B`, or `AB`. `AB` is the two registers as one 32-position
 ring, which is what WEAVE at 100 % actually makes them.
@@ -515,9 +555,9 @@ Thanks for the inspiration!
 
 ## License
 
-Source code is GPL-3.0-or-later — see the [LICENSE](../../LICENSE) at the
-repository root.
+Source code is GPL-3.0-or-later — see the
+[LICENSE](https://github.com/VoltageFoundryMod/ForgeSeries/blob/main/LICENSE) in the source repository.
 
 Panel designs, graphics, module names and the Voltage Foundry Modular brand are
 copyright and are not covered by that licence; see
-[LICENSE-ASSETS.md](../../LICENSE-ASSETS.md).
+[LICENSE-ASSETS.md](https://github.com/VoltageFoundryMod/ForgeSeries/blob/main/LICENSE-ASSETS.md).

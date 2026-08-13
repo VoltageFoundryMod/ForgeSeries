@@ -80,6 +80,7 @@ class StepClock {
     int _stepsInBeat = 0;
 
     bool _pendingStep = false;
+    uint32_t _stepCount = 0; // display only — see StepCount()
 
   public:
     // ── Tempo, forwarded ─────────────────────────────────────────────────────
@@ -195,8 +196,17 @@ class StepClock {
     bool ConsumeStep() {
         bool s = _pendingStep;
         _pendingStep = false;
+        if (s) {
+            _stepCount++;
+        }
         return s;
     }
+
+    // Steps since power-on, wrapping. Display-only, like StepPhase(): the loom
+    // pairs the two into a continuous timeline so the woven cloth can travel at a
+    // rate of its own rather than restarting every step. Free-running and never
+    // reset — a preset load or a RESET moves the pattern, not the cloth.
+    uint32_t StepCount() const { return _stepCount; }
 
     // Time between steps: the beat, scaled by the rate.
     //
@@ -211,6 +221,34 @@ class StepClock {
             return 0;
         }
         return (unsigned long)((float)_src.BeatUs() / s);
+    }
+
+    // How far through the current step we are, 0..1. For the DISPLAY only —
+    // nothing that produces a voltage may read it, or the module's output would
+    // depend on the frame rate.
+    //
+    // The accumulator alone is not the answer under a divided EXTERNAL clock:
+    // there, OnBeatBoundary() re-zeroes it every beat while the step spans
+    // several, so the raw ratio would sweep 0..1/N and snap back N times per
+    // step. The whole beats already elapsed within this step have to be added
+    // back, and _beatCounter is what counts them — it is incremented AFTER the
+    // boundary that emits a step, so the first beat of a step has
+    // _beatCounter % N == 1 and no whole beats behind it.
+    float StepPhase() const {
+        const unsigned long period = StepPeriodUs();
+        if (period == 0) {
+            return 0.0f;
+        }
+
+        unsigned long into = _stepAccumUs;
+        if (_src.IsExternalLive() && RateSteps() < 1.0f) {
+            const int n = BeatsPerStep();
+            const int elapsedBeats = ((int)(_beatCounter % (uint32_t)n) + n - 1) % n;
+            into += (unsigned long)elapsedBeats * _src.BeatUs();
+        }
+
+        const float ph = (float)into / (float)period;
+        return ph > 1.0f ? 1.0f : ph;
     }
 
   private:

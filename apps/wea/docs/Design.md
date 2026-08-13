@@ -259,6 +259,18 @@ Six fields, which is exactly the six rows a menu page holds — so each jack is
 one page, four pages, no scrolling and no seventh row silently clipped off the
 bottom at y=57.
 
+**Those four pages are walked in panel order — A1, A2, B1, B2 — not in DAC
+order.** The DAC order is the rows (top-left, top-right, bottom-left,
+bottom-right) and it is fixed by the hardware, but the panel is labelled by
+column and each register owns one in the default routing (§1), so a list in DAC
+order puts B1 between A1 and A2 and interleaves the two halves of the module on
+the one screen where you are setting up a jack you are looking at.
+`WEA_JACK_COLUMN_ORDER` in `lib/outputs.hpp` is the single source of that order:
+the OUT pages, the ROUTING page summary and the Rack context menu all walk it,
+the last via `jackAt()` on the engine bridge so the plugin cannot drift. The
+menu group IDs still map straight to jack indices — it is the order the blocks
+sit in `MENU_ITEMS[]` that the encoder follows.
+
 ### ROTATE earns its place
 
 Enigma offers rotation only on favourited registers. Here every jack has it, and
@@ -298,13 +310,29 @@ drum machine, it is four coins being flipped.
 Instead the DEPTH-bit window is compared against a threshold:
 
 ```cpp
-bool fire = window < (threshold * (1 << DEPTH)) / 100;
+const int span  = 1 << DEPTH;
+const int limit = (threshold * span) / 100;
+bool fire = window >= span - limit;   // the TOP `limit` values of the range
 ```
 
 THRESH 12 % is a sparse kick, 88 % is a busy hat, and the whole thing is still
 driven by — and locked to — the same register as the melody. At DEPTH = 1 and
 THRESH = 50 % it collapses exactly to the classic bit-0 behaviour, so the
 original is a point in this space rather than a special case.
+
+**Both halves of that comparison are load-bearing, and the first version got the
+first half wrong** — it fired on `window < limit`, i.e. on the LOW values. A set
+bit has to be the one that plays: the screen draws bit 1 as a filled cell and bit
+0 as a hollow one, and every shift-register sequencer since the Turing Machine
+fires on the 1, so firing on the low values meant a row of empty cells played
+while a row of full ones sat silent. The panel, the screen and the manual all
+described the opposite of what the jack did.
+
+Counting the qualifying values down from the TOP of the range rather than up from
+the bottom is what keeps THRESH meaning what it says. `limit` values out of `span`
+qualify either way, so the density is `threshold` % whichever end they are taken
+from — the naive repair, `window >= limit`, fixes the polarity and silently
+inverts the control, turning a sparse kick at 12 % into a busy one.
 
 ### ROUTING is a macro, not a mode
 
@@ -368,19 +396,129 @@ picture of woven cloth **is** the parameter.
 
 ### What a cell says
 
-Three states, all legible on a 1-bit panel at arm's length:
+Four states, all legible on a 1-bit panel at arm's length:
 
-| Drawn        | Means                                        |
-| ------------ | -------------------------------------------- |
-| ■ 6×6 filled | bit = 1, inside the active length            |
-| □ 6×6 hollow | bit = 0, inside the active length            |
-| · 2×2 dot    | past the feedback point — the delay line     |
+| Drawn         | Means                                        |
+| ------------- | -------------------------------------------- |
+| ■ 6×6 filled  | bit = 1, inside the active length            |
+| □ 6×6 hollow  | bit = 0, inside the active length            |
+| ▨ 6×6 shaded  | bit = 1, past the feedback point             |
+| · 2×2 dot     | bit = 0, past the feedback point             |
 
 LENGTH is therefore a _visible boundary_, not a number to read: the point where
-squares become dots. The dots are drawn small rather than omitted because they
-are the delay line of §2 — an output ROTATEd out there is reading them, and they
-have to be visible for that to make sense — but they are drawn small because
-they are not part of the loop and shortening LENGTH is about to overwrite them.
+the row goes dim. The delay line of §2 is drawn dimmer rather than omitted
+because an output ROTATEd out there is reading it — and it shows its BIT VALUE
+for the same reason. A single flat marker for the whole region, which is what
+the first version drew, says "something is here" about cells a jack is actively
+reading and refuses to say what; it is drawn dim, not small, because it is not
+part of the loop and shortening LENGTH is about to overwrite it.
+
+The third tone is a **checkerboard**. There is no grey on a 1-bit panel, but the
+SSD1306 is a true pixel grid and the Rack port's OLED widget area-integrates, so
+both hosts resolve one to a tone rather than to a visible pattern.
+
+### What moves
+
+The screen has to distinguish a running module from a stopped one, and at
+CHANCE 0 — the setting the module is _sold_ on — every frame is otherwise
+byte-identical. Three things animate, all driven by `StepClock::StepPhase()` and
+`StepCount()`, both display-only: nothing that produces a voltage may read them,
+or the outputs would depend on the frame rate.
+
+| Element | Says |
+| ------- | ---- |
+| the fresh-bit hole, at each row's entering end | which bit arrived on this clock |
+| the travelling braid | the cloth is being drawn through the loom |
+| the crossing courier | a bit **actually** jumped on this step |
+
+A caret above each row marks the **feedback tap**, bit `LENGTH-1`. It is the most
+important cell in a Turing machine — the bit about to wrap, the one CHANCE flips
+on the way round, and the one a courier departs from — and nothing pointed at it,
+so the only way to find the tail was to wait for a crossing, and at WEAVE 0 there
+was no way at all. It also gives LENGTH a second reading: the shading boundary
+says where the loop ends, the caret says which cell closes it.
+
+**A strand is exactly 45°** — one pixel across per pixel down — so it spans as
+many columns as the channel has rows. That is forced, not chosen. The first
+version spanned a fixed 8 columns over however many rows the channel happened to
+have, stepping `x0 + (i * 8) / h`; at `h = 7` that yields offsets 0,1,2,3,4,5,6,8,
+so offset 7 never appears and every strand ran straight for seven rows and then
+jumped two pixels sideways. Nine columns over eight rows is not a line. It read
+as a bent strand with a detached pixel at the end, worst on the rightmost one
+where nothing follows it to make the pattern legible — and the fixed width also
+made the marks along the rails alternate 8 px / 6 px apart at WEAVE 100 instead
+of falling evenly. Any change to the channel's height has to keep the strand
+width tied to it (`LOOM_STRAND_W`), or the slope stops being 45° and the kink
+comes back.
+
+**Every animation moves at the rate the bits do**, and that constraint decides
+each one's speed rather than taste. The braid travels one **cell pitch per
+clock** — the same distance the registers shift — which is why it needs
+`StepCount()` and not the phase alone: the first version scrolled a whole strand
+span per clock, and the span is `112/strands`, so the cloth flew past at a low
+WEAVE and crawled at a high one. Fastest exactly where least was crossing.
+Speed must not depend on the control the picture is describing.
+
+The courier earns its place twice over. WEAVE is a probability, so the braid
+draws the _setting_ and is the same picture on the step where a bit crossed and
+the step where none did; the courier draws the _event_. It runs between the two
+cells the transfer is really between — out of the sender's tail, the cell LENGTH
+selects, and into the receiver's bit 0, where the next frame draws it as the
+fresh bit — so the animation joins up with the register rows rather than floating
+between them. `WeavePair::Crossed()` is what it reads, and that flag is
+observation only: nothing in `shiftreg.hpp` reads it back, so the file stays a
+pure function of its inputs (§10).
+
+Below about two frames per step the phase is a lie — successive redraws sample
+unrelated points in the step — so the marks that depend on landing inside a
+fraction of it drop out. The registers are a blur at those rates anyway.
+
+**A full-width sweep line under the header was tried and removed.** It was the
+largest moving thing on the screen and the least informative one; it read as a
+progress bar for something that is not loading. The three animations above
+already say the module is running _while also_ saying something about the
+pattern, which is the bar an element on a 64-row screen has to clear.
+
+### Where an output reads
+
+Each jack's window — the DEPTH cells it is reading, at its ROTATE offset — is
+barred underneath its row, between the cells and that jack's label. Without it
+the label says only where a jack _starts_ reading, and a NOTE at DEPTH 5 is built
+from five cells; the window exists nowhere on screen and the pitch you are
+hearing has no visible source. Barred rather than boxed, because the cell outline
+already means "bit = 0" and a second rectangle would read as a bit value.
+
+Several jacks routinely read the same cells — the DUO default puts a NOTE and its
+GATE both on register A at ROTATE 0 — so the bars merge. The jack being edited is
+redrawn at cell _pitch_ rather than cell _width_, closing the 1 px gaps into one
+solid bar, which picks it out of the pile without needing a row the screen does
+not have.
+
+### The leaders, and why labels cannot simply sit on their taps
+
+Jacks sharing a tap have their labels packed left to right from it, because two
+labels drawn at the same x print on top of each other. That packing means only
+the FIRST label sits over its own cell: in the DUO default `A2` lands two cells
+to the right of the one it taps, and the screen then states something false about
+where a jack reads. This was live until the screenshot tool (`make screen-wea`)
+made it visible — a photo of the panel cannot resolve it.
+
+So each label gets a **leader** on a row of its own between the window bars and
+the labels, running from the cell to the label that names it. The chain reads
+cell ▸ window bar ▸ leader ▸ label, each touching the next.
+
+Two details are load-bearing. The leader is **dotted**: drawn solid it stacked
+under the window bar into a two-row slab and read as a fatter bar, which is the
+one thing the row exists not to be. And the dots are on an **absolute parity**
+rather than one relative to each leader's own start, so leaders that merge —
+which they should, when jacks share a tap — stay dotted instead of filling each
+other in.
+
+The row was paid for by the labels, not the loom: a tap label is the classic
+font's 8-row cell, but the glyphs here are capitals and digits, all of which
+leave the last row empty for descenders. The lit block behind a speaking jack is
+therefore 7 rows. It may not be widened back — row 29, under register A's
+labels, is the weave channel's top rail.
 
 The bracket under each row marks the active span and carries two more things:
 the **bit-editor cursor** (`▲`), and the **output taps** — each jack's digit sits
@@ -397,13 +535,34 @@ without reading the manual.
 
 | Rows  | Content                                            |
 | ----- | -------------------------------------------------- |
-| 0–8   | header — clock pip, tempo, divider, WEAVE %        |
-| 11–17 | register A, flowing ▸                              |
-| 19–23 | A's length bracket, cursor, output taps            |
-| 26–37 | the weave channel                                  |
-| 40–46 | register B, flowing ◂                              |
-| 48–52 | B's length bracket, cursor, output taps            |
-| 55–63 | edit line — the parameter under the encoder, value |
+| 0–11  | header — tempo in helvB12, rate and WEAVE % small  |
+| 12–13 | A's feedback-tap caret                             |
+| 14–19 | register A, flowing ▸                              |
+| 20    | A's output windows                                 |
+| 21    | A's tap leaders                                    |
+| 22–28 | A's output taps (length bracket, cursor: unbuilt)  |
+| 29–38 | the weave channel — braid and couriers             |
+| 39–40 | B's feedback-tap caret                             |
+| 41–46 | register B, flowing ◂                              |
+| 47    | B's output windows                                 |
+| 48    | B's tap leaders                                    |
+| 49–55 | B's output taps (length bracket, cursor: unbuilt)  |
+| 56–63 | status line — the two lengths, the two chances     |
+| 54–63 | the live strip, over the status line while editing |
+
+**The budget is exactly full, and the header is what fills it.** A helvB12 digit
+is 12 rows, so the tempo cost four rows off the loom — two from the weave channel
+(12 → 10) and one from each row of tap labels (9 → 8, which is the classic font's
+cell exactly, so a lit label's block now has no padding row above it). There is
+nowhere for a fifth row to come from. Anything else wanting large type has to
+take it from something on this list, and the channel has no more to give: the
+strands are diagonals, and below about 8 rows they stop reading as crossings.
+
+The font is `core/fonts/helvB12.h`, shared with ClockForge and ScopeForge — it
+used to be three byte-identical copies, one per app plus the Rack shim's. It is
+included from inside the app's namespace like every other header here, which is
+what keeps the unified firmware and the consolidated plugin from seeing several
+definitions of the same glyph tables.
 
 ### Why not rings
 

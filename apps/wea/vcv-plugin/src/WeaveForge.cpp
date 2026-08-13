@@ -337,8 +337,18 @@ struct WeaveForgeWidget : ModuleWidget {
                     }));
 
                 menu->addChild(new MenuSeparator);
-                for (int j = 0; j < 4; j++)
-                    appendJackMenu(menu, m, j);
+                // Listed DOWN THE COLUMNS — A1, A2, B1, B2 — not in DAC index
+                // order, which is the rows (A1, B1, A2, B2). jackAt() is the
+                // firmware's own ordering, so this menu and the module's OUT
+                // pages cannot disagree about it.
+                //
+                // The panel is labelled by column and the module is built around
+                // that: each register owns a column in the default routing, which
+                // is where the jack names come from (Design.md §1). Reading
+                // across the rows puts B1 between A1 and A2, interleaving the two
+                // halves of the module.
+                for (int k = 0; k < 4; k++)
+                    appendJackMenu(menu, m, wvengine::jackAt(k));
             }));
 
         // ── Clock ────────────────────────────────────────────────────────────

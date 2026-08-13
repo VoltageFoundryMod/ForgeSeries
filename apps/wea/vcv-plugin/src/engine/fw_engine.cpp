@@ -576,6 +576,7 @@ void weaveDirSet(Engine *e, int index) {
 
 // ── The output matrix ──
 std::string jackName(int jack) { return OutJackNames[clampJ(jack)]; }
+int jackAt(int slot) { return (int)WEA_JACK_COLUMN_ORDER[clampJ(slot)]; }
 
 int routingCount() { return (int)RoutingLength; }
 std::string routingName(int index) {

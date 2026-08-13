@@ -78,6 +78,16 @@ void weaveDirSet(Engine *, int index);
 // the right in the DUO routing, which is what the naming is for.
 std::string jackName(int jack);
 
+// The jacks in PANEL order — down the left column, then down the right. Pass a
+// SLOT 0..3 and get the jack index to use; jackAt(1) is A2, not B1.
+//
+// Any UI listing the four jacks walks them through this, so the context menu
+// stays in the same order as the module's own OUT pages. The firmware owns the
+// order (WEA_JACK_COLUMN_ORDER in lib/outputs.hpp) and this is how the plugin
+// reads it, rather than repeating {0,2,1,3} on the Rack side where it could
+// quietly drift.
+int jackAt(int slot);
+
 int routingCount();
 std::string routingName(int index);
 // Returns -1 when the four slots match no template — the CUSTOM state, which is

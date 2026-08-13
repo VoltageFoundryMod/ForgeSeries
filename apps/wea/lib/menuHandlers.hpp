@@ -33,11 +33,16 @@
 //    4  CLOCK      — bpm, input ppqn, rate
 //    5  SCALE      — root, scale, transpose
 //    6  ROUTING    — the one row that stamps all four jacks
-//    7  OUT 1      — source, type, depth, rotate, + two contextual rows
-//    8  OUT 2
-//    9  OUT 3
-//   10  OUT 4
+//    7  OUT A1     — source, type, depth, rotate, + two contextual rows
+//    8  OUT B1
+//    9  OUT A2
+//   10  OUT B2
 //   11  CV IN      — IN 2 / IN 3 target + depth
+//
+// Group N is jack N-7, permanently. But the PAGES are walked in panel order —
+// A1, A2, B1, B2, i.e. groups 7, 9, 8, 10 — because the encoder's order is the
+// order the blocks sit in MENU_ITEMS[], not the group numbering. See the note
+// above those blocks before rearranging anything there.
 //   12  SETTINGS   — screen timeout, boot menu
 //   13  PRESETS    — slot, save, load, random
 //
@@ -495,7 +500,7 @@ const MenuItem MENU_ITEMS[] = {
     // it under five neighbours would hide the thing most people want first.
     {"ROUTING", getRouting, nullptr, 76, 0, 6, ROW_SINGLE, MENU_EDIT, setRouting, nullptr},
 
-    // ── 7..10 OUT 1..4 ── (exactly six rows each — the page limit)
+    // ── 7..10 OUT A1 / B1 / A2 / B2 ── (exactly six rows each — the page limit)
     //
     // DEPTH and ROTATE carry the live flag; the other four fields do not, and
     // the line is whether the loom can SHOW the change. ROTATE walks the jack's
@@ -503,6 +508,23 @@ const MenuItem MENU_ITEMS[] = {
     // judged by looking. SOURCE, TYPE and the two contextual fields change what
     // the jack emits rather than where it reads — nothing on the loom moves, so
     // a preview would be a strip in front of a still picture.
+    //
+    // THE BLOCKS ARE OUT OF GROUP-NUMBER ORDER, DELIBERATELY: 7, 9, 8, 10.
+    //
+    // Group N is jack N-7 and always will be — every consumer keys off the group
+    // ID (OutRowLabel, LOOM_LiveJack, groupTitles) — but the order the blocks sit
+    // in this array is the order the encoder walks them, and that has to be the
+    // order the jacks are on the PANEL. The panel is labelled by column: A1/A2
+    // down the left, B1/B2 down the right, each register owning a column in the
+    // default routing (Design.md §1). Ascending group order walks the rows
+    // instead, which lands you on B1 between A1 and A2 — the two halves of the
+    // module interleaved, on the one screen where you are setting up a jack you
+    // are looking at.
+    //
+    // Moving a block is safe; splitting one is not. WEA_RenderGroup() counts
+    // rowInGroup by walking the array and filtering on group, so a group's six
+    // rows must stay contiguous or the two contextual labels resolve to the
+    // wrong fields.
     {"SOURCE", getOutSource<0>, nullptr, 88, 0, 7, ROW_SINGLE, MENU_EDIT, setOutSource<0>, nullptr},
     {"TYPE", getOutType<0>, nullptr, 88, 0, 7, ROW_SINGLE, MENU_EDIT, setOutType<0>, nullptr},
     {"DEPTH", getOutDepth<0>, nullptr, 88, 0, 7, ROW_SINGLE, MENU_EDIT, setOutDepth<0>, nullptr, true},
@@ -510,19 +532,21 @@ const MenuItem MENU_ITEMS[] = {
     {"", getOutParam<0>, nullptr, 88, 0, 7, ROW_SINGLE, MENU_EDIT, setOutParam<0>, nullptr},
     {"", getOutParam2<0>, nullptr, 88, 0, 7, ROW_SINGLE, MENU_EDIT, setOutParam2<0>, nullptr},
 
-    {"SOURCE", getOutSource<1>, nullptr, 88, 0, 8, ROW_SINGLE, MENU_EDIT, setOutSource<1>, nullptr},
-    {"TYPE", getOutType<1>, nullptr, 88, 0, 8, ROW_SINGLE, MENU_EDIT, setOutType<1>, nullptr},
-    {"DEPTH", getOutDepth<1>, nullptr, 88, 0, 8, ROW_SINGLE, MENU_EDIT, setOutDepth<1>, nullptr, true},
-    {"ROTATE", getOutRotate<1>, nullptr, 88, 0, 8, ROW_SINGLE, MENU_EDIT, setOutRotate<1>, nullptr, true},
-    {"", getOutParam<1>, nullptr, 88, 0, 8, ROW_SINGLE, MENU_EDIT, setOutParam<1>, nullptr},
-    {"", getOutParam2<1>, nullptr, 88, 0, 8, ROW_SINGLE, MENU_EDIT, setOutParam2<1>, nullptr},
-
+    // A2 — group 9, second in the walk: down the left column from A1.
     {"SOURCE", getOutSource<2>, nullptr, 88, 0, 9, ROW_SINGLE, MENU_EDIT, setOutSource<2>, nullptr},
     {"TYPE", getOutType<2>, nullptr, 88, 0, 9, ROW_SINGLE, MENU_EDIT, setOutType<2>, nullptr},
     {"DEPTH", getOutDepth<2>, nullptr, 88, 0, 9, ROW_SINGLE, MENU_EDIT, setOutDepth<2>, nullptr, true},
     {"ROTATE", getOutRotate<2>, nullptr, 88, 0, 9, ROW_SINGLE, MENU_EDIT, setOutRotate<2>, nullptr, true},
     {"", getOutParam<2>, nullptr, 88, 0, 9, ROW_SINGLE, MENU_EDIT, setOutParam<2>, nullptr},
     {"", getOutParam2<2>, nullptr, 88, 0, 9, ROW_SINGLE, MENU_EDIT, setOutParam2<2>, nullptr},
+
+    // B1 — group 8, third: over to the top of the right column.
+    {"SOURCE", getOutSource<1>, nullptr, 88, 0, 8, ROW_SINGLE, MENU_EDIT, setOutSource<1>, nullptr},
+    {"TYPE", getOutType<1>, nullptr, 88, 0, 8, ROW_SINGLE, MENU_EDIT, setOutType<1>, nullptr},
+    {"DEPTH", getOutDepth<1>, nullptr, 88, 0, 8, ROW_SINGLE, MENU_EDIT, setOutDepth<1>, nullptr, true},
+    {"ROTATE", getOutRotate<1>, nullptr, 88, 0, 8, ROW_SINGLE, MENU_EDIT, setOutRotate<1>, nullptr, true},
+    {"", getOutParam<1>, nullptr, 88, 0, 8, ROW_SINGLE, MENU_EDIT, setOutParam<1>, nullptr},
+    {"", getOutParam2<1>, nullptr, 88, 0, 8, ROW_SINGLE, MENU_EDIT, setOutParam2<1>, nullptr},
 
     {"SOURCE", getOutSource<3>, nullptr, 88, 0, 10, ROW_SINGLE, MENU_EDIT, setOutSource<3>, nullptr},
     {"TYPE", getOutType<3>, nullptr, 88, 0, 10, ROW_SINGLE, MENU_EDIT, setOutType<3>, nullptr},
