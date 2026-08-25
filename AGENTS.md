@@ -25,7 +25,9 @@ apps/att/       ChaosForge    — dual chaotic-attractor modulation source
 apps/wea/       WeaveForge    — dual shift-register sequencer
 vcv/            the consolidated Rack plugin (all modules, one binary)
 vcvlib/         shared Rack layer (Arduino shim, ForgeModule, IEngine, widgets)
+panel-src/      the panel artwork you edit in Inkscape, one SVG per module
 tools/env.ps1   optional PATH helper for Windows
+tools/          prep_panel.py, panel_coords.py — the panel pipeline
 ```
 
 Each module:
@@ -78,7 +80,49 @@ make screen-wea     # print a module's OLED to the terminal — see below
 make vcv            # the consolidated Rack plugin
 make plugins        # every standalone per-module plugin
 make everything     # every firmware image + all standalone plugins
+make panels         # convert the panel artwork for Rack — see below
 ```
+
+## Panels
+
+**Edit `panel-src/<Name>.svg` in Inkscape. Never edit
+`apps/<app>/vcv-plugin/res/<Name>.svg` — it is generated, and your change is
+gone the next time anyone touches the drawing.**
+
+Rack's SVG parser is nanosvg, which draws `path rect circle ellipse line
+polyline polygon` and nothing else. `<text>` and `<use>` are simply not in that
+list, so a label typed in Inkscape and a tiled clone both vanish silently — the
+ClockForge panel shipped for months with five labels Rack never drew. `make
+panels` is what closes that gap:
+
+```sh
+make panels          # every panel whose drawing changed
+make panels-clk      # just one
+make panels-force    # rebuild all regardless of timestamps
+make panel-coords-clk  # print the components layer as mm, for the module's .cpp
+```
+
+It runs on timestamps, so a build whose artwork has not changed pays nothing,
+and `make vcv`, `make plugins` and `make <app>` all depend on it. Both files are
+committed: the source because it is the source, the output because a machine
+without Inkscape still has to be able to build — there, the step warns and keeps
+what is already there.
+
+What the pipeline does, in order (`tools/prep_panel.py`, then Inkscape):
+
+1. strips the `components` and `Drill` guide layers, which are construction
+   geometry Rack would otherwise render on top of the panel
+2. flattens every `<use>` into real geometry
+3. drops groups the drawing has switched off (`display:none`)
+4. hands the result to Inkscape for `object-to-path` on the text only — glyph
+   outlines need font metrics, which is the one thing here Inkscape is for
+5. checks the output for `<text>` that survived and would still draw
+
+⚠ Widget positions in each module's `<Name>.cpp` are `mm2px(Vec(...))` and are
+*not* generated — they are kept in agreement with the drawing by hand. After
+moving anything on the `components` layer, run `make panel-coords-<app>` and
+reconcile. It accumulates the ancestor transforms and the viewBox scale (1 uu =
+0.01 mm on these panels), which reading `cx`/`cy` out of the XML does not.
 
 ## Looking at a module's screen
 

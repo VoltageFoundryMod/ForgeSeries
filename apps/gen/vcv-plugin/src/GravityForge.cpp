@@ -112,8 +112,8 @@ struct GravityForgeWidget : ModuleWidget {
         // Emulated OLED over the display cutout.
         forgevcv::FramebufferDisplay *disp = new forgevcv::FramebufferDisplay();
         disp->module = module;
-        disp->box.pos = mm2px(Vec(2.559, 19.776));
-        disp->box.size = mm2px(Vec(25.362, 14.994));
+        disp->box.size = mm2px(Vec(25.500, 14.000));
+        disp->box.pos = mm2px(Vec(2.310, 19.800));
         addChild(disp);
 
         // Encoder (drag to scroll, click to select).
@@ -262,11 +262,8 @@ struct GravityForgeWidget : ModuleWidget {
             // never move, so this is independent of Spread.
             menu->addChild(createSubmenuItem("Bias", string::f("%d", gfengine::biasGet(e, c)),
                                              [=](Menu *menu) {
-                addSlider(menu, "Bias (low <-> high)", "", (float)gfengine::biasMin(),
-                          (float)gfengine::biasMax(), 0.f,
-                          [=]() { return gfengine::biasGet(e, c); },
-                          [=](int v) { gfengine::biasSet(e, c, v); });
-            }));
+                                                 addSlider(menu, "Bias (low <-> high)", "", (float)gfengine::biasMin(), (float)gfengine::biasMax(), 0.f, [=]() { return gfengine::biasGet(e, c); }, [=](int v) { gfengine::biasSet(e, c, v); });
+                                             }));
 
             // The two note-thinning controls. They sit here, at the end of Notes,
             // because neither touches the physics: the balls move exactly as they
@@ -274,10 +271,8 @@ struct GravityForgeWidget : ModuleWidget {
             // separates them from every other way of getting fewer notes.
             menu->addChild(createSubmenuItem("Density", string::f("%d%%", gfengine::densityGet(e, c)),
                                              [=](Menu *menu) {
-                addSlider(menu, "Density", "%", 0.f, 100.f, 100.f,
-                          [=]() { return gfengine::densityGet(e, c); },
-                          [=](int v) { gfengine::densitySet(e, c, v); });
-            }));
+                                                 addSlider(menu, "Density", "%", 0.f, 100.f, 100.f, [=]() { return gfengine::densityGet(e, c); }, [=](int v) { gfengine::densitySet(e, c, v); });
+                                             }));
 
             // Minimum gap between notes, in beats. A rate ceiling rather than a
             // grid — Clock ▸ Quantize is the one that moves notes onto a grid.
@@ -431,10 +426,7 @@ struct GravityForgeWidget : ModuleWidget {
                         ? "Off"
                         : string::f("%d beats", gfengine::loopBeatsGet(e)),
                     [=](Menu *menu) {
-                        addSlider(menu, "Length (0 = off)", " beats", 0.f,
-                                  (float)gfengine::loopBeatsMax(), 0.f,
-                                  [=]() { return gfengine::loopBeatsGet(e); },
-                                  [=](int v) { gfengine::loopBeatsSet(e, v); });
+                        addSlider(menu, "Length (0 = off)", " beats", 0.f, (float)gfengine::loopBeatsMax(), 0.f, [=]() { return gfengine::loopBeatsGet(e); }, [=](int v) { gfengine::loopBeatsSet(e, v); });
                     }));
 
                 menu->addChild(createMenuItem("New phrase", "", [=]() { gfengine::loopNewPhrase(e); }));
@@ -454,10 +446,7 @@ struct GravityForgeWidget : ModuleWidget {
                     gfengine::loopNapGet(e) == 0 ? "Off"
                                                  : string::f("%d loops", gfengine::loopNapGet(e)),
                     [=](Menu *menu) {
-                        addSlider(menu, "Nap (0 = never)", " loops", 0.f,
-                                  (float)gfengine::loopNapMax(), 0.f,
-                                  [=]() { return gfengine::loopNapGet(e); },
-                                  [=](int v) { gfengine::loopNapSet(e, v); });
+                        addSlider(menu, "Nap (0 = never)", " loops", 0.f, (float)gfengine::loopNapMax(), 0.f, [=]() { return gfengine::loopNapGet(e); }, [=](int v) { gfengine::loopNapSet(e, v); });
                     }));
 
                 for (int c = 0; c < 2; c++) {

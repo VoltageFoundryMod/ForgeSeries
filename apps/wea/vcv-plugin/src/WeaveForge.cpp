@@ -122,8 +122,8 @@ struct WeaveForgeWidget : ModuleWidget {
         // Emulated OLED over the display cutout.
         forgevcv::FramebufferDisplay *disp = new forgevcv::FramebufferDisplay();
         disp->module = module;
-        disp->box.pos = mm2px(Vec(2.559, 19.776));
-        disp->box.size = mm2px(Vec(25.362, 14.994));
+        disp->box.size = mm2px(Vec(25.500, 14.000));
+        disp->box.pos = mm2px(Vec(2.310, 19.800));
         addChild(disp);
 
         // Encoder (drag to scroll, click to select).
@@ -174,19 +174,14 @@ struct WeaveForgeWidget : ModuleWidget {
             [=](Menu *menu) {
                 menu->addChild(createSubmenuItem(
                     "Length", string::f("%d", wvengine::lengthGet(e, r)), [=](Menu *menu) {
-                        addIntSlider(menu, "Length", "", (float)wvengine::lengthMin(),
-                                     (float)wvengine::lengthMax(), 16.f,
-                                     [=]() { return wvengine::lengthGet(e, r); },
-                                     [=](int v) { wvengine::lengthSet(e, r, v); });
+                        addIntSlider(menu, "Length", "", (float)wvengine::lengthMin(), (float)wvengine::lengthMax(), 16.f, [=]() { return wvengine::lengthGet(e, r); }, [=](int v) { wvengine::lengthSet(e, r, v); });
                     }));
 
                 // 0 locks the pattern; 100 locks it inverted, at twice the
                 // length. Both ends are settings, not extremes to avoid.
                 menu->addChild(createSubmenuItem(
                     "Chance", string::f("%d%%", wvengine::chanceGet(e, r)), [=](Menu *menu) {
-                        addIntSlider(menu, "Chance", "%", 0.f, 100.f, 25.f,
-                                     [=]() { return wvengine::chanceGet(e, r); },
-                                     [=](int v) { wvengine::chanceSet(e, r, v); });
+                        addIntSlider(menu, "Chance", "%", 0.f, 100.f, 25.f, [=]() { return wvengine::chanceGet(e, r); }, [=](int v) { wvengine::chanceSet(e, r, v); });
                     }));
 
                 menu->addChild(new MenuSeparator);
@@ -229,19 +224,14 @@ struct WeaveForgeWidget : ModuleWidget {
 
             menu->addChild(createSubmenuItem(
                 "Depth", string::f("%d bits", wvengine::outDepthGet(e, j)), [=](Menu *menu) {
-                    addIntSlider(menu, "Depth", " bits", 1.f, 8.f, 5.f,
-                                 [=]() { return wvengine::outDepthGet(e, j); },
-                                 [=](int v) { wvengine::outDepthSet(e, j, v); });
+                    addIntSlider(menu, "Depth", " bits", 1.f, 8.f, 5.f, [=]() { return wvengine::outDepthGet(e, j); }, [=](int v) { wvengine::outDepthSet(e, j, v); });
                 }));
 
             // Four jacks tapping one register at different offsets are four
             // phase-shifted copies of the same pattern — the canon trick.
             menu->addChild(createSubmenuItem(
                 "Rotate", string::f("%d", wvengine::outRotateGet(e, j)), [=](Menu *menu) {
-                    addIntSlider(menu, "Rotate", "", 0.f,
-                                 (float)(wvengine::outRotateSpan(e, j) - 1), 0.f,
-                                 [=]() { return wvengine::outRotateGet(e, j); },
-                                 [=](int v) { wvengine::outRotateSet(e, j, v); });
+                    addIntSlider(menu, "Rotate", "", 0.f, (float)(wvengine::outRotateSpan(e, j) - 1), 0.f, [=]() { return wvengine::outRotateGet(e, j); }, [=](int v) { wvengine::outRotateSet(e, j, v); });
                 }));
 
             const std::string l1 = wvengine::outParamLabel(e, j);
@@ -249,9 +239,7 @@ struct WeaveForgeWidget : ModuleWidget {
             const float hi1 = (float)wvengine::outParamMax(e, j);
             menu->addChild(createSubmenuItem(
                 l1, string::f("%d", wvengine::outParamGet(e, j)), [=](Menu *menu) {
-                    addIntSlider(menu, l1, "", lo1, hi1, lo1,
-                                 [=]() { return wvengine::outParamGet(e, j); },
-                                 [=](int v) { wvengine::outParamSet(e, j, v); });
+                    addIntSlider(menu, l1, "", lo1, hi1, lo1, [=]() { return wvengine::outParamGet(e, j); }, [=](int v) { wvengine::outParamSet(e, j, v); });
                 }));
 
             // A GATE has no second field, so the row is simply absent rather
@@ -262,9 +250,7 @@ struct WeaveForgeWidget : ModuleWidget {
                 const float hi2 = (float)wvengine::outParam2Max(e, j);
                 menu->addChild(createSubmenuItem(
                     l2, string::f("%d", wvengine::outParam2Get(e, j)), [=](Menu *menu) {
-                        addIntSlider(menu, l2, "", lo2, hi2, lo2,
-                                     [=]() { return wvengine::outParam2Get(e, j); },
-                                     [=](int v) { wvengine::outParam2Set(e, j, v); });
+                        addIntSlider(menu, l2, "", lo2, hi2, lo2, [=]() { return wvengine::outParam2Get(e, j); }, [=](int v) { wvengine::outParam2Set(e, j, v); });
                     }));
             }
         }));
@@ -296,9 +282,7 @@ struct WeaveForgeWidget : ModuleWidget {
             "Weave", string::f("%d%%", wvengine::weaveGet(e)), [=](Menu *menu) {
                 menu->addChild(createSubmenuItem(
                     "Amount", string::f("%d%%", wvengine::weaveGet(e)), [=](Menu *menu) {
-                        addIntSlider(menu, "Weave", "%", 0.f, 100.f, 0.f,
-                                     [=]() { return wvengine::weaveGet(e); },
-                                     [=](int v) { wvengine::weaveSet(e, v); });
+                        addIntSlider(menu, "Weave", "%", 0.f, 100.f, 0.f, [=]() { return wvengine::weaveGet(e); }, [=](int v) { wvengine::weaveSet(e, v); });
                     }));
 
                 std::vector<std::string> dirs;
@@ -360,10 +344,7 @@ struct WeaveForgeWidget : ModuleWidget {
                 menu->addChild(createSubmenuItem(
                     "Internal tempo", string::f("%d BPM", wvengine::bpmGet(e)),
                     [=](Menu *menu) {
-                        addIntSlider(menu, "Tempo", " BPM", (float)wvengine::bpmMin(),
-                                     (float)wvengine::bpmMax(), 120.f,
-                                     [=]() { return wvengine::bpmGet(e); },
-                                     [=](int v) { wvengine::bpmSet(e, v); });
+                        addIntSlider(menu, "Tempo", " BPM", (float)wvengine::bpmMin(), (float)wvengine::bpmMax(), 120.f, [=]() { return wvengine::bpmGet(e); }, [=](int v) { wvengine::bpmSet(e, v); });
                     }));
 
                 std::vector<std::string> ppqns;
@@ -410,9 +391,7 @@ struct WeaveForgeWidget : ModuleWidget {
                 menu->addChild(createSubmenuItem(
                     "Transpose", string::f("%d st", wvengine::transposeGet(e)),
                     [=](Menu *menu) {
-                        addIntSlider(menu, "Transpose", " st", -24.f, 24.f, 0.f,
-                                     [=]() { return wvengine::transposeGet(e); },
-                                     [=](int v) { wvengine::transposeSet(e, v); });
+                        addIntSlider(menu, "Transpose", " st", -24.f, 24.f, 0.f, [=]() { return wvengine::transposeGet(e); }, [=](int v) { wvengine::transposeSet(e, v); });
                     }));
             }));
 
@@ -434,9 +413,7 @@ struct WeaveForgeWidget : ModuleWidget {
                         menu->addChild(createSubmenuItem(
                             "Depth", string::f("%d%%", wvengine::cvDepthGet(e, i)),
                             [=](Menu *menu) {
-                                addIntSlider(menu, "Depth", "%", 0.f, 100.f, 0.f,
-                                             [=]() { return wvengine::cvDepthGet(e, i); },
-                                             [=](int v) { wvengine::cvDepthSet(e, i, v); });
+                                addIntSlider(menu, "Depth", "%", 0.f, 100.f, 0.f, [=]() { return wvengine::cvDepthGet(e, i); }, [=](int v) { wvengine::cvDepthSet(e, i, v); });
                             }));
                     }));
             }

@@ -5,7 +5,7 @@
    height="128.5mm"
    viewBox="0 0 3012.0001 12850"
    id="svg1"
-   sodipodi:docname="eurorack-panel-6hp-128.5mm.svg"
+   sodipodi:docname="WeaveForge.svg"
    inkscape:version="1.4.2 (f4327f4, 2025-05-13)"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
@@ -28,14 +28,14 @@
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="mm"
      inkscape:zoom="4"
-     inkscape:cx="71.250001"
-     inkscape:cy="266.875"
+     inkscape:cx="71.125"
+     inkscape:cy="267.875"
      inkscape:window-width="2556"
      inkscape:window-height="2061"
-     inkscape:window-x="1225"
+     inkscape:window-x="14"
      inkscape:window-y="0"
      inkscape:window-maximized="0"
-     inkscape:current-layer="F.Mask" />
+     inkscape:current-layer="g8" />
   <title
      id="title1">Eurorack panel — 6HP × 128.5mm</title>
   <g
@@ -49,14 +49,6 @@
        id="path1"
        style="fill:#1a1a1a;stroke-width:0;stroke-dasharray:none"
        sodipodi:nodetypes="cccccssssssssssssss" />
-    <rect
-       style="display:inline;fill:#000000;stroke:#9aa4b3;stroke-width:0;stroke-dasharray:none"
-       id="rect2-4"
-       width="2536.1897"
-       height="1499.3519"
-       x="224.44707"
-       y="1977.5869"
-       inkscape:label="display" />
     <ellipse
        style="display:inline;fill:#00ff00;fill-opacity:1;stroke:#9aa4b3;stroke-width:0;stroke-dasharray:none"
        id="ellipse4"
@@ -129,6 +121,17 @@
        ry="3.0700057"
        inkscape:label="out4"
        transform="scale(100)" />
+    <rect
+       style="display:inline;fill:#ffff00;fill-opacity:1;stroke-width:0;stroke-dasharray:none"
+       id="rect2"
+       width="25.5"
+       height="14"
+       x="2.1754191"
+       y="19.800001"
+       inkscape:label="display"
+       rx="0.5"
+       ry="0.5"
+       transform="matrix(100,0,0,100,13.458169,0)" />
   </g>
   <g
      inkscape:groupmode="layer"
@@ -6723,24 +6726,6 @@
        style="display:inline;fill:#c0894a;fill-opacity:1;stroke-width:2.34686"
        inkscape:label="Anvil" />
     <g
-       inkscape:groupmode="layer"
-       id="g4"
-       inkscape:label="Screen copy"
-       style="display:inline"
-       transform="matrix(100,0,0,100,0,9.5367432e-5)">
-      <rect
-         x="1.2754195"
-         y="19.072628"
-         width="27.299999"
-         height="16.4"
-         rx="1"
-         fill="#05070b"
-         stroke="#3a4048"
-         stroke-width="0.4"
-         id="rect4"
-         style="display:inline;fill:#c0894a;fill-opacity:1;stroke-width:0;stroke-dasharray:none;stroke:#ffffff;stroke-opacity:1" />
-    </g>
-    <g
        inkscape:label="11 detent cog + index"
        id="g55"
        transform="matrix(68.142251,0,0,68.142251,-6980.3231,-15065.452)">
@@ -6893,6 +6878,26 @@
        rx="400"
        ry="406.71329"
        inkscape:label="out4" />
+    <rect
+       style="display:inline;fill:none;fill-opacity:1;stroke:#bf984a;stroke-width:20;stroke-dasharray:none;stroke-opacity:1"
+       id="rect4"
+       width="2690"
+       height="1540"
+       x="161.00008"
+       y="1910.0001"
+       inkscape:label="display"
+       rx="59.999996"
+       ry="59.999992" />
+    <rect
+       style="display:inline;fill:none;fill-opacity:1;stroke:#bf984a;stroke-width:20;stroke-dasharray:none;stroke-opacity:1"
+       id="rect5"
+       width="2570"
+       height="1420"
+       x="221.00008"
+       y="1970.0001"
+       inkscape:label="display"
+       rx="60"
+       ry="60" />
   </g>
   <g
      id="F.Mask"
@@ -6920,19 +6925,6 @@
        id="path2"
        style="display:inline;fill:#c0894a;fill-opacity:1;stroke-width:2.34686"
        inkscape:label="Anvil" />
-    <rect
-       x="1.2754195"
-       y="19.072628"
-       width="27.299999"
-       height="16.4"
-       rx="1"
-       fill="#05070b"
-       stroke="#3a4048"
-       stroke-width="0.4"
-       id="rect3"
-       style="display:inline;fill:#c0894a;fill-opacity:1;stroke-width:0;stroke-dasharray:none;stroke:#ffffff;stroke-opacity:1"
-       inkscape:label="screen"
-       transform="matrix(100,0,0,100,0,9.5367432e-5)" />
     <g
        inkscape:label="11 detent cog + index"
        id="g33"
@@ -7083,6 +7075,26 @@
        rx="400"
        ry="406.71329"
        inkscape:label="out4" />
+    <rect
+       style="display:inline;fill:none;fill-opacity:1;stroke:#bf984a;stroke-width:20;stroke-dasharray:none;stroke-opacity:1"
+       id="rect2-1"
+       width="2690"
+       height="1540"
+       x="161.00008"
+       y="1910.0001"
+       inkscape:label="display"
+       rx="59.999996"
+       ry="59.999992" />
+    <rect
+       style="display:inline;fill:none;fill-opacity:1;stroke:#bf984a;stroke-width:20;stroke-dasharray:none;stroke-opacity:1"
+       id="rect3"
+       width="2570"
+       height="1420"
+       x="221.00008"
+       y="1970.0001"
+       inkscape:label="display"
+       rx="60"
+       ry="60" />
   </g>
   <g
      id="F.SilkS"
@@ -7593,6 +7605,23 @@
      style="display:inline;fill:#ffffff;stroke:#9aa4b3;stroke-width:10" />
   <g
      inkscape:groupmode="layer"
+     id="g8"
+     inkscape:label="DisplayBG-VCV"
+     style="display:inline;fill:#ffffff;stroke:#9aa4b3;stroke-width:10"
+     transform="matrix(0.42637102,0,0,0.81813296,675.69492,4977.201)">
+    <rect
+       style="display:inline;fill:#060a10;fill-opacity:1.0;fill-rule:evenodd;stroke:#9aa4b3;stroke-width:0;stroke-dasharray:none"
+       id="rect8"
+       width="5980.709"
+       height="1711.2123"
+       x="-1042.9774"
+       y="-3663.4639"
+       inkscape:label="display"
+       rx="117.26881"
+       ry="61.114723" />
+  </g>
+  <g
+     inkscape:groupmode="layer"
      id="layer2"
      inkscape:label="components"
      style="display:inline"
@@ -7662,13 +7691,15 @@
        ry="3.0700057"
        inkscape:label="out4" />
     <rect
-       style="display:inline;fill:#ffff00;stroke-width:4.99963"
-       id="rect2"
-       width="25.361897"
-       height="14.993519"
-       x="2.2444708"
-       y="19.775869"
-       inkscape:label="display" />
+       style="display:inline;fill:#ffff00;fill-opacity:1;stroke-width:0;stroke-dasharray:none"
+       id="rect1"
+       width="25.5"
+       height="14"
+       x="2.1754191"
+       y="19.800001"
+       inkscape:label="display"
+       rx="0.5"
+       ry="0.5" />
   </g>
   <metadata
      id="metadata1">

@@ -159,11 +159,16 @@ struct ChaosForgeWidget : ModuleWidget {
         addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.407, 109.34)), module, ChaosForge::A2_OUTPUT));
         addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.647, 109.34)), module, ChaosForge::B2_OUTPUT));
 
-        // Emulated OLED over the display cutout.
+        // Emulated OLED, sized to the SSD1306's *active area* rather than the
+        // panel cutout: 128x64 pixels on a 0.17 mm square pitch = 21.744 x
+        // 10.872 mm, i.e. exactly 2:1, which is the aspect FramebufferDisplay
+        // derives from the box width. Centred in the cutout (rect9/rect12 in
+        // the panel SVG: 2.310, 19.800, 25.500 x 14.000 mm, centre 15.060,
+        // 26.800), so the surrounding glass stays visible like on hardware.
         forgevcv::FramebufferDisplay *disp = new forgevcv::FramebufferDisplay();
         disp->module = module;
-        disp->box.pos = mm2px(Vec(2.559, 19.776));
-        disp->box.size = mm2px(Vec(25.362, 14.994));
+        disp->box.size = mm2px(Vec(25.500, 14.000));
+        disp->box.pos = mm2px(Vec(2.310, 19.800));
         addChild(disp);
 
         // Encoder (drag to scroll, click to select).
@@ -223,10 +228,7 @@ struct ChaosForgeWidget : ModuleWidget {
                 // number means the same thing whichever system is selected.
                 menu->addChild(createSubmenuItem(
                     "Speed", fmtSpeed(chengine::speedGet(e, g)), [=](Menu *menu) {
-                        addFloatSlider(menu, "Speed", "x", chengine::speedMin(),
-                                       chengine::speedMax(), 1.f,
-                                       [=]() { return chengine::speedGet(e, g); },
-                                       [=](float v) { chengine::speedSet(e, g, v); });
+                        addFloatSlider(menu, "Speed", "x", chengine::speedMin(), chengine::speedMax(), 1.f, [=]() { return chengine::speedGet(e, g); }, [=](float v) { chengine::speedSet(e, g, v); });
                     }));
 
                 // ── The system's own constants ────────────────────────────────
@@ -244,9 +246,7 @@ struct ChaosForgeWidget : ModuleWidget {
                         const float def = chengine::paramDefault(e, g, k);
                         menu->addChild(createSubmenuItem(
                             pname, fmtParam(chengine::paramGet(e, g, k)), [=](Menu *menu) {
-                                addFloatSlider(menu, pname, "", lo, hi, def,
-                                               [=]() { return chengine::paramGet(e, g, k); },
-                                               [=](float v) { chengine::paramSet(e, g, k, v); });
+                                addFloatSlider(menu, pname, "", lo, hi, def, [=]() { return chengine::paramGet(e, g, k); }, [=](float v) { chengine::paramSet(e, g, k, v); });
                             }));
                     }
                 }
@@ -270,25 +270,19 @@ struct ChaosForgeWidget : ModuleWidget {
 
                 menu->addChild(createSubmenuItem(
                     "Level", string::f("%d%%", chengine::levelGet(e, g)), [=](Menu *menu) {
-                        addIntSlider(menu, "Level", "%", 0.f, 100.f, 100.f,
-                                     [=]() { return chengine::levelGet(e, g); },
-                                     [=](int v) { chengine::levelSet(e, g, v); });
+                        addIntSlider(menu, "Level", "%", 0.f, 100.f, 100.f, [=]() { return chengine::levelGet(e, g); }, [=](int v) { chengine::levelSet(e, g, v); });
                     }));
 
                 menu->addChild(createSubmenuItem(
                     "Offset", string::f("%d%%", chengine::offsetGet(e, g)), [=](Menu *menu) {
-                        addIntSlider(menu, "Offset", "%", -100.f, 100.f, 0.f,
-                                     [=]() { return chengine::offsetGet(e, g); },
-                                     [=](int v) { chengine::offsetSet(e, g, v); });
+                        addIntSlider(menu, "Offset", "%", -100.f, 100.f, 0.f, [=]() { return chengine::offsetGet(e, g); }, [=](int v) { chengine::offsetSet(e, g, v); });
                     }));
 
                 // A one-pole lag on the pair. Rounds the one fast event some of
                 // these systems have (Rössler's z fold) into a swell.
                 menu->addChild(createSubmenuItem(
                     "Smooth", string::f("%d%%", chengine::smoothGet(e, g)), [=](Menu *menu) {
-                        addIntSlider(menu, "Smooth", "%", 0.f, 100.f, 0.f,
-                                     [=]() { return chengine::smoothGet(e, g); },
-                                     [=](int v) { chengine::smoothSet(e, g, v); });
+                        addIntSlider(menu, "Smooth", "%", 0.f, 100.f, 0.f, [=]() { return chengine::smoothGet(e, g); }, [=](int v) { chengine::smoothSet(e, g, v); });
                     }));
 
                 // FIXED scales the jack by the window measured at the system's
@@ -342,9 +336,7 @@ struct ChaosForgeWidget : ModuleWidget {
             "Link", string::f("%d%%", chengine::coupleGet(e)), [=](Menu *menu) {
                 menu->addChild(createSubmenuItem(
                     "Couple", string::f("%d%%", chengine::coupleGet(e)), [=](Menu *menu) {
-                        addIntSlider(menu, "Couple", "%", 0.f, 100.f, 0.f,
-                                     [=]() { return chengine::coupleGet(e); },
-                                     [=](int v) { chengine::coupleSet(e, v); });
+                        addIntSlider(menu, "Couple", "%", 0.f, 100.f, 0.f, [=]() { return chengine::coupleGet(e); }, [=](int v) { chengine::coupleSet(e, v); });
                     }));
 
                 menu->addChild(new MenuSeparator);
@@ -382,9 +374,7 @@ struct ChaosForgeWidget : ModuleWidget {
                         menu->addChild(createSubmenuItem(
                             "Depth", string::f("%d%%", chengine::cvDepthGet(e, in)),
                             [=](Menu *menu) {
-                                addIntSlider(menu, "Depth", "%", 0.f, 100.f, 0.f,
-                                             [=]() { return chengine::cvDepthGet(e, in); },
-                                             [=](int v) { chengine::cvDepthSet(e, in, v); });
+                                addIntSlider(menu, "Depth", "%", 0.f, 100.f, 0.f, [=]() { return chengine::cvDepthGet(e, in); }, [=](int v) { chengine::cvDepthSet(e, in, v); });
                             }));
                     }));
             }

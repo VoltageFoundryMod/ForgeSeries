@@ -103,8 +103,8 @@ struct ClockForgeWidget : ModuleWidget {
         // Emulated OLED over the display cutout.
         forgevcv::FramebufferDisplay *disp = new forgevcv::FramebufferDisplay();
         disp->module = module;
-        disp->box.pos = mm2px(Vec(2.559, 19.776));
-        disp->box.size = mm2px(Vec(25.362, 14.994));
+        disp->box.size = mm2px(Vec(25.500, 14.000));
+        disp->box.pos = mm2px(Vec(2.310, 19.800));
         addChild(disp);
 
         // Encoder (drag to scroll, click to select).

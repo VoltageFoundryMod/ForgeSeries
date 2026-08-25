@@ -128,8 +128,8 @@ struct NoteForgeWidget : ModuleWidget {
         // Emulated OLED over the display cutout.
         forgevcv::FramebufferDisplay *disp = new forgevcv::FramebufferDisplay();
         disp->module = module;
-        disp->box.pos = mm2px(Vec(2.559, 19.776));
-        disp->box.size = mm2px(Vec(25.362, 14.994));
+        disp->box.size = mm2px(Vec(25.500, 14.000));
+        disp->box.pos = mm2px(Vec(2.310, 19.800));
         addChild(disp);
 
         // Encoder (drag to scroll, click to select).
@@ -175,109 +175,101 @@ struct NoteForgeWidget : ModuleWidget {
 
         menu->addChild(createSubmenuItem(string::f("Channel %d", ch + 1),
                                          nfengine::currentNote(e, ch), [=](Menu *menu) {
-            // ── Notes: the live 12-note mask, the real source of truth ────────
-            menu->addChild(createSubmenuItem("Notes", "", [=](Menu *menu) {
-                for (int n = 0; n < 12; n++) {
-                    menu->addChild(createBoolMenuItem(
-                        nfengine::noteName(n), "",
-                        [=]() { return nfengine::noteEnabled(e, ch, n); },
-                        [=](bool v) { nfengine::setNoteEnabled(e, ch, n, v); }));
-                }
-            }));
+                                             // ── Notes: the live 12-note mask, the real source of truth ────────
+                                             menu->addChild(createSubmenuItem("Notes", "", [=](Menu *menu) {
+                                                 for (int n = 0; n < 12; n++) {
+                                                     menu->addChild(createBoolMenuItem(
+                                                         nfengine::noteName(n), "",
+                                                         [=]() { return nfengine::noteEnabled(e, ch, n); },
+                                                         [=](bool v) { nfengine::setNoteEnabled(e, ch, n, v); }));
+                                                 }
+                                             }));
 
-            // ── Scale: applied to the note mask as soon as it is chosen ──────
-            std::vector<std::string> scales;
-            for (int s = 0; s < nfengine::scaleCount(); s++)
-                scales.push_back(nfengine::scaleName(s));
-            menu->addChild(createIndexSubmenuItem(
-                "Scale", scales,
-                [=]() { return (size_t)nfengine::channelScale(e, ch); },
-                [=](size_t s) { nfengine::setChannelScale(e, ch, (int)s); }));
+                                             // ── Scale: applied to the note mask as soon as it is chosen ──────
+                                             std::vector<std::string> scales;
+                                             for (int s = 0; s < nfengine::scaleCount(); s++)
+                                                 scales.push_back(nfengine::scaleName(s));
+                                             menu->addChild(createIndexSubmenuItem(
+                                                 "Scale", scales,
+                                                 [=]() { return (size_t)nfengine::channelScale(e, ch); },
+                                                 [=](size_t s) { nfengine::setChannelScale(e, ch, (int)s); }));
 
-            std::vector<std::string> roots;
-            for (int n = 0; n < 12; n++)
-                roots.push_back(nfengine::noteName(n));
-            menu->addChild(createIndexSubmenuItem(
-                "Root", roots,
-                [=]() { return (size_t)nfengine::channelRoot(e, ch); },
-                [=](size_t r) { nfengine::setChannelRoot(e, ch, (int)r); }));
+                                             std::vector<std::string> roots;
+                                             for (int n = 0; n < 12; n++)
+                                                 roots.push_back(nfengine::noteName(n));
+                                             menu->addChild(createIndexSubmenuItem(
+                                                 "Root", roots,
+                                                 [=]() { return (size_t)nfengine::channelRoot(e, ch); },
+                                                 [=](size_t r) { nfengine::setChannelRoot(e, ch, (int)r); }));
 
-            menu->addChild(new MenuSeparator);
+                                             menu->addChild(new MenuSeparator);
 
-            // ── Pitch ─────────────────────────────────────────────────────────
-            // TRACK follows the input; S&H latches the note on a TRIG edge and
-            // holds it, so nothing the input does between triggers is heard.
-            std::vector<std::string> pitchModes;
-            for (int pm = 0; pm < nfengine::pitchModeCount(); pm++)
-                pitchModes.push_back(nfengine::pitchModeName(pm));
-            menu->addChild(createIndexSubmenuItem(
-                "Pitch mode", pitchModes,
-                [=]() { return (size_t)nfengine::channelPitchMode(e, ch); },
-                [=](size_t pm) { nfengine::setChannelPitchMode(e, ch, (int)pm); }));
+                                             // ── Pitch ─────────────────────────────────────────────────────────
+                                             // TRACK follows the input; S&H latches the note on a TRIG edge and
+                                             // holds it, so nothing the input does between triggers is heard.
+                                             std::vector<std::string> pitchModes;
+                                             for (int pm = 0; pm < nfengine::pitchModeCount(); pm++)
+                                                 pitchModes.push_back(nfengine::pitchModeName(pm));
+                                             menu->addChild(createIndexSubmenuItem(
+                                                 "Pitch mode", pitchModes,
+                                                 [=]() { return (size_t)nfengine::channelPitchMode(e, ch); },
+                                                 [=](size_t pm) { nfengine::setChannelPitchMode(e, ch, (int)pm); }));
 
-            std::vector<std::string> octaves;
-            for (int o = nfengine::octaveMin(); o <= nfengine::octaveMax(); o++)
-                octaves.push_back(o > 0 ? string::f("+%d", o) : string::f("%d", o));
-            int octBase = nfengine::octaveMin();
-            menu->addChild(createIndexSubmenuItem(
-                "Octave", octaves,
-                [=]() { return (size_t)(nfengine::channelOctave(e, ch) - octBase); },
-                [=](size_t o) { nfengine::setChannelOctave(e, ch, (int)o + octBase); }));
+                                             std::vector<std::string> octaves;
+                                             for (int o = nfengine::octaveMin(); o <= nfengine::octaveMax(); o++)
+                                                 octaves.push_back(o > 0 ? string::f("+%d", o) : string::f("%d", o));
+                                             int octBase = nfengine::octaveMin();
+                                             menu->addChild(createIndexSubmenuItem(
+                                                 "Octave", octaves,
+                                                 [=]() { return (size_t)(nfengine::channelOctave(e, ch) - octBase); },
+                                                 [=](size_t o) { nfengine::setChannelOctave(e, ch, (int)o + octBase); }));
 
-            menu->addChild(createSubmenuItem("Glide", string::f("%d%%", nfengine::channelGlide(e, ch)),
-                                             [=](Menu *menu) {
-                addSlider(menu, "Glide", "%", 0.f, 100.f, 0.f,
-                          [=]() { return nfengine::channelGlide(e, ch); },
-                          [=](int v) { nfengine::setChannelGlide(e, ch, v); });
-            }));
+                                             menu->addChild(createSubmenuItem("Glide", string::f("%d%%", nfengine::channelGlide(e, ch)),
+                                                                              [=](Menu *menu) {
+                                                                                  addSlider(menu, "Glide", "%", 0.f, 100.f, 0.f, [=]() { return nfengine::channelGlide(e, ch); }, [=](int v) { nfengine::setChannelGlide(e, ch, v); });
+                                                                              }));
 
-            // How long a new note must hold before the output follows. Suppresses
-            // the notes an input sweeps through on its way between two pitches.
-            menu->addChild(createSubmenuItem("Settle", string::f("%d ms", nfengine::channelSettle(e, ch)),
-                                             [=](Menu *menu) {
-                addSlider(menu, "Settle", " ms", 0.f, (float)nfengine::settleMax(), 5.f,
-                          [=]() { return nfengine::channelSettle(e, ch); },
-                          [=](int v) { nfengine::setChannelSettle(e, ch, v); });
-            }));
+                                             // How long a new note must hold before the output follows. Suppresses
+                                             // the notes an input sweeps through on its way between two pitches.
+                                             menu->addChild(createSubmenuItem("Settle", string::f("%d ms", nfengine::channelSettle(e, ch)),
+                                                                              [=](Menu *menu) {
+                                                                                  addSlider(menu, "Settle", " ms", 0.f, (float)nfengine::settleMax(), 5.f, [=]() { return nfengine::channelSettle(e, ch); }, [=](int v) { nfengine::setChannelSettle(e, ch, v); });
+                                                                              }));
 
-            menu->addChild(createBoolMenuItem(
-                "Follow transpose CV", "",
-                [=]() { return nfengine::channelTranspose(e, ch); },
-                [=](bool v) { nfengine::setChannelTranspose(e, ch, v); }));
+                                             menu->addChild(createBoolMenuItem(
+                                                 "Follow transpose CV", "",
+                                                 [=]() { return nfengine::channelTranspose(e, ch); },
+                                                 [=](bool v) { nfengine::setChannelTranspose(e, ch, v); }));
 
-            menu->addChild(new MenuSeparator);
+                                             menu->addChild(new MenuSeparator);
 
-            // ── Gate / envelope ───────────────────────────────────────────────
-            std::vector<std::string> gateModes;
-            for (int g = 0; g < nfengine::gateModeCount(); g++)
-                gateModes.push_back(nfengine::gateModeName(g));
-            menu->addChild(createIndexSubmenuItem(
-                "Gate mode", gateModes,
-                [=]() { return (size_t)nfengine::channelGateMode(e, ch); },
-                [=](size_t g) { nfengine::setChannelGateMode(e, ch, (int)g); }));
+                                             // ── Gate / envelope ───────────────────────────────────────────────
+                                             std::vector<std::string> gateModes;
+                                             for (int g = 0; g < nfengine::gateModeCount(); g++)
+                                                 gateModes.push_back(nfengine::gateModeName(g));
+                                             menu->addChild(createIndexSubmenuItem(
+                                                 "Gate mode", gateModes,
+                                                 [=]() { return (size_t)nfengine::channelGateMode(e, ch); },
+                                                 [=](size_t g) { nfengine::setChannelGateMode(e, ch, (int)g); }));
 
-            std::vector<std::string> syncModes;
-            for (int s = 0; s < nfengine::syncModeCount(); s++)
-                syncModes.push_back(nfengine::syncModeName(s));
-            menu->addChild(createIndexSubmenuItem(
-                "Sync", syncModes,
-                [=]() { return (size_t)nfengine::channelSyncMode(e, ch); },
-                [=](size_t s) { nfengine::setChannelSyncMode(e, ch, (int)s); }));
+                                             std::vector<std::string> syncModes;
+                                             for (int s = 0; s < nfengine::syncModeCount(); s++)
+                                                 syncModes.push_back(nfengine::syncModeName(s));
+                                             menu->addChild(createIndexSubmenuItem(
+                                                 "Sync", syncModes,
+                                                 [=]() { return (size_t)nfengine::channelSyncMode(e, ch); },
+                                                 [=](size_t s) { nfengine::setChannelSyncMode(e, ch, (int)s); }));
 
-            menu->addChild(createSubmenuItem("Attack", string::f("%d ms", nfengine::channelAttack(e, ch)),
-                                             [=](Menu *menu) {
-                addSlider(menu, "Attack", " ms", 0.f, (float)nfengine::attackMax(), 0.f,
-                          [=]() { return nfengine::channelAttack(e, ch); },
-                          [=](int v) { nfengine::setChannelAttack(e, ch, v); });
-            }));
+                                             menu->addChild(createSubmenuItem("Attack", string::f("%d ms", nfengine::channelAttack(e, ch)),
+                                                                              [=](Menu *menu) {
+                                                                                  addSlider(menu, "Attack", " ms", 0.f, (float)nfengine::attackMax(), 0.f, [=]() { return nfengine::channelAttack(e, ch); }, [=](int v) { nfengine::setChannelAttack(e, ch, v); });
+                                                                              }));
 
-            menu->addChild(createSubmenuItem("Decay", string::f("%d ms", nfengine::channelDecay(e, ch)),
-                                             [=](Menu *menu) {
-                addSlider(menu, "Decay", " ms", 0.f, (float)nfengine::decayMax(), 360.f,
-                          [=]() { return nfengine::channelDecay(e, ch); },
-                          [=](int v) { nfengine::setChannelDecay(e, ch, v); });
-            }));
-        }));
+                                             menu->addChild(createSubmenuItem("Decay", string::f("%d ms", nfengine::channelDecay(e, ch)),
+                                                                              [=](Menu *menu) {
+                                                                                  addSlider(menu, "Decay", " ms", 0.f, (float)nfengine::decayMax(), 360.f, [=]() { return nfengine::channelDecay(e, ch); }, [=](int v) { nfengine::setChannelDecay(e, ch, v); });
+                                                                              }));
+                                         }));
     }
 
     void appendContextMenu(Menu *menu) override {
@@ -312,22 +304,22 @@ struct NoteForgeWidget : ModuleWidget {
         menu->addChild(createSubmenuItem("Input routing",
                                          nfengine::in2RoleName(nfengine::in2RoleGet(eng)),
                                          [=](Menu *menu) {
-            std::vector<std::string> roles;
-            for (int r = 0; r < nfengine::in2RoleCount(); r++)
-                roles.push_back(nfengine::in2RoleName(r));
-            menu->addChild(createIndexSubmenuItem(
-                "IN 2", roles,
-                [=]() { return (size_t)nfengine::in2RoleGet(eng); },
-                [=](size_t r) { nfengine::in2RoleSet(eng, (int)r); }));
+                                             std::vector<std::string> roles;
+                                             for (int r = 0; r < nfengine::in2RoleCount(); r++)
+                                                 roles.push_back(nfengine::in2RoleName(r));
+                                             menu->addChild(createIndexSubmenuItem(
+                                                 "IN 2", roles,
+                                                 [=]() { return (size_t)nfengine::in2RoleGet(eng); },
+                                                 [=](size_t r) { nfengine::in2RoleSet(eng, (int)r); }));
 
-            std::vector<std::string> ranges;
-            for (int r = 0; r < nfengine::transposeRangeCount(); r++)
-                ranges.push_back(nfengine::transposeRangeName(r));
-            menu->addChild(createIndexSubmenuItem(
-                "Transpose range", ranges,
-                [=]() { return (size_t)nfengine::transposeRangeGet(eng); },
-                [=](size_t r) { nfengine::transposeRangeSet(eng, (int)r); }));
-        }));
+                                             std::vector<std::string> ranges;
+                                             for (int r = 0; r < nfengine::transposeRangeCount(); r++)
+                                                 ranges.push_back(nfengine::transposeRangeName(r));
+                                             menu->addChild(createIndexSubmenuItem(
+                                                 "Transpose range", ranges,
+                                                 [=]() { return (size_t)nfengine::transposeRangeGet(eng); },
+                                                 [=](size_t r) { nfengine::transposeRangeSet(eng, (int)r); }));
+                                         }));
 
         for (int ch = 0; ch < 2; ch++)
             appendChannelMenu(menu, m, ch);

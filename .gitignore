@@ -25,6 +25,11 @@ vcv/plugin.dylib
 .pio
 CURRENT.UF2
 
+# Scratch space for build intermediates — .build/panels/ holds each panel SVG
+# after the guide layers and clones are resolved but before Inkscape outlines
+# the text. The committed artefact is apps/<app>/vcv-plugin/res/<Name>.svg.
+.build/
+
 # PlatformIO regenerates both of these into the project root, which is now the
 # repo root. They hold absolute toolchain and home-directory paths, so they are
 # per-machine and must not be committed. tasks.json and extensions.json are
