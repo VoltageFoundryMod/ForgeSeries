@@ -23,7 +23,12 @@ struct NoteForge : forgevcv::ForgeModule {
         GATE2_OUTPUT,
         OUTPUTS_LEN
     };
+    // Output LEDs, one per jack, in the same order as the outputs above.
     enum LightId {
+        LED1_LIGHT,
+        LED2_LIGHT,
+        LED3_LIGHT,
+        LED4_LIGHT,
         LIGHTS_LEN
     };
 
@@ -46,6 +51,10 @@ struct NoteForge : forgevcv::ForgeModule {
         configOutput(CV2_OUTPUT, "Quantized CV 2");
         configOutput(GATE1_OUTPUT, "Gate / envelope 1");
         configOutput(GATE2_OUTPUT, "Gate / envelope 2");
+        configLight(LED1_LIGHT, "Quantized CV 1 level");
+        configLight(LED2_LIGHT, "Quantized CV 2 level");
+        configLight(LED3_LIGHT, "Gate / envelope 1 level");
+        configLight(LED4_LIGHT, "Gate / envelope 2 level");
         nf = new nfengine::VcvEngine();
         engine = nf; // base takes ownership
     }
@@ -63,6 +72,11 @@ struct NoteForge : forgevcv::ForgeModule {
 
         for (int i = 0; i < 4; i++)
             outputs[CV1_OUTPUT + i].setVoltage(outHold[i]);
+
+        // Panel LEDs sit on the output pins themselves — see updateOutputLights.
+        // The two CV jacks carry pitch, so their LEDs read as a lit-above-middle-C
+        // indicator rather than as activity. That is what the hardware does.
+        updateOutputLights(LED1_LIGHT, 4, args.sampleTime);
     }
 
     json_t *dataToJson() override {
@@ -116,15 +130,19 @@ struct NoteForgeWidget : ModuleWidget {
         addChild(createWidget<ScrewBlack>(Vec(RACK_GRID_WIDTH, 0)));
         addChild(createWidget<ScrewBlack>(Vec(RACK_GRID_WIDTH, RACK_GRID_HEIGHT - RACK_GRID_WIDTH)));
 
-        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(15.2405, 66.795)), module, NoteForge::TRIG_INPUT));
-        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(7.153, 80.797)), module, NoteForge::CV1_INPUT));
-        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(22.647, 80.797)), module, NoteForge::CV2_INPUT));
+        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(15.060, 66.795)), module, NoteForge::TRIG_INPUT));
+        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(7.547, 80.797)), module, NoteForge::CV1_INPUT));
+        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(22.787, 80.797)), module, NoteForge::CV2_INPUT));
 
-        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.412, 95.068)), module, NoteForge::CV1_OUTPUT));
-        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.652, 95.068)), module, NoteForge::CV2_OUTPUT));
-        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.407, 109.34)), module, NoteForge::GATE1_OUTPUT));
-        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.647, 109.34)), module, NoteForge::GATE2_OUTPUT));
+        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.595f, 95.199f)), module, NoteForge::CV1_OUTPUT));
+        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.866f, 95.199f)), module, NoteForge::CV2_OUTPUT));
+        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.595f, 109.399f)), module, NoteForge::GATE1_OUTPUT));
+        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.866f, 109.399f)), module, NoteForge::GATE2_OUTPUT));
 
+        addChild(createLightCentered<SmallSimpleLight<RedLight>>(mm2px(Vec(7.595f, 89.383f)), module, NoteForge::LED1_LIGHT));
+        addChild(createLightCentered<SmallSimpleLight<RedLight>>(mm2px(Vec(22.866f, 89.383f)), module, NoteForge::LED2_LIGHT));
+        addChild(createLightCentered<SmallSimpleLight<RedLight>>(mm2px(Vec(7.595f, 103.604f)), module, NoteForge::LED3_LIGHT));
+        addChild(createLightCentered<SmallSimpleLight<RedLight>>(mm2px(Vec(22.866f, 103.604f)), module, NoteForge::LED4_LIGHT));
         // Emulated OLED over the display cutout.
         forgevcv::FramebufferDisplay *disp = new forgevcv::FramebufferDisplay();
         disp->module = module;
@@ -136,7 +154,7 @@ struct NoteForgeWidget : ModuleWidget {
         forgevcv::EncoderKnob *enc = new forgevcv::EncoderKnob();
         enc->module = module;
         enc->box.size = mm2px(Vec(9.0, 9.0));
-        enc->box.pos = mm2px(Vec(15.24, 50.918)).minus(enc->box.size.div(2));
+        enc->box.pos = mm2px(Vec(15.060, 50.918)).minus(enc->box.size.div(2));
         addChild(enc);
         encoder = enc;
     }

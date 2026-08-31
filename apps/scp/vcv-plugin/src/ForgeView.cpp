@@ -29,7 +29,14 @@ struct ForgeView : forgevcv::ForgeModule {
         OUT4_OUTPUT, // additional CV 2 through
         OUTPUTS_LEN
     };
-    enum LightId { LIGHTS_LEN };
+    // Output LEDs, one per jack, in the same order as the outputs above.
+    enum LightId {
+        LED1_LIGHT,
+        LED2_LIGHT,
+        LED3_LIGHT,
+        LED4_LIGHT,
+        LIGHTS_LEN
+    };
 
     fvengine::Engine *fv = nullptr; // scope firmware engine (module-specific API)
     int feedDecim = 0;
@@ -44,6 +51,10 @@ struct ForgeView : forgevcv::ForgeModule {
         configOutput(OUT2_OUTPUT, "CV 2 through");
         configOutput(OUT3_OUTPUT, "CV 1 through");
         configOutput(OUT4_OUTPUT, "CV 2 through");
+        configLight(LED1_LIGHT, "CV 1 through level");
+        configLight(LED2_LIGHT, "CV 2 through level");
+        configLight(LED3_LIGHT, "CV 1 through level");
+        configLight(LED4_LIGHT, "CV 2 through level");
         cvRange = CV_UNIPOLAR; // Use the 0–5V range by default (matches the hardware's input scaling). User can change it in the context menu.
         fv = fvengine::createEngine();
     }
@@ -73,6 +84,14 @@ struct ForgeView : forgevcv::ForgeModule {
         outputs[OUT2_OUTPUT].setVoltage(inputs[CV2IN_INPUT].getVoltage());
         outputs[OUT3_OUTPUT].setVoltage(inputs[CV1IN_INPUT].getVoltage());
         outputs[OUT4_OUTPUT].setVoltage(inputs[CV2IN_INPUT].getVoltage());
+
+        // Panel LEDs. Unlike the other modules there is no outHold to read here:
+        // the through jacks are driven from the inputs, not from the DAC. The
+        // hardware LED hangs off the jack net rather than the DAC pin, so it
+        // lights from the pass-through all the same — read the jacks back.
+        for (int i = 0; i < 4; i++)
+            lights[LED1_LIGHT + i].setBrightnessSmooth(
+                outputLedBrightness(outputs[OUT1_OUTPUT + i].getVoltage()), args.sampleTime);
 
         // Feed the acquisition engine at control rate.
         if (++feedDecim >= ENGINE_DECIM) {
@@ -158,15 +177,19 @@ struct ForgeViewWidget : ModuleWidget {
         addChild(createWidget<ScrewBlack>(Vec(RACK_GRID_WIDTH, 0)));
         addChild(createWidget<ScrewBlack>(Vec(RACK_GRID_WIDTH, RACK_GRID_HEIGHT - RACK_GRID_WIDTH)));
 
-        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(15.2405, 66.795)), module, ForgeView::CLKIN_INPUT));
-        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(7.153, 80.797)), module, ForgeView::CV1IN_INPUT));
-        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(22.647, 80.797)), module, ForgeView::CV2IN_INPUT));
+        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(15.060, 66.795)), module, ForgeView::CLKIN_INPUT));
+        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(7.547, 80.797)), module, ForgeView::CV1IN_INPUT));
+        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(22.787, 80.797)), module, ForgeView::CV2IN_INPUT));
 
-        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.412, 95.068)), module, ForgeView::OUT1_OUTPUT));
-        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.652, 95.068)), module, ForgeView::OUT2_OUTPUT));
-        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.412, 109.34)), module, ForgeView::OUT3_OUTPUT));
-        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.652, 109.34)), module, ForgeView::OUT4_OUTPUT));
+        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.595f, 95.199f)), module, ForgeView::OUT1_OUTPUT));
+        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.866f, 95.199f)), module, ForgeView::OUT2_OUTPUT));
+        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.595f, 109.399f)), module, ForgeView::OUT3_OUTPUT));
+        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.866f, 109.399f)), module, ForgeView::OUT4_OUTPUT));
 
+        addChild(createLightCentered<SmallSimpleLight<RedLight>>(mm2px(Vec(7.595f, 89.383f)), module, ForgeView::LED1_LIGHT));
+        addChild(createLightCentered<SmallSimpleLight<RedLight>>(mm2px(Vec(22.866f, 89.383f)), module, ForgeView::LED2_LIGHT));
+        addChild(createLightCentered<SmallSimpleLight<RedLight>>(mm2px(Vec(7.595f, 103.604f)), module, ForgeView::LED3_LIGHT));
+        addChild(createLightCentered<SmallSimpleLight<RedLight>>(mm2px(Vec(22.866f, 103.604f)), module, ForgeView::LED4_LIGHT));
         // Emulated OLED over the display cutout.
         forgevcv::FramebufferDisplay *disp = new forgevcv::FramebufferDisplay();
         disp->module = module;
@@ -178,7 +201,7 @@ struct ForgeViewWidget : ModuleWidget {
         forgevcv::EncoderKnob *enc = new forgevcv::EncoderKnob();
         enc->module = module;
         enc->box.size = mm2px(Vec(9.0, 9.0));
-        enc->box.pos = mm2px(Vec(15.24, 50.918)).minus(enc->box.size.div(2));
+        enc->box.pos = mm2px(Vec(15.060, 50.918)).minus(enc->box.size.div(2));
         addChild(enc);
         encoder = enc;
     }

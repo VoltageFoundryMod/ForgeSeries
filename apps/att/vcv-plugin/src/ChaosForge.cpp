@@ -23,7 +23,16 @@ struct ChaosForge : forgevcv::ForgeModule {
         B2_OUTPUT, // generator B, second axis
         OUTPUTS_LEN
     };
+    // Output LEDs, in JACK order — top-left, top-right, bottom-left,
+    // bottom-right — because that is where they physically sit on the panel and
+    // what outHold is indexed by. It is not the port-id order above: those two
+    // genuinely differ here (see process()), and an LED belongs to a hole in the
+    // panel, not to a patch cable's id.
     enum LightId {
+        LED1_LIGHT, // top-left,     A1
+        LED2_LIGHT, // top-right,    B1
+        LED3_LIGHT, // bottom-left,  A2
+        LED4_LIGHT, // bottom-right, B2
         LIGHTS_LEN
     };
 
@@ -40,6 +49,10 @@ struct ChaosForge : forgevcv::ForgeModule {
         configOutput(A2_OUTPUT, "Generator A, second axis");
         configOutput(B1_OUTPUT, "Generator B, first axis");
         configOutput(B2_OUTPUT, "Generator B, second axis");
+        configLight(LED1_LIGHT, "Generator A, first axis level");
+        configLight(LED2_LIGHT, "Generator B, first axis level");
+        configLight(LED3_LIGHT, "Generator A, second axis level");
+        configLight(LED4_LIGHT, "Generator B, second axis level");
         cf = new chengine::VcvEngine();
         engine = cf; // base takes ownership
     }
@@ -69,6 +82,9 @@ struct ChaosForge : forgevcv::ForgeModule {
         outputs[B1_OUTPUT].setVoltage(outHold[1]); // top-right
         outputs[A2_OUTPUT].setVoltage(outHold[2]); // bottom-left
         outputs[B2_OUTPUT].setVoltage(outHold[3]); // bottom-right
+
+        // The LEDs are in jack order, so they take outHold straight.
+        updateOutputLights(LED1_LIGHT, 4, args.sampleTime);
     }
 
     json_t *dataToJson() override {
@@ -147,18 +163,22 @@ struct ChaosForgeWidget : ModuleWidget {
 
         // Jack positions match the shared Forge Series hardware, so these are the
         // same coordinates every other module in the series uses.
-        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(15.2405, 66.795)), module, ChaosForge::TRIG_INPUT));
-        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(7.153, 80.797)), module, ChaosForge::CV1_INPUT));
-        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(22.647, 80.797)), module, ChaosForge::CV2_INPUT));
+        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(15.060, 66.720)), module, ChaosForge::TRIG_INPUT));
+        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(7.547, 80.723)), module, ChaosForge::CV1_INPUT));
+        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(22.787, 80.723)), module, ChaosForge::CV2_INPUT));
 
         // Generator A down the left column, B down the right — see the jack map
         // in lib/engine.hpp. The panel silkscreen reads A1/A2 on the left and
-        // B1/B2 on the right to match.
-        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.412, 95.068)), module, ChaosForge::A1_OUTPUT));
-        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.652, 95.068)), module, ChaosForge::B1_OUTPUT));
-        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.407, 109.34)), module, ChaosForge::A2_OUTPUT));
-        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.647, 109.34)), module, ChaosForge::B2_OUTPUT));
+        // B1/B2 on the right to match.;
+        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.595f, 95.199f)), module, ChaosForge::A1_OUTPUT));
+        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.866f, 95.199f)), module, ChaosForge::B1_OUTPUT));
+        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.595f, 109.399f)), module, ChaosForge::A2_OUTPUT));
+        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.866f, 109.399f)), module, ChaosForge::B2_OUTPUT));
 
+        addChild(createLightCentered<SmallSimpleLight<RedLight>>(mm2px(Vec(7.595f, 89.383f)), module, ChaosForge::LED1_LIGHT));
+        addChild(createLightCentered<SmallSimpleLight<RedLight>>(mm2px(Vec(22.866f, 89.383f)), module, ChaosForge::LED2_LIGHT));
+        addChild(createLightCentered<SmallSimpleLight<RedLight>>(mm2px(Vec(7.595f, 103.604f)), module, ChaosForge::LED3_LIGHT));
+        addChild(createLightCentered<SmallSimpleLight<RedLight>>(mm2px(Vec(22.866f, 103.604f)), module, ChaosForge::LED4_LIGHT));
         // Emulated OLED, sized to the SSD1306's *active area* rather than the
         // panel cutout: 128x64 pixels on a 0.17 mm square pitch = 21.744 x
         // 10.872 mm, i.e. exactly 2:1, which is the aspect FramebufferDisplay
@@ -168,14 +188,14 @@ struct ChaosForgeWidget : ModuleWidget {
         forgevcv::FramebufferDisplay *disp = new forgevcv::FramebufferDisplay();
         disp->module = module;
         disp->box.size = mm2px(Vec(25.500, 14.000));
-        disp->box.pos = mm2px(Vec(2.310, 19.800));
+        disp->box.pos = mm2px(Vec(2.310, 19.726));
         addChild(disp);
 
         // Encoder (drag to scroll, click to select).
         forgevcv::EncoderKnob *enc = new forgevcv::EncoderKnob();
         enc->module = module;
         enc->box.size = mm2px(Vec(9.0, 9.0));
-        enc->box.pos = mm2px(Vec(15.24, 50.918)).minus(enc->box.size.div(2));
+        enc->box.pos = mm2px(Vec(15.060, 50.844)).minus(enc->box.size.div(2));
         addChild(enc);
         encoder = enc;
     }

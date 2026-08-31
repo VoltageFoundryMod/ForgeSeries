@@ -10,7 +10,8 @@
 // A firmware's module subclasses this, declares its own Input/Output/Param/Light
 // enums, constructs a concrete IEngine into `engine`, and implements process()
 // as: gather CV (via mapCvInput) + clock level -> stepEngine(...) -> write
-// outHold to its outputs. dataToJson/dataFromJson call baseToJson/baseFromJson.
+// outHold to its outputs -> updateOutputLights(...) for the panel LEDs.
+// dataToJson/dataFromJson call baseToJson/baseFromJson.
 
 #include <rack.hpp>
 
@@ -25,6 +26,27 @@ using namespace rack;
 
 // Maximum DAC channels on the ForgeSeries hardware profile (MCP4728).
 static const int FORGE_MAX_OUT = 4;
+
+// ── Panel LED transfer curve ─────────────────────────────────────────────────
+// Taken from the hardware rather than invented: each output pin drives a BC547
+// base through 100k, emitter to ground, with the LED and a 330R series resistor
+// hanging off the collector on the 3.3 V rail. Two numbers fall out of that, and
+// they are the whole model.
+//
+// Below the base-emitter drop the transistor is off, so the LED is dark. Above
+// it, collector current is beta * (V - Vbe) / 100k — but the collector branch
+// can only ever pass (3.3 V - Vf - Vce_sat) / 330R, about 3.5 mA, which that
+// reaches at roughly 1.9 V. From there to the 5 V top of the range the LED is
+// simply saturated: an output at 2 V and one at 5 V look the same on the panel.
+//
+// The saturation point moves with the transistor's gain (~2.5 V at hFE 200,
+// ~1.5 V at 450, so 1.9 V is the middle of a BC547B), which is inherent to a
+// common-emitter driver and not worth chasing. Refitting the base resistor is
+// what would move it far: the value is beta * (5 V - Vbe) / Rbase-ish, so a 330k
+// base would push it to the top of the range and make the LED track the whole
+// 0..5 V span.
+static const float FORGE_LED_ON_VOLTS = 0.7f;   // Vbe — dark below this
+static const float FORGE_LED_FULL_VOLTS = 1.9f; // saturated above this
 
 struct ForgeModule : Module {
     // Owned engine handle; the subclass creates it, this base deletes it.
@@ -104,6 +126,36 @@ struct ForgeModule : Module {
             engine->process(dt, cv, nCv, clockHigh, outHold, nOut);
             engine->getFramebuffer(fb);
         }
+    }
+
+    // ── Output LEDs ──────────────────────────────────────────────────────────
+    // Mirror the outputs onto the panel LEDs. On the hardware an LED hangs off
+    // each output pin through a transistor, so it is not something the firmware
+    // drives: it glows with whatever voltage the DAC is putting out. Emulate the
+    // driver's actual transfer curve (see FORGE_LED_ON_VOLTS above) rather than
+    // brightness-equals-volts, so a gate blinks, a disabled output sits dark,
+    // and an envelope shows only the part of its shape the real LED resolves —
+    // the bottom two volts — instead of a fade the panel never performs.
+    //
+    // Call once per process() with args.sampleTime, passing the first of a
+    // contiguous run of light ids (LED1_LIGHT). The smoothing slows only the
+    // *fall*: a rise applies immediately, so a trigger shorter than a frame
+    // still lights the LED fully and then decays, the way the real LED and the
+    // eye do between frames. It reads outHold, so an LED follows its jack
+    // whether or not anything is patched into it — as on the hardware.
+    void updateOutputLights(int firstLight, int nOut, float sampleTime) {
+        for (int i = 0; i < nOut && i < FORGE_MAX_OUT; i++)
+            lights[firstLight + i].setBrightnessSmooth(
+                outputLedBrightness(outHold[i]), sampleTime);
+    }
+
+    // The curve on its own, for a module whose jacks are not driven from outHold
+    // — ForgeView's buffered pass-throughs, say. The hardware LED senses the jack
+    // net rather than the DAC pin, so feeding it the voltage actually leaving the
+    // module is the faithful thing either way.
+    static float outputLedBrightness(float volts) {
+        const float span = FORGE_LED_FULL_VOLTS - FORGE_LED_ON_VOLTS;
+        return clamp((volts - FORGE_LED_ON_VOLTS) / span, 0.f, 1.f);
     }
 
     // Serialize the shared state (EEPROM blob + host settings) into a patch. The

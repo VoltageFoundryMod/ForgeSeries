@@ -23,7 +23,12 @@ struct GravityForge : forgevcv::ForgeModule {
         GATEB_OUTPUT,
         OUTPUTS_LEN
     };
+    // Output LEDs, one per jack, in the same order as the outputs above.
     enum LightId {
+        LED1_LIGHT,
+        LED2_LIGHT,
+        LED3_LIGHT,
+        LED4_LIGHT,
         LIGHTS_LEN
     };
 
@@ -40,6 +45,10 @@ struct GravityForge : forgevcv::ForgeModule {
         configOutput(CVB_OUTPUT, "Pitch CV B");
         configOutput(GATEA_OUTPUT, "Gate / envelope A");
         configOutput(GATEB_OUTPUT, "Gate / envelope B");
+        configLight(LED1_LIGHT, "Pitch CV A level");
+        configLight(LED2_LIGHT, "Pitch CV B level");
+        configLight(LED3_LIGHT, "Gate / envelope A level");
+        configLight(LED4_LIGHT, "Gate / envelope B level");
         gf = new gfengine::VcvEngine();
         engine = gf; // base takes ownership
     }
@@ -56,6 +65,9 @@ struct GravityForge : forgevcv::ForgeModule {
 
         for (int i = 0; i < 4; i++)
             outputs[CVA_OUTPUT + i].setVoltage(outHold[i]);
+
+        // Panel LEDs sit on the output pins themselves — see updateOutputLights.
+        updateOutputLights(LED1_LIGHT, 4, args.sampleTime);
     }
 
     json_t *dataToJson() override {
@@ -100,15 +112,19 @@ struct GravityForgeWidget : ModuleWidget {
 
         // Jack positions match the shared Forge Series hardware, so these are the
         // same coordinates NoteForge and ClockForge use.
-        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(15.2405, 66.795)), module, GravityForge::TRIG_INPUT));
-        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(7.153, 80.797)), module, GravityForge::CV1_INPUT));
-        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(22.647, 80.797)), module, GravityForge::CV2_INPUT));
+        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(15.060, 66.795)), module, GravityForge::TRIG_INPUT));
+        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(7.547, 80.797)), module, GravityForge::CV1_INPUT));
+        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(22.787, 80.797)), module, GravityForge::CV2_INPUT));
 
-        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.412, 95.068)), module, GravityForge::CVA_OUTPUT));
-        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.652, 95.068)), module, GravityForge::CVB_OUTPUT));
-        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.407, 109.34)), module, GravityForge::GATEA_OUTPUT));
-        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.647, 109.34)), module, GravityForge::GATEB_OUTPUT));
+        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.595f, 95.199f)), module, GravityForge::CVA_OUTPUT));
+        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.866f, 95.199f)), module, GravityForge::CVB_OUTPUT));
+        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.595f, 109.399f)), module, GravityForge::GATEA_OUTPUT));
+        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.866f, 109.399f)), module, GravityForge::GATEB_OUTPUT));
 
+        addChild(createLightCentered<SmallSimpleLight<RedLight>>(mm2px(Vec(7.595f, 89.383f)), module, GravityForge::LED1_LIGHT));
+        addChild(createLightCentered<SmallSimpleLight<RedLight>>(mm2px(Vec(22.866f, 89.383f)), module, GravityForge::LED2_LIGHT));
+        addChild(createLightCentered<SmallSimpleLight<RedLight>>(mm2px(Vec(7.595f, 103.604f)), module, GravityForge::LED3_LIGHT));
+        addChild(createLightCentered<SmallSimpleLight<RedLight>>(mm2px(Vec(22.866f, 103.604f)), module, GravityForge::LED4_LIGHT));
         // Emulated OLED over the display cutout.
         forgevcv::FramebufferDisplay *disp = new forgevcv::FramebufferDisplay();
         disp->module = module;
@@ -120,7 +136,7 @@ struct GravityForgeWidget : ModuleWidget {
         forgevcv::EncoderKnob *enc = new forgevcv::EncoderKnob();
         enc->module = module;
         enc->box.size = mm2px(Vec(9.0, 9.0));
-        enc->box.pos = mm2px(Vec(15.24, 50.918)).minus(enc->box.size.div(2));
+        enc->box.pos = mm2px(Vec(15.060, 50.918)).minus(enc->box.size.div(2));
         addChild(enc);
         encoder = enc;
     }

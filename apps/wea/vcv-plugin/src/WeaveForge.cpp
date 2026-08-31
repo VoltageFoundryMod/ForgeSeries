@@ -27,7 +27,12 @@ struct WeaveForge : forgevcv::ForgeModule {
         B2_OUTPUT, // bottom-right
         OUTPUTS_LEN
     };
+    // Output LEDs, one per jack, in the same order as the outputs above.
     enum LightId {
+        LED1_LIGHT,
+        LED2_LIGHT,
+        LED3_LIGHT,
+        LED4_LIGHT,
         LIGHTS_LEN
     };
 
@@ -47,6 +52,10 @@ struct WeaveForge : forgevcv::ForgeModule {
         configOutput(B1_OUTPUT, "B1");
         configOutput(A2_OUTPUT, "A2");
         configOutput(B2_OUTPUT, "B2");
+        configLight(LED1_LIGHT, "A1 level");
+        configLight(LED2_LIGHT, "B1 level");
+        configLight(LED3_LIGHT, "A2 level");
+        configLight(LED4_LIGHT, "B2 level");
         wf = new wvengine::VcvEngine();
         engine = wf; // base takes ownership
     }
@@ -67,6 +76,9 @@ struct WeaveForge : forgevcv::ForgeModule {
         // ChaosForge, whose port ids predate its column layout.
         for (int i = 0; i < 4; i++)
             outputs[A1_OUTPUT + i].setVoltage(outHold[i]);
+
+        // Panel LEDs sit on the output pins themselves — see updateOutputLights.
+        updateOutputLights(LED1_LIGHT, 4, args.sampleTime);
     }
 
     json_t *dataToJson() override {
@@ -110,27 +122,31 @@ struct WeaveForgeWidget : ModuleWidget {
 
         // Jack positions match the shared Forge Series hardware, so these are the
         // same coordinates every other module in the series uses.
-        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(15.2405, 66.795)), module, WeaveForge::CLOCK_INPUT));
-        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(7.153, 80.797)), module, WeaveForge::CV1_INPUT));
-        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(22.647, 80.797)), module, WeaveForge::CV2_INPUT));
+        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(15.060, 66.721)), module, WeaveForge::CLOCK_INPUT));
+        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(7.547, 80.723)), module, WeaveForge::CV1_INPUT));
+        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(22.787, 80.723)), module, WeaveForge::CV2_INPUT));
 
-        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.412, 95.068)), module, WeaveForge::A1_OUTPUT));
-        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.652, 95.068)), module, WeaveForge::B1_OUTPUT));
-        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.407, 109.34)), module, WeaveForge::A2_OUTPUT));
-        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.647, 109.34)), module, WeaveForge::B2_OUTPUT));
+        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.595f, 95.199f)), module, WeaveForge::A1_OUTPUT));
+        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.866f, 95.199f)), module, WeaveForge::B1_OUTPUT));
+        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.595f, 109.399f)), module, WeaveForge::A2_OUTPUT));
+        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.866f, 109.399f)), module, WeaveForge::B2_OUTPUT));
 
+        addChild(createLightCentered<SmallSimpleLight<RedLight>>(mm2px(Vec(7.595f, 89.383f)), module, WeaveForge::LED1_LIGHT));
+        addChild(createLightCentered<SmallSimpleLight<RedLight>>(mm2px(Vec(22.866f, 89.383f)), module, WeaveForge::LED2_LIGHT));
+        addChild(createLightCentered<SmallSimpleLight<RedLight>>(mm2px(Vec(7.595f, 103.604f)), module, WeaveForge::LED3_LIGHT));
+        addChild(createLightCentered<SmallSimpleLight<RedLight>>(mm2px(Vec(22.866f, 103.604f)), module, WeaveForge::LED4_LIGHT));
         // Emulated OLED over the display cutout.
         forgevcv::FramebufferDisplay *disp = new forgevcv::FramebufferDisplay();
         disp->module = module;
         disp->box.size = mm2px(Vec(25.500, 14.000));
-        disp->box.pos = mm2px(Vec(2.310, 19.800));
+        disp->box.pos = mm2px(Vec(2.310, 19.726));
         addChild(disp);
 
         // Encoder (drag to scroll, click to select).
         forgevcv::EncoderKnob *enc = new forgevcv::EncoderKnob();
         enc->module = module;
         enc->box.size = mm2px(Vec(9.0, 9.0));
-        enc->box.pos = mm2px(Vec(15.24, 50.918)).minus(enc->box.size.div(2));
+        enc->box.pos = mm2px(Vec(15.060, 50.844)).minus(enc->box.size.div(2));
         addChild(enc);
         encoder = enc;
     }

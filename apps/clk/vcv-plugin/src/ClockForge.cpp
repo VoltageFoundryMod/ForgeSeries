@@ -22,6 +22,10 @@ struct ClockForge : forgevcv::ForgeModule {
         OUTPUTS_LEN
     };
     enum LightId {
+        LED1_LIGHT,
+        LED2_LIGHT,
+        LED3_LIGHT,
+        LED4_LIGHT,
         LIGHTS_LEN
     };
 
@@ -38,6 +42,10 @@ struct ClockForge : forgevcv::ForgeModule {
         configOutput(OUT2_OUTPUT, "Out 2");
         configOutput(OUT3_OUTPUT, "Out 3");
         configOutput(OUT4_OUTPUT, "Out 4");
+        configLight(LED1_LIGHT, "Out 1 level");
+        configLight(LED2_LIGHT, "Out 2 level");
+        configLight(LED3_LIGHT, "Out 3 level");
+        configLight(LED4_LIGHT, "Out 4 level");
         cf = new cfengine::VcvEngine();
         engine = cf; // base takes ownership
     }
@@ -51,6 +59,9 @@ struct ClockForge : forgevcv::ForgeModule {
 
         for (int i = 0; i < 4; i++)
             outputs[OUT1_OUTPUT + i].setVoltage(outHold[i]);
+
+        // Panel LEDs sit on the output pins themselves — see updateOutputLights.
+        updateOutputLights(LED1_LIGHT, 4, args.sampleTime);
     }
 
     json_t *dataToJson() override {
@@ -91,14 +102,19 @@ struct ClockForgeWidget : ModuleWidget {
         addChild(createWidget<ScrewBlack>(Vec(RACK_GRID_WIDTH, 0)));
         addChild(createWidget<ScrewBlack>(Vec(RACK_GRID_WIDTH, RACK_GRID_HEIGHT - RACK_GRID_WIDTH)));
 
-        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(15.2405, 66.795)), module, ClockForge::CLKIN_INPUT));
-        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(7.153, 80.797)), module, ClockForge::CV1IN_INPUT));
-        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(22.647, 80.797)), module, ClockForge::CV2IN_INPUT));
+        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(15.060, 66.795)), module, ClockForge::CLKIN_INPUT));
+        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(7.547, 80.797)), module, ClockForge::CV1IN_INPUT));
+        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(22.787, 80.797)), module, ClockForge::CV2IN_INPUT));
 
-        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.412, 95.068)), module, ClockForge::OUT1_OUTPUT));
-        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.652, 95.068)), module, ClockForge::OUT2_OUTPUT));
-        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.407, 109.34)), module, ClockForge::OUT3_OUTPUT));
-        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.647, 109.34)), module, ClockForge::OUT4_OUTPUT));
+        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.595f, 95.199f)), module, ClockForge::OUT1_OUTPUT));
+        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.866f, 95.199f)), module, ClockForge::OUT2_OUTPUT));
+        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.595f, 109.399f)), module, ClockForge::OUT3_OUTPUT));
+        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.866f, 109.399f)), module, ClockForge::OUT4_OUTPUT));
+
+        addChild(createLightCentered<SmallSimpleLight<RedLight>>(mm2px(Vec(7.595f, 89.383f)), module, ClockForge::LED1_LIGHT));
+        addChild(createLightCentered<SmallSimpleLight<RedLight>>(mm2px(Vec(22.866f, 89.383f)), module, ClockForge::LED2_LIGHT));
+        addChild(createLightCentered<SmallSimpleLight<RedLight>>(mm2px(Vec(7.595f, 103.604f)), module, ClockForge::LED3_LIGHT));
+        addChild(createLightCentered<SmallSimpleLight<RedLight>>(mm2px(Vec(22.866f, 103.604f)), module, ClockForge::LED4_LIGHT));
 
         // Emulated OLED over the display cutout.
         forgevcv::FramebufferDisplay *disp = new forgevcv::FramebufferDisplay();
@@ -111,7 +127,7 @@ struct ClockForgeWidget : ModuleWidget {
         forgevcv::EncoderKnob *enc = new forgevcv::EncoderKnob();
         enc->module = module;
         enc->box.size = mm2px(Vec(9.0, 9.0));
-        enc->box.pos = mm2px(Vec(15.24, 50.918)).minus(enc->box.size.div(2));
+        enc->box.pos = mm2px(Vec(15.060, 50.918)).minus(enc->box.size.div(2));
         addChild(enc);
         encoder = enc;
     }
