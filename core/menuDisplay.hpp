@@ -116,6 +116,81 @@ static inline void MD_PageEnd() {
     RedrawDisplay();
 }
 
+// ── Two-column page renderer ──────────────────────────────────
+// A page whose items are ROW_TWOCOL/ROW_HIDDEN pairs, under a row of column
+// headers with an indicator arrow marking which column the encoder is editing.
+// ClockForge has several of these (level/offset, state/invert, swing, cross
+// ops, phase/duty) and they were five copies of the same 28 lines.
+//
+// Each column is described by its header text, the x the header prints at, and
+// the x its indicator arrow sits at. The arrow x is passed rather than derived
+// because the existing pages do not agree on the gap (some use 5px, some 6px)
+// and this renderer has to reproduce them exactly.
+struct MD_ColSpec {
+    const char *hdr; // column header text
+    int hdrX;        // x the header prints at
+    int arrowX;      // x the active-column indicator sits at
+};
+
+// WHICH COLUMN IS ACTIVE is read off the item's own rowStyle, never off the
+// parity of its item number.
+//
+// Every one of these pages used to test `menuItem % 2`, which worked only
+// because of where the rows happened to land in MENU_ITEMS[] — and already had
+// to be inverted for cross ops, whose rows start on an odd number. Any
+// reordering of the menu silently pointed the arrow at the wrong column, with
+// nothing to catch it. The pairing itself is what the test should read: the
+// ROW_TWOCOL item owns the left column and its ROW_HIDDEN partner the right.
+//
+// `allowEdit` is false for pages built from MENU_TOGGLE items, which never
+// enter edit mode and so always draw a hollow cursor.
+// startY is where the COLUMN HEADER goes, one row above the page grid, so the
+// data rows beneath it land on exactly the same y values a single-column page
+// uses. Scrolling between the two kinds of page then moves the cursor down a
+// row rather than nudging every label a pixel or two sideways of where the eye
+// left it — these pages sat at three different offsets before.
+//
+// Derived rather than written down, so it follows MD_START_Y if that moves.
+static bool MD_RenderTwoColPage(const char *title,
+                                int curItem, // 1-based menuItem
+                                int curMode, // menuMode
+                                int groupId,
+                                MD_ColSpec c1, MD_ColSpec c2,
+                                bool allowEdit,
+                                int startY = MD_START_Y - MD_ROW_H) {
+    MD_PageBegin(title, startY);
+
+    display.setCursor(c1.hdrX, _md_rowY);
+    display.println(c1.hdr);
+    display.setCursor(c2.hdrX, _md_rowY);
+    display.println(c2.hdr);
+
+    const bool leftActive =
+        (curItem >= 1 && curItem <= MENU_ITEM_COUNT)
+            ? (MENU_ITEMS[curItem - 1].rowStyle != ROW_HIDDEN)
+            : true;
+    const int ax = leftActive ? c1.arrowX : c2.arrowX;
+    display.fillTriangle(ax, _md_rowY, ax, _md_rowY + 6, ax + 3, _md_rowY + 3, 1);
+    _md_rowY += MD_ROW_H;
+
+    // One visible row per pair: the ROW_TWOCOL item draws both values, and the
+    // cursor shows on it when either half of the pair is selected.
+    for (int i = 0; i < MENU_ITEM_COUNT; i++) {
+        const MenuItem &mi = MENU_ITEMS[i];
+        if (mi.group != groupId || mi.rowStyle == ROW_HIDDEN)
+            continue;
+        const int idx = i + 1;     // the ROW_TWOCOL item
+        const int idxPair = idx + 1; // its ROW_HIDDEN partner
+        const bool sel = (idx == curItem || idxPair == curItem);
+        const bool edit = allowEdit && sel && (curMode == curItem);
+        MD_TwoColRow(mi.label,
+                     mi.valueFn ? mi.valueFn() : String(""), mi.valueFn != nullptr,
+                     mi.valueFn2 ? mi.valueFn2() : String(""), mi.valueFn2 != nullptr,
+                     mi.col1x, mi.col2x, sel, edit);
+    }
+    return true;
+}
+
 // ── Generic group renderer ────────────────────────────────────
 // Renders all items that share a group id using their rowStyle /
 // valueFn / valueFn2 / label fields.  Every non-home page in this

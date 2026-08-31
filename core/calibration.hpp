@@ -61,7 +61,23 @@ static const int CAL_DAC_LOW_CODE = MAXDAC * CAL_DAC_LOW_MV / 5000; // = 819 cou
 // Jack names for the prompts. Physical, not module-flavoured: the wizard runs
 // from the module selector, before an app has been chosen, so "OUT 3" is the
 // only name that is true whichever one you go on to boot.
-static const char *const CAL_OUT_NAMES[NUM_OUTPUTS] = {"OUT 1", "OUT 2", "OUT 3", "OUT 4"};
+static const char *const CAL_OUT_NAMES[NUM_MAX_OUTPUTS] = {
+    "OUT 1", "OUT 2", "OUT 3", "OUT 4", "OUT 5", "OUT 6", "OUT 7", "OUT 8"};
+
+// How much hardware this run is calibrating. Decided by probing the DAC bus,
+// NOT by any module's EXPANDER setting: the wizard runs from the shell's
+// module selector, before an app has been chosen, so there is no app setting
+// to read — and the physical question ("is a second DAC answering?") is the
+// right one anyway.
+// inline, not static: core/'s rule, because a file-scope static gives every
+// including TU its own copy of what is one piece of state. Only src/main.cpp
+// includes this header today, so static would work — the const tables above
+// stay static for that reason — but these three are mutable, and that is
+// exactly what the rule exists to catch.
+inline int _calOuts = NUM_OUTPUTS;
+inline int _calCvIns = NUM_CV_INS;
+// Steps: output trim, output offsets, then two references per CV input.
+inline int _calSteps = 2 + 2 * NUM_CV_INS;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -168,8 +184,12 @@ static uint32_t _CalRawToMVDisplay(uint16_t raw) {
 // ── Phase 1: Output trim ──────────────────────────────────────────────────────
 static void _CalOutputTrim() {
     DACWriteAll(MAXDAC, MAXDAC, MAXDAC, MAXDAC);
+    if (_calOuts > NUM_OUTPUTS)
+        DACWriteAllExp(MAXDAC, MAXDAC, MAXDAC, MAXDAC);
 
-    _CalHeader("1/6  OUTPUT TRIM");
+    char title[24];
+    snprintf(title, sizeof(title), "1/%d  OUTPUT TRIM", _calSteps);
+    _CalHeader(title);
     display.setTextSize(1);
     display.setCursor(0, 13);
     display.println("All outputs -> max.");
@@ -188,11 +208,14 @@ static void _CalOutputTrim() {
 static void _CalOutputOffset(CalibrationData &newCal) {
     DACWriteAll(CAL_DAC_LOW_CODE, CAL_DAC_LOW_CODE, CAL_DAC_LOW_CODE,
                 CAL_DAC_LOW_CODE);
+    if (_calOuts > NUM_OUTPUTS)
+        DACWriteAllExp(CAL_DAC_LOW_CODE, CAL_DAC_LOW_CODE, CAL_DAC_LOW_CODE,
+                       CAL_DAC_LOW_CODE);
     delay(50);
 
-    for (int ch = 0; ch < NUM_OUTPUTS; ch++) {
+    for (int ch = 0; ch < _calOuts; ch++) {
         char title[24];
-        snprintf(title, sizeof(title), "2/6  %s OFFSET", CAL_OUT_NAMES[ch]);
+        snprintf(title, sizeof(title), "2/%d  %s OFFSET", _calSteps, CAL_OUT_NAMES[ch]);
         char prompt[24];
         snprintf(prompt, sizeof(prompt), "Measure %s, dial:", CAL_OUT_NAMES[ch]);
         int measuredMV = _CalEnterMV(title, prompt, CAL_DAC_LOW_MV);
@@ -224,7 +247,7 @@ static void _CalOutputOffset(CalibrationData &newCal) {
 // ── CV capture step: wait for stable reference, then average ─────────────────
 static uint16_t _CalCaptureCV(int ch, int refMV, int step) {
     char header[24];
-    snprintf(header, sizeof(header), "%d/6  CV%d INPUT %dV", step, ch + 1,
+    snprintf(header, sizeof(header), "%d/%d  CV%d INPUT %dV", step, _calSteps, ch + 1,
              refMV / 1000);
 
     while (true) {
@@ -262,14 +285,29 @@ static uint16_t _CalCaptureCV(int ch, int refMV, int step) {
 void RunCalibration() {
     Serial.println("Entering calibration mode...");
 
+    // Probe the DAC bus before drawing anything: an expander adds four output
+    // jacks to trim and one CV input to capture, which changes the step count
+    // the wizard advertises.
+    if (ProbeExpander()) {
+        InitExpDAC(); // its channels need VREF/gain set before it will output
+        _calOuts = NUM_MAX_OUTPUTS;
+        _calCvIns = NUM_MAX_CV_INS;
+    } else {
+        _calOuts = NUM_OUTPUTS;
+        _calCvIns = NUM_CV_INS;
+    }
+    _calSteps = 2 + 2 * _calCvIns;
+
     _CalHeader("CALIBRATION");
     display.setTextSize(1);
     display.setCursor(0, 13);
-    display.println("6-step wizard:");
+    display.printf("%d-step wizard:\n", _calSteps);
     display.println("1) Trim outputs to 5V");
     display.println("2) Measure outs @1V");
-    display.println("3-6) Apply 1V & 3V to");
+    display.printf("3-%d) Apply 1V & 3V to\n", _calSteps);
     display.println("     each CV input.");
+    if (_calOuts > NUM_OUTPUTS)
+        display.println("Expander detected.");
     display.print("Click enc. to start");
     _CalFlush();
     _CalWaitClick();
@@ -277,6 +315,20 @@ void RunCalibration() {
     CalibrationData newCal;
     newCal.magic = CAL_MAGIC;
     newCal.valid = true;
+
+    // Seed every channel with the nominal mapping, including the ones this run
+    // will not visit. The struct is sized to NUM_MAX_* whether or not an
+    // expander is attached, so without this the unvisited entries would be
+    // whatever was on the stack — and they get written to /cal.bin all the same,
+    // to be read back as a channel's calibration the day one is fitted.
+    for (int i = 0; i < NUM_MAX_OUTPUTS; i++) {
+        newCal.dacScale[i] = 1.0f;
+        newCal.dacOffset[i] = 0.0f;
+    }
+    for (int i = 0; i < NUM_MAX_CV_INS; i++) {
+        newCal.cvScale[i] = 5000.0f / (float)MAXADC;
+        newCal.cvOffset[i] = 0.0f;
+    }
 
     // Output steps write RAW codes so the user trims/measures true hardware; the
     // stored correction must not fold back into the calibration measurements.
@@ -289,10 +341,10 @@ void RunCalibration() {
 
     // ── Steps 3–6: per-channel CV input, per-reference capture ─────────────────
     const int refs[2] = {CAL_REF1_MV, CAL_REF2_MV};
-    for (int ch = 0; ch < NUM_CV_INS; ch++) {
+    for (int ch = 0; ch < _calCvIns; ch++) {
         uint16_t rawRef[2];
         for (int r = 0; r < 2; r++) {
-            int step = 3 + ch * 2 + r; // steps 3, 4, 5, 6
+            int step = 3 + ch * 2 + r; // 3,4 then 5,6 then (expander) 7,8
             rawRef[r] = _CalCaptureCV(ch, refs[r], step);
         }
         // Linear fit through (rawRef[0], 1000mV) and (rawRef[1], 3000mV).
@@ -317,7 +369,7 @@ void RunCalibration() {
     display.setTextSize(1);
     display.setCursor(0, 13);
     display.println("Calibration done!");
-    for (int ch = 0; ch < NUM_CV_INS; ch++) {
+    for (int ch = 0; ch < _calCvIns; ch++) {
         display.printf("CV%d: x%.4f+%.1f\n", ch + 1, newCal.cvScale[ch],
                        newCal.cvOffset[ch]);
     }

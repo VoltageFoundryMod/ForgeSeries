@@ -40,6 +40,19 @@
 #define CV_1_IN_PIN A1 // GPIO27 — IN 2
 #define CV_2_IN_PIN A2 // GPIO28 — IN 3
 
+// ── IN 4 — analog CV input, on the expander ──────────────────────────────────
+// The last free pad on the XIAO. Its jack, and the inverting/offsetting input
+// stage in front of it, live on the expander board; the base board only carries
+// the net from the expander header (J9 pin 8) to here. Electrically it is the
+// same stage as IN 2 and IN 3 — 100k in, 200k from the -10 V reference, 33k
+// feedback — so it reads through CvRead() like any other channel and needs no
+// mapping of its own.
+//
+// With this taken, every XIAO pad is spoken for: 26, 27, 28, 29, 6, 7, 0, 1, 2,
+// 4, 3. Nothing is left to drive the DAC's LDAC line, which is why the two DAC
+// banks cannot be latched together — see DACWriteAllExp() in boardIO.hpp.
+#define CV_3_IN_PIN A3 // GPIO29 = D3 — IN 4 (expander)
+
 // ── Encoder ──────────────────────────────────────────────────────────────────
 // arduino-pico pin numbers are GPIO numbers, not the silkscreen D numbers.
 // XIAO RP2040: D8=GPIO2, D9=GPIO4, D10=GPIO3.
@@ -49,9 +62,25 @@
 
 // ── Counts ───────────────────────────────────────────────────────────────────
 // No GPIO output pins — all four outputs go through the MCP4728.
+//
+// These describe THE BASE BOARD, and keep doing so with an expander attached.
+// Code that means "this board's own jacks" — calibration of the on-board DAC,
+// the four panel LEDs, a module that has no expander support — stays on these.
 #define NUM_CV_INS 2   // analog CV inputs (IN 1 is trigger-only)
 #define NUM_OUTPUTS 4  // output jacks
 #define NUM_DAC_OUTS 4 // ...all of which are DAC channels
+
+// ── Expander counts ──────────────────────────────────────────────────────────
+// Expander 1 is a second MCP4728 (four more outputs) plus one more CV input, on
+// the DAC bus and the ADC pad above. NUM_MAX_* is the ceiling a module sizes its
+// arrays to; how many are actually live is a runtime question, because whether
+// an expander is fitted is a setting rather than a build flag. One firmware
+// covers both, so there is no second image to keep in step and no second preset
+// schema.
+#define NUM_EXP_OUTPUTS 4
+#define NUM_EXP_CV_INS 1
+#define NUM_MAX_OUTPUTS (NUM_OUTPUTS + NUM_EXP_OUTPUTS) // 8
+#define NUM_MAX_CV_INS (NUM_CV_INS + NUM_EXP_CV_INS)    // 3
 
 // ── Converter resolution ─────────────────────────────────────────────────────
 // The MCP4728 is 12-bit and so is the RP2040's ADC. These are board facts, so
@@ -65,4 +94,5 @@
 // includes the header emits the symbol and the unified firmware (shell + one TU
 // per app) fails to link. `inline` rather than `static` so all TUs share ONE
 // array instead of each carrying a private copy.
-inline int CV_IN_PINS[] = {CV_1_IN_PIN, CV_2_IN_PIN};
+// Indexed 0..NUM_MAX_CV_INS-1; entry 2 is only read when an expander is fitted.
+inline int CV_IN_PINS[] = {CV_1_IN_PIN, CV_2_IN_PIN, CV_3_IN_PIN};

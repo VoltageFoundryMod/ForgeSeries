@@ -19,6 +19,7 @@
 #include "clockEngine.hpp"
 #include "cvInputs.hpp"
 #include "displayManager.hpp"
+#include "expander.hpp"
 #include "outputs.hpp"
 
 extern int menuScreenTimeout; // defined in src/main.cpp
@@ -40,36 +41,38 @@ extern int menuScreenTimeout; // defined in src/main.cpp
 // Bump this whenever the LoadSaveParams layout changes so older (incompatible)
 // presets are treated as invalid and fall back to defaults instead of loading
 // garbage into the new fields.  0xA6: cross-op fields.  0xA7: loop + invert fields.
-#define VALID_MAGIC 0xA7 // Written to `valid` on save; 0xFF = erased flash, 0x00 = zeroed RAM
+// 0xA8: expanderType.
+#define VALID_MAGIC 0xA8 // Written to `valid` on save; 0xFF = erased flash, 0x00 = zeroed RAM
 
 struct LoadSaveParams {
     uint8_t valid; // VALID_MAGIC = valid data; any other = use defaults
     unsigned int BPM;
     unsigned int externalClockDivIdx;
-    int divIdx[NUM_OUTPUTS];
-    int dutyCycle[NUM_OUTPUTS];
-    bool outputState[NUM_OUTPUTS];
-    bool outputInvert[NUM_OUTPUTS];
-    uint32_t outputLevel[NUM_OUTPUTS];
-    int outputOffset[NUM_OUTPUTS];
-    int swingIdx[NUM_OUTPUTS];
-    int swingEvery[NUM_OUTPUTS];
-    int pulseProbability[NUM_OUTPUTS];
-    EuclideanParams euclideanParams[NUM_OUTPUTS];
-    int phaseShift[NUM_OUTPUTS];
-    int waveformType[NUM_OUTPUTS];
-    byte CVInputTarget[NUM_CV_INS];
-    int CVInputAttenuation[NUM_CV_INS];
-    int CVInputOffset[NUM_CV_INS];
-    EnvelopeParams envParams[NUM_OUTPUTS];
-    QuantizerParams quantizerParams[NUM_OUTPUTS];
-    int crossOp[NUM_OUTPUTS];   // CrossOp index per output
-    int crossSrc[NUM_OUTPUTS];  // CrossSource index per output
-    int loopBeats[NUM_OUTPUTS]; // Loop length in beats (0 = off)
-    int loopWake[NUM_OUTPUTS];  // Loops to run before napping
-    int loopNap[NUM_OUTPUTS];   // Loops to mute (0 = never nap)
-    int loopShift[NUM_OUTPUTS]; // Nap/wake cycle offset in whole loops
+    int divIdx[NUM_MAX_OUTPUTS];
+    int dutyCycle[NUM_MAX_OUTPUTS];
+    bool outputState[NUM_MAX_OUTPUTS];
+    bool outputInvert[NUM_MAX_OUTPUTS];
+    uint32_t outputLevel[NUM_MAX_OUTPUTS];
+    int outputOffset[NUM_MAX_OUTPUTS];
+    int swingIdx[NUM_MAX_OUTPUTS];
+    int swingEvery[NUM_MAX_OUTPUTS];
+    int pulseProbability[NUM_MAX_OUTPUTS];
+    EuclideanParams euclideanParams[NUM_MAX_OUTPUTS];
+    int phaseShift[NUM_MAX_OUTPUTS];
+    int waveformType[NUM_MAX_OUTPUTS];
+    byte CVInputTarget[NUM_MAX_CV_INS];
+    int CVInputAttenuation[NUM_MAX_CV_INS];
+    int CVInputOffset[NUM_MAX_CV_INS];
+    EnvelopeParams envParams[NUM_MAX_OUTPUTS];
+    QuantizerParams quantizerParams[NUM_MAX_OUTPUTS];
+    int crossOp[NUM_MAX_OUTPUTS];   // CrossOp index per output
+    int crossSrc[NUM_MAX_OUTPUTS];  // CrossSource index per output
+    int loopBeats[NUM_MAX_OUTPUTS]; // Loop length in beats (0 = off)
+    int loopWake[NUM_MAX_OUTPUTS];  // Loops to run before napping
+    int loopNap[NUM_MAX_OUTPUTS];   // Loops to mute (0 = never nap)
+    int loopShift[NUM_MAX_OUTPUTS]; // Nap/wake cycle offset in whole loops
     int menuScreenTimeout;      // index into screenTimeoutOptions[]
+    uint8_t expanderType;       // which expander is fitted (0 = none)
 };
 
 // CV calibration — see calibrationData.hpp for the struct definition.
@@ -80,7 +83,7 @@ LoadSaveParams LoadDefaultParams() {
     p.valid = VALID_MAGIC;
     p.BPM = 120;
     p.externalClockDivIdx = 0;
-    for (int i = 0; i < NUM_OUTPUTS; i++) {
+    for (int i = 0; i < NUM_MAX_OUTPUTS; i++) {
         p.divIdx[i] = 9;
         p.dutyCycle[i] = 50;
         p.outputState[i] = true;
@@ -102,12 +105,13 @@ LoadSaveParams LoadDefaultParams() {
         p.loopNap[i] = 0; // never nap
         p.loopShift[i] = 0;
     }
-    for (int i = 0; i < NUM_CV_INS; i++) {
+    for (int i = 0; i < NUM_MAX_CV_INS; i++) {
         p.CVInputTarget[i] = 0;
         p.CVInputAttenuation[i] = 0;
         p.CVInputOffset[i] = 0;
     }
     p.menuScreenTimeout = 2; // default: 5s
+    p.expanderType = 0;      // no expander
     return p;
 }
 
@@ -122,7 +126,7 @@ LoadSaveParams CollectParams() {
     p.valid = true;
     p.BPM = BPM;
     p.externalClockDivIdx = externalDividerIndex;
-    for (int i = 0; i < NUM_OUTPUTS; i++) {
+    for (int i = 0; i < NUM_MAX_OUTPUTS; i++) {
         p.divIdx[i] = outputs[i].GetDividerIndex();
         p.dutyCycle[i] = outputs[i].GetDutyCycle();
         p.outputState[i] = outputs[i].GetOutputState();
@@ -144,12 +148,13 @@ LoadSaveParams CollectParams() {
         p.loopNap[i] = outputs[i].GetLoopNap();
         p.loopShift[i] = outputs[i].GetLoopShift();
     }
-    for (int i = 0; i < NUM_CV_INS; i++) {
+    for (int i = 0; i < NUM_MAX_CV_INS; i++) {
         p.CVInputTarget[i] = CVInputTarget[i];
         p.CVInputAttenuation[i] = CVInputAttenuation[i];
         p.CVInputOffset[i] = CVInputOffset[i];
     }
     p.menuScreenTimeout = menuScreenTimeout;
+    p.expanderType = (uint8_t)expanderType;
     return p;
 }
 
@@ -159,7 +164,7 @@ LoadSaveParams CollectParams() {
 void UpdateParameters(LoadSaveParams p) {
     BPM = constrain(p.BPM, minBPM, maxBPM);
     externalDividerIndex = p.externalClockDivIdx;
-    for (int i = 0; i < NUM_OUTPUTS; i++) {
+    for (int i = 0; i < NUM_MAX_OUTPUTS; i++) {
         outputs[i].SetDivider(p.divIdx[i]);
         outputs[i].SetDutyCycle(p.dutyCycle[i]);
         outputs[i].SetOutputState(p.outputState[i]);
@@ -181,11 +186,12 @@ void UpdateParameters(LoadSaveParams p) {
         outputs[i].SetLoopNap(p.loopNap[i]);
         outputs[i].SetLoopShift(p.loopShift[i]);
     }
-    for (int i = 0; i < NUM_CV_INS; i++) {
+    for (int i = 0; i < NUM_MAX_CV_INS; i++) {
         CVInputTarget[i] = static_cast<CVTarget>(p.CVInputTarget[i]);
         CVInputAttenuation[i] = p.CVInputAttenuation[i];
         CVInputOffset[i] = p.CVInputOffset[i];
     }
+    expanderType = constrain((int)p.expanderType, 0, 1);
     menuScreenTimeout = constrain(p.menuScreenTimeout, 0, 4);
     static const unsigned long kTimeoutOpts[] = {0, 2000, 5000, 10000, 20000};
     displayMgr.SetMenuTimeout(kTimeoutOpts[menuScreenTimeout]);

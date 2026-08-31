@@ -71,7 +71,7 @@ extern CalibrationData cal;
 // ── Acquisition ─────────────────────────────────────────────────────────────
 // Read one CV channel, calibrated and oversampled, as a normalised value.
 inline float CvRead(int ch) {
-    if (ch < 0 || ch >= NUM_CV_INS)
+    if (ch < 0 || ch >= NUM_MAX_CV_INS)
         return 0.0f;
 
     int32_t sum = 0;

@@ -11,6 +11,7 @@ void init(Plugin* p) {
 	// registers only its own Model; the Makefile filters those out of the
 	// aggregate build.
 	p->addModel(modelClockForge);
+	p->addModel(modelClockForgeExpander);
 	p->addModel(modelNoteForge);
 	p->addModel(modelForgeView);
 	p->addModel(modelGravityForge);

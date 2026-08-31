@@ -24,6 +24,16 @@
 
 #include "encoderAccel.hpp"
 
+// Item visibility. A module whose menu has rows that only apply to hardware
+// that may not be attached — ClockForge's expander pages — defines this to
+// hide them; navigation then steps over them as though they were not in the
+// table. Guarded so the modules that have no such rows define nothing.
+//
+// Cheap by construction: it is only consulted while the cursor is moving.
+#ifndef FORGE_MENU_ITEM_ENABLED
+#define FORGE_MENU_ITEM_ENABLED(item) true
+#endif
+
 // One acted-on detent. `detents` is +clockwise / -counter-clockwise; the shell
 // (or the Rack port) has already done the quarter-step edge detection, so this
 // only ever sees a direction.
@@ -36,11 +46,17 @@ inline void MenuEncoderTurn(int detents) {
     lastEncoderUpdate = millis();
 
     if (menuMode == 0) {
-        menuItem += dir;
-        if (menuItem < 1)
-            menuItem = MENU_ITEM_COUNT;
-        else if (menuItem > MENU_ITEM_COUNT)
-            menuItem = 1;
+        // Step until a visible item, wrapping. The guard bounds the walk at one
+        // full lap so an all-disabled table cannot spin here.
+        for (int guard = 0; guard < MENU_ITEM_COUNT; guard++) {
+            menuItem += dir;
+            if (menuItem < 1)
+                menuItem = MENU_ITEM_COUNT;
+            else if (menuItem > MENU_ITEM_COUNT)
+                menuItem = 1;
+            if (FORGE_MENU_ITEM_ENABLED(menuItem))
+                break;
+        }
         OnMenuNavigate();
     } else if (menuMode >= 1 && menuMode <= MENU_ITEM_COUNT) {
         MenuApplyEdit(menuMode, dir * (int)speedFactor);

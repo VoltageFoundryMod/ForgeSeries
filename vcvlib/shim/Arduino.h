@@ -59,7 +59,9 @@ struct HostBridge {
     uint8_t gpio[40];        // digitalRead(pin), indexed by pin number
 
     // Firmware outputs (read by the host after each engine step):
-    uint16_t dac[4] = {0, 0, 0, 0}; // captured by the MCP4728 / DACWriteAll shim
+    // Captured by the MCP4728 / DACWriteAll shim. 0-3 are the base board's,
+    // 4-7 the expander's — see the address decode in Wire.h.
+    uint16_t dac[8] = {0, 0, 0, 0, 0, 0, 0, 0};
     uint8_t fb[1024];               // 128x64 monochrome framebuffer (SSD1306 layout)
 
     HostBridge() {

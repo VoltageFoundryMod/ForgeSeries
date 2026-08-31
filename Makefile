@@ -387,23 +387,26 @@ PANEL_TIMEOUT ?= $(firstword $(wildcard \
 PANEL_SRCDIR := panel-src
 PANEL_TMP    := $(BUILD_TMP)/panels
 
-# Which panel belongs to which app. Listed rather than derived: the app codes
+# Which panels belong to which app. Listed rather than derived: the app codes
 # are three-letter directory names and the panels are product names, and there
 # is no rule connecting `dq` to NoteForge that a reader could check. A new
 # module adds its line here and nothing else.
-PANEL_att := ChaosForge
-PANEL_clk := ClockForge
-PANEL_dq  := NoteForge
-PANEL_gen := GravityForge
-PANEL_scp := ForgeView
-PANEL_wea := WeaveForge
+# A LIST per app, not a single name: a module can ship more than one panel.
+# ClockForge has two — its own, and its expander's.
+PANELS_att := ChaosForge
+PANELS_clk := ClockForge ClockForge_Exp1
+PANELS_dq  := NoteForge
+PANELS_gen := GravityForge
+PANELS_scp := ForgeView
+PANELS_wea := WeaveForge
 
 # Ask the filesystem which panels actually exist, for the same reason FW_APPS
 # and PLUGIN_APPS do: a module arrives in pieces, and `make panels` should
 # convert what is there rather than fail on what is not drawn yet.
-PANEL_APPS   := $(foreach a,$(APPS),$(if $(wildcard $(PANEL_SRCDIR)/$(PANEL_$(a)).svg),$(a)))
+# An app counts as having panels if ANY of its listed drawings exists.
+PANEL_APPS   := $(foreach a,$(APPS),$(if $(wildcard $(addsuffix .svg,$(addprefix $(PANEL_SRCDIR)/,$(PANELS_$(a))))),$(a)))
 NOPANEL_APPS := $(filter-out $(PANEL_APPS),$(APPS))
-PANEL_OUT    := $(foreach a,$(PANEL_APPS),apps/$(a)/vcv-plugin/res/$(PANEL_$(a)).svg)
+PANEL_OUT    := $(foreach a,$(PANEL_APPS),$(foreach p,$(PANELS_$(a)),apps/$(a)/vcv-plugin/res/$(p).svg))
 
 .PHONY: panels panels-force panel-coords \
         $(addprefix panels-,$(APPS)) $(addprefix panel-coords-,$(APPS))
@@ -459,7 +462,7 @@ $(panel_recipe)
 
 panels-$(1): apps/$(1)/vcv-plugin/res/$(2).svg
 endef
-$(foreach a,$(PANEL_APPS),$(eval $(call panel_rule,$(a),$(PANEL_$(a)))))
+$(foreach a,$(PANEL_APPS),$(foreach p,$(PANELS_$(a)),$(eval $(call panel_rule,$(a),$(p)))))
 
 # An app whose panel is not drawn yet still needs its `panels-<app>` target: the
 # plugin rules below depend on it unconditionally, and a missing prerequisite
@@ -479,8 +482,8 @@ endif
 panel-coords: $(addprefix panel-coords-,$(PANEL_APPS))
 
 $(addprefix panel-coords-,$(APPS)): panel-coords-%:
-	@$(PYTHON) tools/panel_coords.py $(PANEL_SRCDIR)/$(PANEL_$*).svg \
-	  $(firstword $(PANEL_HIDE_LAYERS))
+	@$(foreach p,$(PANELS_$*),$(PYTHON) tools/panel_coords.py $(PANEL_SRCDIR)/$(p).svg \
+	  $(firstword $(PANEL_HIDE_LAYERS));)
 
 # ── VCV Rack plugins ─────────────────────────────────────────────────────────
 # PlatformIO does NOT compile vcv-plugin/, so `make all` passing says nothing

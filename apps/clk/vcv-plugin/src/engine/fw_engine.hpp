@@ -15,10 +15,14 @@ Engine *createEngine();
 void destroyEngine(Engine *);
 
 // Advance the engine by dt seconds.
-//   cvVolts[2]    : the two CV input voltages (0..5 V nominal).
+//   cvVolts[3]    : CV input voltages (0..5 V nominal). The third is the
+//                   expander's IN 4 and is ignored unless one is enabled.
 //   clockGateHigh : external clock input level (rising edges drive ext sync).
-//   outVolts[4]   : filled with the four output voltages (0..5 V nominal).
-void process(Engine *, float dt, const float cvVolts[2], bool clockGateHigh, float outVolts[4]);
+//   outVolts[8]   : filled with the output voltages (0..5 V nominal). Only the
+//                   first outputCount() entries are written; the rest are left
+//                   alone, so an unfitted expander's jacks read whatever the
+//                   caller initialised them to.
+void process(Engine *, float dt, const float cvVolts[3], bool clockGateHigh, float outVolts[8]);
 
 // Encoder rotation in detents (+clockwise / -counter-clockwise).
 void encoderTurn(Engine *, int detents);
@@ -77,6 +81,18 @@ bool outputIsEnvelope(Engine *, int out);
 // Output enable (per-output on/off).
 bool outputEnabled(Engine *, int out);
 void setOutputEnabled(Engine *, int out, bool on);
+
+// ── Expander ─────────────────────────────────────────────────────────────────
+// Which expander the firmware thinks is fitted: 0 = none, 1 = Expander 1.
+// This is the same setting as the module's EXPANDER menu row, and it is the
+// authority on both hosts — the Rack module sets it when an expander widget is
+// placed beside it, so a patch behaves the way a rack does.
+int expanderType(Engine *);
+void setExpanderType(Engine *, int type);
+
+// How many outputs are live right now — 4, or 8 with an expander. The context
+// menu sizes its per-output list from this.
+int outputCount(Engine *);
 
 // ── forgevcv adapter ─────────────────────────────────────────────────────────
 // Wraps an Engine as a forgevcv::IEngine so the reusable ForgeModule base can

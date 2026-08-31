@@ -23,6 +23,17 @@
         "Digital",
         "Hardware clone"
       ]
+    },
+    {
+      "slug": "ClockForgeExpander",
+      "name": "Clock Forge Expander 1",
+      "description": "Four extra outputs and one CV input for Clock Forge",
+      "tags": [
+        "Expander",
+        "Clock generator",
+        "Digital",
+        "Hardware clone"
+      ]
     }
   ]
 }

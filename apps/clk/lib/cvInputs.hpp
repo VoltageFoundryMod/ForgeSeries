@@ -16,98 +16,77 @@
 #include "calibrationData.hpp" // CalibrationData
 #include "clockEngine.hpp"
 #include "cvInput.hpp" // shared acquisition + range adapters
+#include "expander.hpp" // ActiveOutputs / ActiveCvIns
 #include "outputs.hpp"
 #include "utils.hpp"
 
-// ── CV modulation target enum
-// ─────────────────────────────────────────────────
-enum CVTarget {
+// ── CV modulation targets ────────────────────────────────────────────────────
+//
+// Four global targets, then one block of nine parameters PER OUTPUT. Encoded
+// output-major:
+//
+//     target = kCVPerOutputBase + out * CVFam_COUNT + family
+//
+// so every output's parameters are contiguous and the outputs are in order.
+// That is what makes the expander cheap: outputs 5-8 simply extend the range,
+// the stored byte for a given target never changes meaning, and gating the list
+// down when no expander is fitted is a smaller CVTargetCount() and nothing else.
+//
+// It also replaced a 40-entry table of Arduino Strings and a 40-case switch that
+// were both a per-output copy-paste. Eight outputs would have made those 76 and
+// 112. Names are built on demand instead — see CVTargetName() — and the switch
+// dispatches on the family, with the output index decoded out of the target.
+enum CVFamily : uint8_t {
+    CVFam_Divider = 0,
+    CVFam_Probability,
+    CVFam_SwingAmount,
+    CVFam_SwingEvery,
+    CVFam_Level,
+    CVFam_Offset,
+    CVFam_Waveform,
+    CVFam_Duty,
+    CVFam_Envelope,
+    CVFam_COUNT,
+};
+
+enum CVTarget : uint8_t {
     None = 0,
     StartStop,
     Reset,
     SetBPM,
-    Div1,
-    Div2,
-    Div3,
-    Div4,
-    Output1Prob,
-    Output2Prob,
-    Output3Prob,
-    Output4Prob,
-    Swing1Amount,
-    Swing1Every,
-    Swing2Amount,
-    Swing2Every,
-    Swing3Amount,
-    Swing3Every,
-    Swing4Amount,
-    Swing4Every,
-    Output1Level,
-    Output2Level,
-    Output3Level,
-    Output4Level,
-    Output1Offset,
-    Output2Offset,
-    Output3Offset,
-    Output4Offset,
-    Output1Waveform,
-    Output2Waveform,
-    Output3Waveform,
-    Output4Waveform,
-    Output1Duty,
-    Output2Duty,
-    Output3Duty,
-    Output4Duty,
-    Envelope1,
-    Envelope2,
-    Envelope3,
-    Envelope4,
+    kCVPerOutputBase, // everything from here is per-output; see the encoding above
 };
 
-String CVTargetDescription[] = {
-    "None",
-    "Start/Stop",
-    "Reset",
-    "Set BPM",
-    "Output 1 Div",
-    "Output 2 Div",
-    "Output 3 Div",
-    "Output 4 Div",
-    "Output 1 Prob",
-    "Output 2 Prob",
-    "Output 3 Prob",
-    "Output 4 Prob",
-    "Swing 1 Amt",
-    "Swing 1 Every",
-    "Swing 2 Amt",
-    "Swing 2 Every",
-    "Swing 3 Amt",
-    "Swing 3 Every",
-    "Swing 4 Amt",
-    "Swing 4 Every",
-    "Output 1 Lvl",
-    "Output 2 Lvl",
-    "Output 3 Lvl",
-    "Output 4 Lvl",
-    "Output 1 Off",
-    "Output 2 Off",
-    "Output 3 Off",
-    "Output 4 Off",
-    "Output 1 Wav",
-    "Output 2 Wav",
-    "Output 3 Wav",
-    "Output 4 Wav",
-    "Output 1 Duty",
-    "Output 2 Duty",
-    "Output 3 Duty",
-    "Output 4 Duty",
-    "Output 1 Env",
-    "Output 2 Env",
-    "Output 3 Env",
-    "Output 4 Env",
-};
-int CVTargetLength =
-    sizeof(CVTargetDescription) / sizeof(CVTargetDescription[0]);
+// Highest target that exists at all (expander fitted). Sizes nothing — the
+// stored value is a byte and the tables are generated — but bounds the decode.
+static const int kCVTargetMax = kCVPerOutputBase + NUM_MAX_OUTPUTS * CVFam_COUNT;
+
+static inline int CVTargetOutput(int t) { return (t - kCVPerOutputBase) / CVFam_COUNT; }
+static inline int CVTargetFamily(int t) { return (t - kCVPerOutputBase) % CVFam_COUNT; }
+
+// How many targets the menu offers right now. Without an expander the list ends
+// after output 4, exactly as it always did.
+// Without an expander the list stops after output 4 — the same 40 entries it
+// has always offered. Stored target bytes keep their meaning either way,
+// because the encoding's stride is NUM_MAX_OUTPUTS-independent (output-major).
+static inline int CVTargetCount() {
+    return kCVPerOutputBase + ActiveOutputs() * CVFam_COUNT;
+}
+
+// Display name. Global targets are literals; per-output ones are the family name
+// with the output number substituted, into a shared static buffer — the menu
+// renders one value at a time, the same assumption the other getters here make.
+static String CVTargetName(int t) {
+    static const char *const kGlobal[] = {"None", "Start/Stop", "Reset", "Set BPM"};
+    if (t < kCVPerOutputBase)
+        return kGlobal[t];
+    static const char *const kFamily[CVFam_COUNT] = {
+        "Out %d Div", "Out %d Prob", "Swing %d Amt", "Swing %d Evry",
+        "Out %d Lvl", "Out %d Off", "Out %d Wav", "Out %d Duty", "Out %d Env"};
+    static char buf[16];
+    snprintf(buf, sizeof(buf), kFamily[CVTargetFamily(t)], CVTargetOutput(t) + 1);
+    return buf;
+}
 
 // ── CV oversample count comes from core/cvInput.hpp (default 8).
 // Must be a macro, not a constexpr, so core's #ifndef guard can see it if this
@@ -115,12 +94,12 @@ int CVTargetLength =
 
 // ── CV input state globals
 // ────────────────────────────────────────────────────
-CVTarget pendingCVInputTarget[NUM_CV_INS] = {CVTarget::None, CVTarget::None};
+CVTarget pendingCVInputTarget[NUM_MAX_CV_INS] = {CVTarget::None, CVTarget::None, CVTarget::None};
 
 // Active CV target assignments
-CVTarget CVInputTarget[NUM_CV_INS] = {CVTarget::None, CVTarget::None};
-int CVInputAttenuation[NUM_CV_INS] = {0, 0};
-int CVInputOffset[NUM_CV_INS] = {0, 0};
+CVTarget CVInputTarget[NUM_MAX_CV_INS] = {CVTarget::None, CVTarget::None, CVTarget::None};
+int CVInputAttenuation[NUM_MAX_CV_INS] = {0, 0, 0};
+int CVInputOffset[NUM_MAX_CV_INS] = {0, 0, 0};
 
 // CV readings (calibrated, filtered), normalised (see core/cvInput.hpp).
 //
@@ -128,7 +107,7 @@ int CVInputOffset[NUM_CV_INS] = {0, 0};
 // these, and a count would change meaning if MAXADC or the CV range ever did —
 // and both will. It also means the modulation matrix below needs no notion of
 // converter resolution at all: MAXDAC appears only in the output domain.
-float channelCv[NUM_CV_INS], oldChannelCv[NUM_CV_INS];
+float channelCv[NUM_MAX_CV_INS], oldChannelCv[NUM_MAX_CV_INS];
 
 // Map a normalised 0..1 CV onto an integer parameter range.
 //
@@ -145,7 +124,7 @@ static inline int CvMap(float cv, int lo, int hi) {
 // HandleCVInputs() is polled fast (e.g. the VCV engine at several kHz): each
 // step's delta stays below the threshold and the target would never update.
 // Sentinel forces a dispatch on the first reading after a target is assigned.
-float lastDispatchedCv[NUM_CV_INS] = {-1.0e9f, -1.0e9f};
+float lastDispatchedCv[NUM_MAX_CV_INS] = {-1.0e9f, -1.0e9f, -1.0e9f};
 
 // ── extern refs defined in main.cpp / clockEngine.hpp ────────────────────────
 extern bool masterState;
@@ -158,7 +137,7 @@ void HandleCVTarget(int ch, float CVValue, CVTarget cvTarget);
 // Poll both CV inputs and dispatch to HandleCVTarget() on meaningful change
 // ─────────────────────────────────────────────────────────────────────────────
 void HandleCVInputs() {
-    for (int i = 0; i < NUM_CV_INS; i++) {
+    for (int i = 0; i < ActiveCvIns(); i++) {
         oldChannelCv[i] = channelCv[i];
         // Oversampling and calibration live in core/cvInput.hpp — the same
         // acquisition path every module uses.
@@ -168,9 +147,9 @@ void HandleCVInputs() {
         // "CV 2" reads CV in 2).  Such outputs feed the quantizer and want a
         // light filter for responsive pitch tracking; everything else (BPM,
         // dividers, …) benefits from heavier filtering to suppress ADC noise.
-        WaveformType passthroughWave = (i == 0) ? WaveformType::CVInput1 : WaveformType::CVInput2;
+        WaveformType passthroughWave = kCvPassthroughWave[i];
         bool feedsOutput = false;
-        for (int o = 0; o < NUM_OUTPUTS; o++) {
+        for (int o = 0; o < ActiveOutputs(); o++) {
             if (outputs[o].GetWaveformType() == passthroughWave) {
                 feedsOutput = true;
                 break;
@@ -194,7 +173,7 @@ void HandleCVInputs() {
         // Push the filtered CV to every output mirroring this input.  The
         // quantizer's own ±hysteresis decides note changes downstream.
         if (feedsOutput) {
-            for (int o = 0; o < NUM_OUTPUTS; o++) {
+            for (int o = 0; o < ActiveOutputs(); o++) {
                 if (outputs[o].GetWaveformType() == passthroughWave) {
                     outputs[o].SetCVValue(cv);
                 }
@@ -231,11 +210,7 @@ void HandleCVTarget(int ch, float CVValue, CVTarget cvTarget) {
     case CVTarget::None:
         break;
     case CVTarget::StartStop:
-        if (CVValue > 0.5f) {
-            SetMasterState(true);
-        } else {
-            SetMasterState(false);
-        }
+        SetMasterState(CVValue > 0.5f);
         break;
     case CVTarget::Reset:
         if (CVValue > 0.5f && !lastResetState) {
@@ -249,143 +224,49 @@ void HandleCVTarget(int ch, float CVValue, CVTarget cvTarget) {
     case CVTarget::SetBPM:
         UpdateBPM(CvMap(CVValue, minBPM, maxBPM));
         break;
-    case CVTarget::Div1:
-        outputs[0].SetDivider(
-            CvMap(CVValue, 0, outputs[0].GetDividerAmounts()));
-        break;
-    case CVTarget::Div2:
-        outputs[1].SetDivider(
-            CvMap(CVValue, 0, outputs[1].GetDividerAmounts()));
-        break;
-    case CVTarget::Div3:
-        outputs[2].SetDivider(
-            CvMap(CVValue, 0, outputs[2].GetDividerAmounts()));
-        break;
-    case CVTarget::Div4:
-        outputs[3].SetDivider(
-            CvMap(CVValue, 0, outputs[3].GetDividerAmounts()));
-        break;
-    case CVTarget::Output1Prob:
-        outputs[0].SetPulseProbability(CvMap(CVValue, 1, 100));
-        break;
-    case CVTarget::Output2Prob:
-        outputs[1].SetPulseProbability(CvMap(CVValue, 1, 100));
-        break;
-    case CVTarget::Output3Prob:
-        outputs[2].SetPulseProbability(CvMap(CVValue, 1, 100));
-        break;
-    case CVTarget::Output4Prob:
-        outputs[3].SetPulseProbability(CvMap(CVValue, 1, 100));
-        break;
-    case CVTarget::Swing1Amount:
-        outputs[0].SetSwingAmount(
-            CvMap(CVValue, 0, outputs[0].GetSwingAmounts()));
-        break;
-    case CVTarget::Swing1Every:
-        outputs[0].SetSwingEvery(
-            CvMap(CVValue, 1, outputs[0].GetSwingEveryAmounts()));
-        break;
-    case CVTarget::Swing2Amount:
-        outputs[1].SetSwingAmount(
-            CvMap(CVValue, 0, outputs[1].GetSwingAmounts()));
-        break;
-    case CVTarget::Swing2Every:
-        outputs[1].SetSwingEvery(
-            CvMap(CVValue, 1, outputs[1].GetSwingEveryAmounts()));
-        break;
-    case CVTarget::Swing3Amount:
-        outputs[2].SetSwingAmount(
-            CvMap(CVValue, 0, outputs[2].GetSwingAmounts()));
-        break;
-    case CVTarget::Swing3Every:
-        outputs[2].SetSwingEvery(
-            CvMap(CVValue, 1, outputs[2].GetSwingEveryAmounts()));
-        break;
-    case CVTarget::Swing4Amount:
-        outputs[3].SetSwingAmount(
-            CvMap(CVValue, 0, outputs[3].GetSwingAmounts()));
-        break;
-    case CVTarget::Swing4Every:
-        outputs[3].SetSwingEvery(
-            CvMap(CVValue, 1, outputs[3].GetSwingEveryAmounts()));
-        break;
-    case CVTarget::Output1Level:
-        outputs[0].SetLevel(CvMap(CVValue, 0, 100));
-        break;
-    case CVTarget::Output2Level:
-        outputs[1].SetLevel(CvMap(CVValue, 0, 100));
-        break;
-    case CVTarget::Output3Level:
-        outputs[2].SetLevel(CvMap(CVValue, 0, 100));
-        break;
-    case CVTarget::Output4Level:
-        outputs[3].SetLevel(CvMap(CVValue, 0, 100));
-        break;
-    case CVTarget::Output1Offset:
-        outputs[0].SetOffset(CvMap(CVValue, 0, 100));
-        break;
-    case CVTarget::Output2Offset:
-        outputs[1].SetOffset(CvMap(CVValue, 0, 100));
-        break;
-    case CVTarget::Output3Offset:
-        outputs[2].SetOffset(CvMap(CVValue, 0, 100));
-        break;
-    case CVTarget::Output4Offset:
-        outputs[3].SetOffset(CvMap(CVValue, 0, 100));
-        break;
-    // map upper bound is WaveformTypeLength - 1 so a full-scale CV selects the
-    // last waveform (not an out-of-range index).
-    case CVTarget::Output1Waveform:
-        outputs[0].SetWaveformType(static_cast<WaveformType>(
-            CvMap(CVValue, 0, WaveformTypeLength - 1)));
-        break;
-    case CVTarget::Output2Waveform:
-        outputs[1].SetWaveformType(static_cast<WaveformType>(
-            CvMap(CVValue, 0, WaveformTypeLength - 1)));
-        break;
-    case CVTarget::Output3Waveform:
-        outputs[2].SetWaveformType(static_cast<WaveformType>(
-            CvMap(CVValue, 0, WaveformTypeLength - 1)));
-        break;
-    case CVTarget::Output4Waveform:
-        outputs[3].SetWaveformType(static_cast<WaveformType>(
-            CvMap(CVValue, 0, WaveformTypeLength - 1)));
-        break;
-    case CVTarget::Output1Duty:
-        outputs[0].SetDutyCycle(CvMap(CVValue, 0, 100));
-        break;
-    case CVTarget::Output2Duty:
-        outputs[1].SetDutyCycle(CvMap(CVValue, 0, 100));
-        break;
-    case CVTarget::Output3Duty:
-        outputs[2].SetDutyCycle(CvMap(CVValue, 0, 100));
-        break;
-    case CVTarget::Output4Duty:
-        outputs[3].SetDutyCycle(CvMap(CVValue, 0, 100));
-        break;
-    case CVTarget::Envelope1: {
-        // Schmitt-trigger hysteresis: higher threshold to arm, lower to release.
-        bool wasTriggered = outputs[0].GetExternalTrigger();
-        outputs[0].SetExternalTrigger(
-            CVValue > (wasTriggered ? 0.40f : 0.60f));
-        break;
-    }
-    case CVTarget::Envelope2: {
-        bool wasTriggered = outputs[1].GetExternalTrigger();
-        outputs[1].SetExternalTrigger(
-            CVValue > (wasTriggered ? 0.40f : 0.60f));
-        break;
-    }
-    case CVTarget::Envelope3: {
-        bool wasTriggered = outputs[2].GetExternalTrigger();
-        outputs[2].SetExternalTrigger(
-            CVValue > (wasTriggered ? 0.40f : 0.60f));
-        break;
-    }
-    case CVTarget::Envelope4: {
-        bool wasTriggered = outputs[3].GetExternalTrigger();
-        outputs[3].SetExternalTrigger(
-            CVValue > (wasTriggered ? 0.40f : 0.60f));
+    default: {
+        // Per-output target: which output, and which of its parameters.
+        const int o = CVTargetOutput(cvTarget);
+        if (o < 0 || o >= ActiveOutputs())
+            break; // targets an output this build has no expander for
+        Output &out = outputs[o];
+        switch (CVTargetFamily(cvTarget)) {
+        case CVFam_Divider:
+            out.SetDivider(CvMap(CVValue, 0, out.GetDividerAmounts()));
+            break;
+        case CVFam_Probability:
+            out.SetPulseProbability(CvMap(CVValue, 1, 100));
+            break;
+        case CVFam_SwingAmount:
+            out.SetSwingAmount(CvMap(CVValue, 0, out.GetSwingAmounts()));
+            break;
+        case CVFam_SwingEvery:
+            out.SetSwingEvery(CvMap(CVValue, 1, out.GetSwingEveryAmounts()));
+            break;
+        case CVFam_Level:
+            out.SetLevel(CvMap(CVValue, 0, 100));
+            break;
+        case CVFam_Offset:
+            out.SetOffset(CvMap(CVValue, 0, 100));
+            break;
+        case CVFam_Waveform:
+            // Upper bound is WaveformTypeLength - 1 so a full-scale CV selects
+            // the last waveform rather than an out-of-range index.
+            out.SetWaveformType(static_cast<WaveformType>(
+                CvMap(CVValue, 0, WaveformTypeLength - 1)));
+            break;
+        case CVFam_Duty:
+            out.SetDutyCycle(CvMap(CVValue, 0, 100));
+            break;
+        case CVFam_Envelope: {
+            // Schmitt-trigger hysteresis: higher threshold to arm, lower to release.
+            const bool wasTriggered = out.GetExternalTrigger();
+            out.SetExternalTrigger(CVValue > (wasTriggered ? 0.40f : 0.60f));
+            break;
+        }
+        default:
+            break;
+        }
         break;
     }
     }

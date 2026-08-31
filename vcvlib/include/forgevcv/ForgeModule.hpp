@@ -24,8 +24,10 @@
 namespace forgevcv {
 using namespace rack;
 
-// Maximum DAC channels on the ForgeSeries hardware profile (MCP4728).
-static const int FORGE_MAX_OUT = 4;
+// Maximum DAC channels a ForgeSeries module can drive: the board's own
+// MCP4728, plus a second one on an expander. Modules without expander support
+// simply pass their own nOut and never touch the upper half.
+static const int FORGE_MAX_OUT = 8;
 
 // ── Panel LED transfer curve ─────────────────────────────────────────────────
 // Taken from the hardware rather than invented: each output pin drives a BC547

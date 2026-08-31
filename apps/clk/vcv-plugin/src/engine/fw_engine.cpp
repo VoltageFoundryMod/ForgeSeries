@@ -80,6 +80,7 @@ void attachInterrupt(int, void (*isr)(), int) { _clkIsr = isr; }
 #include "boardPinouts.hpp"
 #include "clockEngine.hpp"
 #include "cvInputs.hpp"
+#include "expander.hpp"
 #include "displayManager.hpp"
 #include "menuDefinitions.hpp"
 #include "menuDisplay.hpp"
@@ -98,11 +99,17 @@ DisplayManager displayMgr(display);
 
 // metrics lives in core/metrics.hpp now, one shared instance.
 
-Output outputs[NUM_OUTPUTS] = {
-    Output(1, OutputType::DACOut),
+Output outputs[NUM_MAX_OUTPUTS] = {
+    Output(1, OutputType::DACOut), // all outputs go through an MCP4728
     Output(2, OutputType::DACOut),
     Output(3, OutputType::DACOut),
-    Output(4, OutputType::DACOut)};
+    Output(4, OutputType::DACOut),
+    // 5-8 exist whether or not an expander is fitted; ActiveOutputs()
+    // decides how many are driven. See lib/expander.hpp.
+    Output(5, OutputType::DACOut),
+    Output(6, OutputType::DACOut),
+    Output(7, OutputType::DACOut),
+    Output(8, OutputType::DACOut)};
 
 bool masterState = true;
 
@@ -117,6 +124,7 @@ int quantizerOutputSelect = 0;
 int envelopeOutputSelect = 0;
 int loopOutputSelect = 0;
 int menuScreenTimeout = 2;
+int expanderType = 0;
 
 CalibrationData cal;
 
@@ -179,11 +187,15 @@ struct EngineState {
 
     // outputs[] is handled outside the registry: Output has no default ctor, so
     // the array member needs an initializer (mirroring the global definition).
-    Output outputs[NUM_OUTPUTS] = {
+    Output outputs[NUM_MAX_OUTPUTS] = {
         Output(1, OutputType::DACOut),
         Output(2, OutputType::DACOut),
         Output(3, OutputType::DACOut),
-        Output(4, OutputType::DACOut)};
+        Output(4, OutputType::DACOut),
+        Output(5, OutputType::DACOut),
+        Output(6, OutputType::DACOut),
+        Output(7, OutputType::DACOut),
+        Output(8, OutputType::DACOut)};
 
     // Exchange this snapshot with the live firmware globals (symmetric).
     void swapWithGlobals() {
@@ -205,7 +217,7 @@ struct EngineState {
 #undef CF_SCALAR
 #undef CF_ARRAY
 #undef CF_OBJECT
-        for (int i = 0; i < NUM_OUTPUTS; ++i)
+        for (int i = 0; i < NUM_MAX_OUTPUTS; ++i)
             swap(::outputs[i], this->outputs[i]);
     }
 
@@ -223,7 +235,7 @@ struct EngineState {
 #undef CF_SCALAR
 #undef CF_ARRAY
 #undef CF_OBJECT
-        for (int i = 0; i < NUM_OUTPUTS; ++i)
+        for (int i = 0; i < NUM_MAX_OUTPUTS; ++i)
             this->outputs[i] = ::outputs[i];
     }
 };
@@ -285,6 +297,10 @@ static void engineInstanceInit() {
     cal = LoadCalibration();
     LoadSaveParams p = Load(0);
     UpdateParameters(p);
+    // UpdateParameters() has restored expanderType, so this is the first
+    // point at which we know whether there is a second DAC to bring up.
+    if (ExpanderFitted())
+        InitExpDAC();
     UpdateBPM(BPM);
     REQUEST_DISPLAY_REFRESH();
     displayMgr.MarkDirty();
@@ -301,17 +317,15 @@ static void doEncoderClick() {
                     mi.action();
             } else { // MENU_EDIT
                 menuMode = menuItem;
-                if (menuItem == 61)
-                    pendingCVInputTarget[0] = CVInputTarget[0];
-                else if (menuItem == 62)
-                    pendingCVInputTarget[1] = CVInputTarget[1];
+                const int ch = CVTargetItemChannel(menuItem);
+                if (ch >= 0)
+                    pendingCVInputTarget[ch] = CVInputTarget[ch];
             }
         }
     } else {
-        if (menuMode == 61)
-            CVInputTarget[0] = pendingCVInputTarget[0];
-        else if (menuMode == 62)
-            CVInputTarget[1] = pendingCVInputTarget[1];
+        const int ch = CVTargetItemChannel(menuMode);
+        if (ch >= 0)
+            CVInputTarget[ch] = pendingCVInputTarget[ch];
         menuMode = 0;
     }
 }
@@ -346,7 +360,7 @@ void destroyEngine(Engine *e) {
     delete e;
 }
 
-void process(Engine *e, float dt, const float cvVolts[2], bool clockGateHigh, float outVolts[4]) {
+void process(Engine *e, float dt, const float cvVolts[3], bool clockGateHigh, float outVolts[8]) {
     EngineScope scope(e);
 
     // Advance engine time by the elapsed block.
@@ -355,6 +369,7 @@ void process(Engine *e, float dt, const float cvVolts[2], bool clockGateHigh, fl
     // Feed CV inputs (volts -> 12-bit ADC) and the external-clock gate.
     e->host.adc[CV_1_IN_PIN] = voltsToAdc(cvVolts[0]);
     e->host.adc[CV_2_IN_PIN] = voltsToAdc(cvVolts[1]);
+    e->host.adc[CV_3_IN_PIN] = voltsToAdc(cvVolts[2]);
     e->host.gpio[CLK_IN_PIN] = clockGateHigh ? 1 : 0;
     if (clockGateHigh && !e->lastClock && _clkIsr)
         _clkIsr();
@@ -381,7 +396,8 @@ void process(Engine *e, float dt, const float cvVolts[2], bool clockGateHigh, fl
     if (displayRefresh)
         displayMgr.MarkDirty();
 
-    for (int i = 0; i < NUM_OUTPUTS; i++)
+    // Only what is live: with no expander the caller's upper four are its own.
+    for (int i = 0; i < ActiveOutputs(); i++)
         outVolts[i] = e->host.dac[i] / (float)MAXDAC * 5.0f;
 }
 
@@ -392,11 +408,18 @@ void encoderTurn(Engine *e, int detents) {
     for (int k = 0; k < n; k++) {
         REQUEST_DISPLAY_REFRESH();
         if (menuMode == 0) {
-            menuItem += dir;
-            if (menuItem < 1)
-                menuItem = MENU_ITEM_COUNT;
-            else if (menuItem > MENU_ITEM_COUNT)
-                menuItem = 1;
+            // Mirrors core/encoderMenu.hpp's MenuEncoderTurn, including its
+            // skip over hidden items. This is a second copy of that loop and
+            // has to stay in step with it.
+            for (int guard = 0; guard < MENU_ITEM_COUNT; guard++) {
+                menuItem += dir;
+                if (menuItem < 1)
+                    menuItem = MENU_ITEM_COUNT;
+                else if (menuItem > MENU_ITEM_COUNT)
+                    menuItem = 1;
+                if (MenuItemEnabled(menuItem))
+                    break;
+            }
         } else if (menuMode >= 1 && menuMode <= MENU_ITEM_COUNT) {
             if (MENU_ITEMS[menuMode - 1].setter)
                 MENU_ITEMS[menuMode - 1].setter(dir);
@@ -475,7 +498,7 @@ void randomize(Engine *e) {
         return (int)std::uniform_int_distribution<int>(lo, hi)(rng);
     };
 
-    for (int i = 0; i < NUM_OUTPUTS; i++) {
+    for (int i = 0; i < ActiveOutputs(); i++) {
         // Waveform first: SetWaveformType moves an envelope output onto the
         // locked "Env" divider slot, and SetDivider is a no-op once it has. Only
         // the plain pulse/LFO shapes are offered — rolling an envelope type would
@@ -533,6 +556,10 @@ void deserialize(Engine *e, const std::string &blob) {
     cal = LoadCalibration();
     LoadSaveParams p = Load(0);
     UpdateParameters(p);
+    // UpdateParameters() has restored expanderType, so this is the first
+    // point at which we know whether there is a second DAC to bring up.
+    if (ExpanderFitted())
+        InitExpDAC();
     UpdateBPM(BPM);
     REQUEST_DISPLAY_REFRESH();
 }
@@ -547,7 +574,10 @@ int bpm(Engine *e) {
 // firmware state under an EngineScope (globals lock + swap-in), then requests a
 // display refresh so the emulated OLED tracks changes made from the menu.
 
-static int clampOut(int out) { return out < 0 ? 0 : (out > NUM_OUTPUTS - 1 ? NUM_OUTPUTS - 1 : out); }
+static int clampOut(int out) {
+    const int n = ActiveOutputs();
+    return out < 0 ? 0 : (out > n - 1 ? n - 1 : out);
+}
 
 bool isRunning(Engine *e) {
     EngineScope scope(e);
@@ -623,15 +653,40 @@ void setOutputEnabled(Engine *e, int out, bool on) {
     REQUEST_DISPLAY_REFRESH();
 }
 
+// ── Expander ────────────────────────────────────────────────────────────
+int expanderType(Engine *e) {
+    EngineScope scope(e);
+    return ::expanderType;
+}
+void setExpanderType(Engine *e, int type) {
+    EngineScope scope(e);
+    ::expanderType = (type != 0) ? 1 : 0;
+    if (ExpanderFitted())
+        InitExpDAC(); // the Wire shim ACKs, so this just sets the present flag
+    unsavedChanges = true;
+    REQUEST_DISPLAY_REFRESH();
+}
+int outputCount(Engine *e) {
+    EngineScope scope(e);
+    return ActiveOutputs();
+}
 // ── forgevcv::IEngine adapter ─────────────────────────────────────────────────
-// Thin forwards to the free-function bridge above. The firmware is fixed at
-// 2 CV inputs / 4 outputs, so the nCv/nOut counts are informational here.
+// Thin forwards to the free-function bridge above. nCv/nOut are honoured: the
+// engine runs 2 CV in / 4 out, or 3 in / 8 out with an expander enabled.
 VcvEngine::VcvEngine() : e_(createEngine()) {}
 VcvEngine::~VcvEngine() { destroyEngine(e_); }
 
-void VcvEngine::process(float dt, const float *cv, int /*nCv*/,
-                        bool clockHigh, float *out, int /*nOut*/) {
-    cfengine::process(e_, dt, cv, clockHigh, out);
+void VcvEngine::process(float dt, const float *cv, int nCv,
+                        bool clockHigh, float *out, int nOut) {
+    // Pad a short CV array rather than reading past it: the screenshot tool
+    // and any caller predating the expander still hand over two channels.
+    float cv3[NUM_MAX_CV_INS] = {0.f, 0.f, 0.f};
+    for (int i = 0; i < nCv && i < NUM_MAX_CV_INS; i++)
+        cv3[i] = cv[i];
+    float o8[NUM_MAX_OUTPUTS] = {0.f};
+    cfengine::process(e_, dt, cv3, clockHigh, o8);
+    for (int i = 0; i < nOut && i < NUM_MAX_OUTPUTS; i++)
+        out[i] = o8[i];
 }
 void VcvEngine::encoderTurn(int detents) { cfengine::encoderTurn(e_, detents); }
 void VcvEngine::encoderButton(bool pressed) { cfengine::encoderButton(e_, pressed); }

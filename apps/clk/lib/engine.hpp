@@ -15,10 +15,11 @@
 #include "boardPinouts.hpp"
 #include "clockEngine.hpp"
 #include "cvInputs.hpp"
+#include "expander.hpp"
 #include "metrics.hpp"
 #include "outputs.hpp"
 
-extern Output outputs[NUM_OUTPUTS];
+extern Output outputs[NUM_MAX_OUTPUTS];
 extern bool masterState;
 
 // Global play/stop. Declared by cvInputs.hpp (a CV target can drive it) and
@@ -30,7 +31,7 @@ inline void SetMasterState(bool state) {
         externalTickCounter = 0;
     }
     masterState = state;
-    for (int i = 0; i < NUM_OUTPUTS; i++) {
+    for (int i = 0; i < NUM_MAX_OUTPUTS; i++) {
         outputs[i].SetMasterState(state);
     }
 }
@@ -42,25 +43,26 @@ inline void HandleOutputs() {
     // Pass 1: each output's raw (pre-quantisation) value plus a normalised
     // snapshot. Cross operations read the frozen snapshot so results are
     // order-independent — no feedback when two outputs cross-modulate.
-    float raw[NUM_OUTPUTS];
-    float norm[NUM_OUTPUTS];
-    for (int i = 0; i < NUM_OUTPUTS; i++) {
+    const int nOut = ActiveOutputs();
+    float raw[NUM_MAX_OUTPUTS];
+    float norm[NUM_MAX_OUTPUTS];
+    for (int i = 0; i < nOut; i++) {
         raw[i] = outputs[i].ComputeRawOutput();
         norm[i] = raw[i] / (float)MAXDAC;
     }
 
     // Pass 2: apply cross operations against the snapshot, then quantise/clamp.
-    uint16_t v[NUM_OUTPUTS];
-    for (int i = 0; i < NUM_OUTPUTS; i++) {
+    uint16_t v[NUM_MAX_OUTPUTS] = {0};
+    for (int i = 0; i < nOut; i++) {
         float r = raw[i];
         if (outputs[i].HasCrossOp()) {
             const int src = outputs[i].GetCrossSourceIndex();
             float srcNorm;
-            if (src < NUM_OUTPUTS) {
+            if (src < NUM_MAX_OUTPUTS) {
                 srcNorm = norm[src]; // another output's pre-cross value
             } else {
                 // IN1 / IN2 sampled CV, normalised 0..1 by the core adapter
-                srcNorm = CvUni(channelCv[src - NUM_OUTPUTS]);
+                srcNorm = CvUni(channelCv[src - NUM_MAX_OUTPUTS]);
             }
             r = outputs[i].ApplyCrossOp(raw[i], srcNorm);
         }
@@ -69,9 +71,13 @@ inline void HandleOutputs() {
 
     metrics.BeginDACMeasurement();
     DACWriteAll(v[0], v[1], v[2], v[3]);
+    // Second transaction on the same bus, and only when an expander is fitted.
+    // The two banks land one transaction apart — see DACWriteAllExp.
+    if (nOut > NUM_OUTPUTS)
+        DACWriteAllExp(v[4], v[5], v[6], v[7]);
     metrics.EndDACMeasurement();
 
-    for (int i = 0; i < NUM_OUTPUTS; i++) {
+    for (int i = 0; i < nOut; i++) {
         outputs[i].GenEnvelope();
     }
 }

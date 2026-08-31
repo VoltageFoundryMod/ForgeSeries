@@ -10,6 +10,7 @@
 #include "boardIO.hpp"
 #include "boardPinouts.hpp"
 #include "metrics.hpp"
+#include "expander.hpp"
 #include "outputs.hpp"
 #include <Arduino.h>
 #include <hardware/timer.h>
@@ -66,7 +67,7 @@ String externalDividerDescription[dividerAmount] = {
 int externalDividerIndex = 0;
 
 // ── extern refs to objects defined in main.cpp ───────────────────────────────
-extern Output outputs[NUM_OUTPUTS];
+extern Output outputs[NUM_MAX_OUTPUTS];
 extern PerformanceMetrics metrics;
 extern bool displayRefresh;
 extern bool unsavedChanges;
@@ -159,7 +160,7 @@ void ClockReceived() {
             // first pulse of each new sync session (mode transition).
             if (!wasExternal)
                 lastInternalBPM = BPM;
-            for (int i = 0; i < NUM_OUTPUTS; i++) {
+            for (int i = 0; i < ActiveOutputs(); i++) {
                 outputs[i].SetExternalClock(true);
                 outputs[i].IncrementInternalCounter();
             }
@@ -203,7 +204,7 @@ void HandleExternalClock() {
         usingExternalClock = false;
         BPM = lastInternalBPM;
         UpdateBPM(BPM);
-        for (int i = 0; i < NUM_OUTPUTS; i++) {
+        for (int i = 0; i < ActiveOutputs(); i++) {
             outputs[i].SetExternalClock(false);
         }
         // Reset the ring buffer so stale intervals don't affect the next sync
@@ -238,7 +239,7 @@ void ClockPulse() {
     // CRITICAL: This ISR must not be delayed by encoder interrupts.
     metrics.BeginISRMeasurement();
 
-    for (int i = 0; i < NUM_OUTPUTS; i++) {
+    for (int i = 0; i < ActiveOutputs(); i++) {
         outputs[i].Pulse(PPQN, tickCounter);
     }
     tickCounter++;

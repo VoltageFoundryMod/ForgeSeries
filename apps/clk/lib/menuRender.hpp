@@ -37,7 +37,9 @@ extern Output outputs[];
 static inline bool OnHomePage() { return menuItem == 1 || menuItem == 2; }
 
 inline void MenuIndicator() {
-    displayMgr.DrawMenuIndicator(menuItem, MENU_ITEM_COUNT, OnHomePage());
+    // Visible position out of visible total — see MenuVisibleCount().
+    displayMgr.DrawMenuIndicator(MenuVisibleIndex(menuItem), MenuVisibleCount(),
+                                 OnHomePage());
 }
 
 inline void MenuHeader(const char *header) {
@@ -168,8 +170,8 @@ void HandleDisplay() {
             "PROBABILITY",       // 3
             "EUCLIDEAN RHYTHM",  // 4
             "OUTPUT SWING",      // 5
-            "PHASE SHIFT",       // 6
-            "DUTY CYCLE",        // 7  (duty)
+            "PHASE / DUTY",      // 6  (custom two-column renderer)
+            "",                  // 7  unused — duty merged into group 6
             "WAVEFORM SETTINGS", // 8  (waveforms - all 4)
             "ENVELOPE SETTINGS", // 9
             "CV INPUT TARGETS",  // 10
@@ -179,6 +181,16 @@ void HandleDisplay() {
             "CROSS OPS",         // 14 (cross operations - all 4)
             "LOOPS",             // 15 (loop reset + nap/wake, per-output)
             "PRESETS",           // 16 (slot, save, load, defaults)
+            // 17-24: the same pages again for the expander's outputs 5-8.
+            "CLOCK DIVIDERS 5-8", // 17
+            "WAVEFORM 5-8",       // 18
+            "OUTPUT SETTINGS 5-8",// 19 (level/offset)
+            "OUTPUT STATE 5-8",   // 20
+            "PROBABILITY 5-8",    // 21
+            "OUTPUT SWING 5-8",   // 22
+            "PHASE / DUTY 5-8",   // 23
+            "CROSS OPS 5-8",      // 24
+            "CV ATTEN / OFFSET",  // 25 (split from 10 - see the renderer)
         };
 
         // ── Group 4: Euclidean — custom overlay (pattern grid) ─────────────
@@ -191,8 +203,8 @@ void HandleDisplay() {
                 int idx = i + 1;
                 bool sel = (idx == menuItem);
                 bool edit = sel && (menuMode == idx);
-                // Items 20 (ROT) and 21 (PAD) share a row; draw ROT on left, PAD at x=64
-                if (idx == 36) { // ROT — left half
+                // ROT and PAD share a row; draw ROT on the left, PAD at x=50
+                if (idx == MI_EUC_ROT) { // ROT — left half
                     display.setCursor(MD_LABEL_X, _md_rowY);
                     display.print(mi.label);
                     if (mi.valueFn) {
@@ -201,7 +213,7 @@ void HandleDisplay() {
                     }
                     _MD_Cursor(_md_rowY, sel, edit);
                     // Don't advance — PAD shares this row
-                } else if (idx == 37) { // PAD — right half
+                } else if (idx == MI_EUC_PAD) { // PAD — right half
                     display.setCursor(50, _md_rowY);
                     display.print(mi.label);
                     if (mi.valueFn) {
@@ -248,129 +260,79 @@ void HandleDisplay() {
 
         // ── Group 5: Swing — two-column with header + column indicator ─────
         if (grp == 5) {
-            MD_PageBegin("OUTPUT SWING", 20);
-            // Column headers
-            display.setCursor(64, _md_rowY);
-            display.println("AMT");
-            display.setCursor(94, _md_rowY);
-            display.println("EVERY");
-            // Column indicator arrow (points to active column)
-            if (menuItem % 2 == 0) { // even items → AMT column
-                display.fillTriangle(59, _md_rowY, 59, _md_rowY + 6, 62, _md_rowY + 3, 1);
-            } else { // odd items  → EVERY column
-                display.fillTriangle(89, _md_rowY, 89, _md_rowY + 6, 92, _md_rowY + 3, 1);
-            }
-            _md_rowY += MD_ROW_H;
-            // One visible row per output (items 22,24,26,28 are ROW_TWOCOL; 23,25,27,29 ROW_HIDDEN)
-            for (int i = 0; i < MENU_ITEM_COUNT; i++) {
-                const MenuItem &mi = MENU_ITEMS[i];
-                if (mi.group != 5 || mi.rowStyle == ROW_HIDDEN)
-                    continue;
-                int idx = i + 1;     // ROW_TWOCOL item (amt)
-                int idxEv = idx + 1; // ROW_HIDDEN item (every)
-                bool sel = (idx == menuItem || idxEv == menuItem);
-                bool edit = sel && (menuMode == menuItem);
-                MD_TwoColRow(mi.label,
-                             mi.valueFn ? mi.valueFn() : String(""), mi.valueFn != nullptr,
-                             mi.valueFn2 ? mi.valueFn2() : String(""), mi.valueFn2 != nullptr,
-                             mi.col1x, mi.col2x, sel, edit);
-            }
+            MD_RenderTwoColPage("OUTPUT SWING", menuItem, menuMode, 5,
+                                {"AMT", 64, 59}, {"EVERY", 94, 89}, true);
+            RedrawDisplay();
+            return;
+        }
+
+        // ── Group 6: Phase / Duty — one row per output, two values each ────
+        // Was two separate four-row pages (phase group 6, duty group 7); group
+        // 7 is now unused. Geometry mirrors group 13, the other per-output pair.
+        if (grp == 6) {
+            MD_RenderTwoColPage("PHASE / DUTY", menuItem, menuMode, 6,
+                                {"PH", 70, 65}, {"DTY", 100, 95}, true);
             RedrawDisplay();
             return;
         }
 
         // ── Group 2: Output state — STATE/INV for all 4 outputs ────────────
         if (grp == 2) {
-            MD_PageBegin("OUTPUT STATE", 12);
-            // Column headers
-            display.setCursor(58, _md_rowY);
-            display.println("STATE");
-            display.setCursor(100, _md_rowY);
-            display.println("INV");
-            // Column indicator arrow (even item → STATE column, odd → INV column)
-            if (menuItem % 2 == 0) {
-                display.fillTriangle(52, _md_rowY, 52, _md_rowY + 6, 55, _md_rowY + 3, 1);
-            } else {
-                display.fillTriangle(94, _md_rowY, 94, _md_rowY + 6, 97, _md_rowY + 3, 1);
-            }
-            _md_rowY += MD_ROW_H;
-            for (int i = 0; i < MENU_ITEM_COUNT; i++) {
-                const MenuItem &mi = MENU_ITEMS[i];
-                if (mi.group != 2 || mi.rowStyle == ROW_HIDDEN)
-                    continue;
-                int idx = i + 1;
-                int idxInv = idx + 1;
-                bool sel = (idx == menuItem || idxInv == menuItem);
-                // Toggles never enter edit mode, so the cursor is always hollow.
-                MD_TwoColRow(mi.label,
-                             mi.valueFn ? mi.valueFn() : String(""), mi.valueFn != nullptr,
-                             mi.valueFn2 ? mi.valueFn2() : String(""), mi.valueFn2 != nullptr,
-                             mi.col1x, mi.col2x, sel, false);
-            }
+            // allowEdit=false: these are MENU_TOGGLEs, which never enter edit
+            // mode, so the cursor stays hollow.
+            MD_RenderTwoColPage("OUTPUT STATE", menuItem, menuMode, 2,
+                                {"STATE", 58, 52}, {"INV", 100, 94}, false);
             RedrawDisplay();
             return;
         }
 
         // ── Group 13: Level/Offset — LVL/OFF for all 4 outputs ─────────────
         if (grp == 13) {
-            MD_PageBegin("OUTPUT SETTINGS", 12);
-            // Column headers
-            display.setCursor(70, _md_rowY);
-            display.println("LVL");
-            display.setCursor(100, _md_rowY);
-            display.println("OFF");
-            // Column indicator arrow (even item → LVL column, odd → OFF column)
-            if (menuItem % 2 == 0) {
-                display.fillTriangle(65, _md_rowY, 65, _md_rowY + 6, 68, _md_rowY + 3, 1);
-            } else {
-                display.fillTriangle(95, _md_rowY, 95, _md_rowY + 6, 98, _md_rowY + 3, 1);
-            }
-            _md_rowY += MD_ROW_H;
-            for (int i = 0; i < MENU_ITEM_COUNT; i++) {
-                const MenuItem &mi = MENU_ITEMS[i];
-                if (mi.group != 13 || mi.rowStyle == ROW_HIDDEN)
-                    continue;
-                int idx = i + 1;
-                int idxOff = idx + 1;
-                bool sel = (idx == menuItem || idxOff == menuItem);
-                bool edit = sel && (menuMode == menuItem);
-                MD_TwoColRow(mi.label,
-                             mi.valueFn ? mi.valueFn() : String(""), mi.valueFn != nullptr,
-                             mi.valueFn2 ? mi.valueFn2() : String(""), mi.valueFn2 != nullptr,
-                             mi.col1x, mi.col2x, sel, edit);
-            }
+            MD_RenderTwoColPage("OUTPUT SETTINGS", menuItem, menuMode, 13,
+                                {"LVL", 70, 65}, {"OFF", 100, 95}, true);
             RedrawDisplay();
             return;
         }
 
         // ── Group 14: Cross ops — OP/SRC for all 4 outputs ─────────────────
         if (grp == 14) {
-            MD_PageBegin("CROSS OPS", 12);
-            // Column headers
-            display.setCursor(48, _md_rowY);
-            display.println("OP");
-            display.setCursor(92, _md_rowY);
-            display.println("SRC");
-            // Column indicator arrow (odd item → OP column, even → SRC column)
-            if (menuItem % 2 != 0) {
-                display.fillTriangle(42, _md_rowY, 42, _md_rowY + 6, 45, _md_rowY + 3, 1);
-            } else {
-                display.fillTriangle(86, _md_rowY, 86, _md_rowY + 6, 89, _md_rowY + 3, 1);
-            }
-            _md_rowY += MD_ROW_H;
-            for (int i = 0; i < MENU_ITEM_COUNT; i++) {
-                const MenuItem &mi = MENU_ITEMS[i];
-                if (mi.group != 14 || mi.rowStyle == ROW_HIDDEN)
-                    continue;
-                int idx = i + 1;
-                int idxSrc = idx + 1;
-                bool sel = (idx == menuItem || idxSrc == menuItem);
-                bool edit = sel && (menuMode == menuItem);
-                MD_TwoColRow(mi.label,
-                             mi.valueFn ? mi.valueFn() : String(""), mi.valueFn != nullptr,
-                             mi.valueFn2 ? mi.valueFn2() : String(""), mi.valueFn2 != nullptr,
-                             mi.col1x, mi.col2x, sel, edit);
-            }
+            MD_RenderTwoColPage("CROSS OPS", menuItem, menuMode, 14,
+                                {"OP", 48, 42}, {"SRC", 92, 86}, true);
+            RedrawDisplay();
+            return;
+        }
+
+        // ── Groups 19-24: the two-column pages again, for outputs 5-8 ──────
+        // Identical geometry to their 1-4 counterparts, so the expander half of
+        // the menu reads the same as the base half. Groups 17, 18 and 21 are
+        // single-column and fall through to the generic renderer.
+        if (grp == 19) {
+            MD_RenderTwoColPage("OUTPUT SETTINGS 5-8", menuItem, menuMode, 19,
+                                {"LVL", 70, 65}, {"OFF", 100, 95}, true);
+            RedrawDisplay();
+            return;
+        }
+        if (grp == 20) {
+            MD_RenderTwoColPage("OUTPUT STATE 5-8", menuItem, menuMode, 20,
+                                {"STATE", 58, 52}, {"INV", 100, 94}, false);
+            RedrawDisplay();
+            return;
+        }
+        if (grp == 22) {
+            MD_RenderTwoColPage("OUTPUT SWING 5-8", menuItem, menuMode, 22,
+                                {"AMT", 64, 59}, {"EVERY", 94, 89}, true);
+            RedrawDisplay();
+            return;
+        }
+        if (grp == 23) {
+            MD_RenderTwoColPage("PHASE / DUTY 5-8", menuItem, menuMode, 23,
+                                {"PH", 70, 65}, {"DTY", 100, 95}, true);
+            RedrawDisplay();
+            return;
+        }
+        if (grp == 24) {
+            MD_RenderTwoColPage("CROSS OPS 5-8", menuItem, menuMode, 24,
+                                {"OP", 48, 42}, {"SRC", 92, 86}, true);
             RedrawDisplay();
             return;
         }
@@ -385,14 +347,14 @@ void HandleDisplay() {
                 int idx = i + 1;
                 bool sel = (idx == menuItem);
                 bool edit = sel && (menuMode == idx);
-                if (idx == 59) { // Curv — left half of last row
+                if (idx == MI_ENV_CURVE) { // Curv — left half of last row
                     display.setCursor(MD_LABEL_X, _md_rowY);
                     display.print(mi.label);
                     if (mi.valueFn)
                         display.print(mi.valueFn());
                     _MD_Cursor(_md_rowY, sel, edit);
                     // Don't advance; Retr shares this row
-                } else if (idx == 60) { // Retr — right half
+                } else if (idx == MI_ENV_RETRIG) { // Retr — right half
                     bool sel2 = (idx == menuItem);
                     bool edit2 = sel2 && (menuMode == idx);
                     display.setCursor(70, _md_rowY);
@@ -415,52 +377,38 @@ void HandleDisplay() {
             return;
         }
 
-        // ── Group 10: CV inputs — targets full-width, then two-col attn/off
+        // ── Group 10: CV input targets — one full-width row per input ─────
+        // Full-width rather than label+value-at-a-column: a target name runs to
+        // 13 characters ("Swing 8 Evry") and would not clear a column stop.
         if (grp == 10) {
             MD_PageBegin("CV INPUT TARGETS", 20);
             for (int i = 0; i < MENU_ITEM_COUNT; i++) {
                 const MenuItem &mi = MENU_ITEMS[i];
                 if (mi.group != 10)
                     continue;
-                int idx = i + 1;
-                if (mi.rowStyle == ROW_HIDDEN)
-                    continue; // skip paired offset items
-                bool sel = (idx == menuItem);
-                bool edit = sel && (menuMode == idx);
-                if (mi.rowStyle == ROW_SINGLE && idx <= 62) {
-                    // Full-width target rows (CV 1:/CV 2: target)
-                    display.setCursor(MD_LABEL_X, _md_rowY);
-                    display.print(mi.label);
-                    if (mi.valueFn)
-                        display.print(mi.valueFn());
-                    _MD_Cursor(_md_rowY, sel, edit);
-                    _md_rowY += MD_ROW_H;
-                } else if (mi.rowStyle == ROW_TWOCOL) {
-                    // First time through: draw column headers
-                    if (idx == 63) {
-                        display.setCursor(60, _md_rowY);
-                        display.println("ATTN");
-                        display.setCursor(100, _md_rowY);
-                        display.println("OFF");
-                        // Column indicator
-                        int colItem = menuItem; // 63,64 or 65,66
-                        if (colItem == 63 || colItem == 65) {
-                            display.fillTriangle(55, _md_rowY, 55, _md_rowY + 6, 58, _md_rowY + 3, 1);
-                        } else if (colItem == 64 || colItem == 66) {
-                            display.fillTriangle(95, _md_rowY, 95, _md_rowY + 6, 98, _md_rowY + 3, 1);
-                        }
-                        _md_rowY += MD_ROW_H;
-                    }
-                    // Two-col data row
-                    int idxOff = idx + 1;
-                    bool rowSel = (idx == menuItem || idxOff == menuItem);
-                    bool rowEdit = rowSel && (menuMode == menuItem);
-                    MD_TwoColRow(mi.label,
-                                 mi.valueFn ? mi.valueFn() : String(""), mi.valueFn != nullptr,
-                                 mi.valueFn2 ? mi.valueFn2() : String(""), mi.valueFn2 != nullptr,
-                                 mi.col1x, mi.col2x, rowSel, rowEdit);
-                }
+                const int idx = i + 1;
+                // IN 4's row is only there when an expander is.
+                if (!MenuItemEnabled(idx))
+                    continue;
+                const bool sel = (idx == menuItem);
+                display.setCursor(MD_LABEL_X, _md_rowY);
+                display.print(mi.label);
+                if (mi.valueFn)
+                    display.print(mi.valueFn());
+                _MD_Cursor(_md_rowY, sel, sel && (menuMode == idx));
+                _md_rowY += MD_ROW_H;
             }
+            RedrawDisplay();
+            return;
+        }
+
+        // ── Group 25: CV attenuation / offset ──────────────────────────────
+        // Split off from group 10 when IN 4 arrived. Targets plus attenuation
+        // pairs came to seven rows on one page, and six is the ceiling — the
+        // third input's row was landing at y=65 and being silently clipped.
+        if (grp == 25) {
+            MD_RenderTwoColPage("CV ATTEN / OFFSET", menuItem, menuMode, 25,
+                                {"ATTN", 60, 55}, {"OFF", 100, 95}, true);
             RedrawDisplay();
             return;
         }

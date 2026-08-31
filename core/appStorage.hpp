@@ -106,19 +106,19 @@ inline CalibrationData LoadCalibration() {
     EEPROM.get(EEPROM_CAL_BASE, cal);
 
     bool finite = true;
-    for (int i = 0; i < NUM_CV_INS; i++)
+    for (int i = 0; i < NUM_MAX_CV_INS; i++)
         if (cal.cvScale[i] != cal.cvScale[i] || cal.cvOffset[i] != cal.cvOffset[i])
             finite = false;
-    for (int i = 0; i < NUM_OUTPUTS; i++)
+    for (int i = 0; i < NUM_MAX_OUTPUTS; i++)
         if (cal.dacScale[i] != cal.dacScale[i] || cal.dacOffset[i] != cal.dacOffset[i])
             finite = false;
 
     if (cal.magic != CAL_MAGIC || !cal.valid || !finite) {
-        for (int i = 0; i < NUM_CV_INS; i++) {
+        for (int i = 0; i < NUM_MAX_CV_INS; i++) {
             cal.cvScale[i] = 5000.0f / (float)MAXADC;
             cal.cvOffset[i] = 0.0f;
         }
-        for (int i = 0; i < NUM_OUTPUTS; i++) {
+        for (int i = 0; i < NUM_MAX_OUTPUTS; i++) {
             cal.dacScale[i] = 1.0f;
             cal.dacOffset[i] = 0.0f;
         }

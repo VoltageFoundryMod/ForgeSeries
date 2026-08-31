@@ -26,15 +26,15 @@
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="mm"
-     inkscape:zoom="7.4637825"
-     inkscape:cx="47.696995"
-     inkscape:cy="362.34979"
+     inkscape:zoom="3.7318913"
+     inkscape:cx="24.116458"
+     inkscape:cy="277.47325"
      inkscape:window-width="1749"
      inkscape:window-height="2061"
      inkscape:window-x="47"
      inkscape:window-y="0"
      inkscape:window-maximized="0"
-     inkscape:current-layer="layer2" /><title
+     inkscape:current-layer="F.Mask" /><title
      id="title1">Eurorack panel — 6HP × 128.5mm</title><g
      id="Edge.Cuts"
      inkscape:groupmode="layer"
@@ -42,9 +42,9 @@
      style="display:inline;fill:#262b33;fill-rule:evenodd;stroke:#9aa4b3;stroke-width:10"><path
        d="M 0,0 H 3012.0002 V 12864.883 H 0 Z m 635.00002,140.16214 h 230.00002 c 88.36562,0 159.99996,71.71741 159.99996,160.18532 0,88.4679 -71.63434,160.18531 -159.99996,160.18531 H 635.00002 c -88.36562,0 -159.99993,-71.71741 -159.99993,-160.18531 0,-88.46791 71.63431,-160.18532 159.99993,-160.18532 z m 0,12264.18786 h 230.00002 c 88.36562,0 159.99996,71.717 159.99996,160.186 0,88.467 -71.63434,160.185 -159.99996,160.185 H 635.00002 c -88.36562,0 -159.99993,-71.718 -159.99993,-160.185 0,-88.469 71.63431,-160.186 159.99993,-160.186 z"
        id="path1"
-       style="fill:#1a1a1a;stroke-width:0;stroke-dasharray:none"
+       style="display:inline;fill:#1a1a1a;stroke-width:0;stroke-dasharray:none"
        sodipodi:nodetypes="cccccssssssssssssss" /><ellipse
-       style="display:inline;fill:#00ff00;fill-opacity:1;stroke-width:5.27133"
+       style="display:inline;fill:#00ff00;fill-opacity:1;stroke-width:0;stroke-dasharray:none"
        id="ellipse1"
        cx="14.925419"
        cy="66.794594"
@@ -52,7 +52,7 @@
        ry="3.0700057"
        inkscape:label="clkin"
        transform="matrix(100,0,0,100,13.458169,0)" /><ellipse
-       style="display:inline;fill:#ffff00;fill-opacity:1;stroke-width:6.31256"
+       style="display:inline;fill:#ffff00;fill-opacity:1;stroke-width:0;stroke-dasharray:none"
        id="ellipse2"
        cx="14.925419"
        cy="50.9184"
@@ -60,7 +60,7 @@
        ry="3.6460009"
        inkscape:label="encoder"
        transform="matrix(100,0,0,100,13.458169,0)" /><ellipse
-       style="display:inline;fill:#00ff00;fill-opacity:1;stroke-width:5.27133"
+       style="display:inline;fill:#00ff00;fill-opacity:1;stroke-width:0;stroke-dasharray:none"
        id="ellipse3"
        cx="22.652269"
        cy="80.797005"
@@ -68,7 +68,7 @@
        ry="3.0700057"
        inkscape:label="cv2in"
        transform="matrix(100,0,0,100,13.458169,0)" /><ellipse
-       style="display:inline;fill:#00ff00;fill-opacity:1;stroke-width:5.27133"
+       style="display:inline;fill:#00ff00;fill-opacity:1;stroke-width:0;stroke-dasharray:none"
        id="ellipse4"
        cx="7.4122691"
        cy="80.797005"
@@ -76,7 +76,7 @@
        ry="3.0700057"
        inkscape:label="cv1in"
        transform="matrix(100,0,0,100,13.458169,0)" /><ellipse
-       style="display:inline;fill:#0000ff;fill-opacity:1;stroke-width:5.27133"
+       style="display:inline;fill:#0000ff;fill-opacity:1;stroke-width:0;stroke-dasharray:none"
        id="ellipse5"
        cx="22.731119"
        cy="95.198509"
@@ -84,7 +84,7 @@
        ry="3.0700057"
        inkscape:label="out2"
        transform="matrix(100,0,0,100,13.458169,0)" /><ellipse
-       style="display:inline;fill:#0000ff;fill-opacity:1;stroke-width:5.27133"
+       style="display:inline;fill:#0000ff;fill-opacity:1;stroke-width:0;stroke-dasharray:none"
        id="ellipse6"
        cx="7.4599247"
        cy="95.198509"
@@ -92,7 +92,7 @@
        ry="3.0700057"
        inkscape:label="out1"
        transform="matrix(100,0,0,100,13.458169,0)" /><ellipse
-       style="display:inline;fill:#0000ff;fill-opacity:1;stroke-width:5.27133"
+       style="display:inline;fill:#0000ff;fill-opacity:1;stroke-width:0;stroke-dasharray:none"
        id="ellipse7"
        cx="7.4599247"
        cy="109.39851"
@@ -100,7 +100,7 @@
        ry="3.0700057"
        inkscape:label="out3"
        transform="matrix(100,0,0,100,13.458169,0)" /><ellipse
-       style="display:inline;fill:#0000ff;fill-rule:evenodd;stroke:#9aa4b3;stroke-width:5.27133;fill-opacity:1"
+       style="display:inline;fill:#0000ff;fill-rule:evenodd;stroke:#9aa4b3;stroke-width:0;fill-opacity:1;stroke-dasharray:none"
        id="ellipse8"
        cx="22.731119"
        cy="109.39851"

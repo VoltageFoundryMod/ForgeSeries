@@ -4,8 +4,15 @@
 // live in boardPinouts.hpp, included below, so code that only
 // needs to scale a reading does not have to include the whole DAC driver.
 
-// MCP4728 I2C address (all 4 outputs go through this DAC)
+// MCP4728 I2C address — the base board's DAC, outputs 1-4.
 #define MCP4728_ADDR 0x60
+
+// The expander's MCP4728, outputs 5-8. Same part, same bus (Wire1), so its
+// address has to be moved off the 0x60 default before it can be fitted. The
+// MCP4728 stores its address in EEPROM and changing it needs LDAC toggled
+// during the write, which no pin here can do — it is done out-of-circuit
+// through the expander's program header.
+#define MCP4728_EXP_ADDR 0x61
 
 #include <Adafruit_MCP4728.h>
 #include <Arduino.h>
@@ -21,15 +28,25 @@
 // MCP4728 quad 12-bit I2C DAC (channels A=out1, B=out2, C=out3, D=out4)
 inline Adafruit_MCP4728 dac4;
 
-// Current per-channel shadow values for fast single-channel updates
-inline uint16_t _dacShadow[4] = {0, 0, 0, 0};
+// Current per-channel shadow values for fast single-channel updates.
+// Indices 4-7 are the expander's, written only when one is fitted.
+inline uint16_t _dacShadow[NUM_MAX_OUTPUTS] = {0, 0, 0, 0, 0, 0, 0, 0};
 
-// Physical channel mapping: board wiring has DACB and DACC swapped relative
-// to the expected output order (Out1=A, Out2=C, Out3=B, Out4=D).
+// Set once at boot by ProbeExpander(). Nothing writes the expander DAC unless
+// this is true, so a module with no expander pays one I2C probe and nothing
+// more.
+inline bool expanderDacPresent = false;
+
+// Physical channel mapping: DAC channel A-D drive outputs 1-4 in order.
+//
+// This used to swap B and C, compensating for the GY-MCP4728 breakout's wiring
+// on the older board. The board no longer uses that breakout — the DAC is on
+// the PCB with its outputs wired in order, and the expander is wired the same
+// way — so the mapping is the identity on both devices and the swap is gone.
 inline const MCP4728_channel_t _chanMap[4] = {
     MCP4728_CHANNEL_A, // Output 1 → DACA → Jack 1 (CV 1)
-    MCP4728_CHANNEL_C, // Output 2 → DACC → Jack 2 (CV 2)   (B/C swapped in HW)
-    MCP4728_CHANNEL_B, // Output 3 → DACB → Jack 3 (GATE 1) (B/C swapped in HW)
+    MCP4728_CHANNEL_B, // Output 2 → DACB → Jack 2 (CV 2)
+    MCP4728_CHANNEL_C, // Output 3 → DACC → Jack 3 (GATE 1)
     MCP4728_CHANNEL_D, // Output 4 → DACD → Jack 4 (GATE 2)
 };
 
@@ -38,7 +55,7 @@ inline void InitIO() {
 
     pinMode(CLK_IN_PIN, INPUT_PULLDOWN); // TRIG in — pull low so a floating
                                          // input doesn't fire spurious triggers
-    for (int i = 0; i < NUM_CV_INS; i++) {
+    for (int i = 0; i < NUM_MAX_CV_INS; i++) {
         pinMode(CV_IN_PINS[i], INPUT);
     }
     pinMode(ENCODER_SW, INPUT_PULLUP);
@@ -134,17 +151,52 @@ inline bool InitDAC() {
         return false;
     }
     Serial.println("MCP4728 found. Configuring channels (VDD ref, Gain 1x)...");
-    // setChannelValue with udac=false uses the Multi-Write command (UDAC=0).
-    // This updates the OUTPUT register immediately -- no LDAC pulse needed.
-    // fastWrite only updates the INPUT register; output changes only when LDAC
-    // goes low. Since LDAC is unconnected on the GY-MCP4728 board, fastWrite
-    // must NOT be used.
+    // Multi-Write (UDAC=0), and it is used here for one reason: it is the only
+    // frame that carries the VREF and gain bits. The hot path is Fast Write,
+    // which does not, and relies on the device retaining what this sets.
+    // Changing the reference or gain means changing it here.
     bool ok = true;
     for (int i = 0; i < 4; i++) {
         ok &=
             dac4.setChannelValue(_chanMap[i], 0, MCP4728_VREF_VDD, MCP4728_GAIN_1X);
     }
     Serial.printf("MCP4728 init: %s\n", ok ? "OK" : "FAILED");
+    return ok;
+}
+
+// ── Expander DAC (outputs 5-8) ───────────────────────────────────────────────
+//
+// Is an expander on the bus? A bare address probe: START, address, look for
+// the ACK. Cheap, and the only way to tell — the expander has no ID register
+// and nothing else on the header reports back.
+//
+// Hardware only. Under VCV Rack the Wire shim ACKs every address, so this
+// answers true in every patch; the Rack port decides an expander is present
+// from module adjacency instead and never calls this.
+inline bool ProbeExpander() {
+    Wire1.beginTransmission(MCP4728_EXP_ADDR);
+    expanderDacPresent = (Wire1.endTransmission() == 0);
+    return expanderDacPresent;
+}
+
+// Configure the expander's four channels. Same reference and gain as the base
+// DAC, because the output stage behind it is the same circuit — 10k into the
+// non-inverting input, 6k8 to ground, 9k1 plus a 2k trimmer in the feedback.
+// The channel map is the identity here and on the base board alike.
+inline bool InitExpDAC() {
+    if (!ProbeExpander()) {
+        Serial.println("No expander DAC at 0x61.");
+        return false;
+    }
+    bool ok = true;
+    for (int i = 0; i < NUM_EXP_OUTPUTS; i++) {
+        Wire1.beginTransmission(MCP4728_EXP_ADDR);
+        Wire1.write(0x40 | (i << 1)); // Multi-Write, channel i, UDAC=0
+        Wire1.write(0x00);            // VREF=VDD, PD=normal, GAIN=1x, D[11:8]=0
+        Wire1.write(0x00);            // D[7:0]
+        ok &= (Wire1.endTransmission() == 0);
+    }
+    Serial.printf("MCP4728 expander init: %s\n", ok ? "OK" : "FAILED");
     return ok;
 }
 
@@ -163,38 +215,91 @@ inline void SetDACCalBypass(bool bypass) { _dacCalBypass = bypass; }
 // (clamped) when calibration is invalid or bypassed, so an uncalibrated module
 // behaves exactly as before.
 inline uint16_t _CalibrateDACValue(int channel, uint32_t desired) {
+    if (channel < 0 || channel >= NUM_MAX_OUTPUTS)
+        return (uint16_t)constrain((int)desired, 0, MAXDAC);
     if (_dacCalBypass || !cal.valid)
         return (uint16_t)constrain((int)desired, 0, MAXDAC);
     float cmd = cal.dacScale[channel] * (float)desired + cal.dacOffset[channel];
     return (uint16_t)constrain((int)lroundf(cmd), 0, MAXDAC);
 }
 
-// Write all 4 DAC channels.
-// Uses MCP4728 Multi-Write command in a single I2C transaction (one
-// START/STOP), which is ~3x faster than four separate setChannelValue() calls.
-// Hardware channel mapping: DACA=sw0, DACB=sw2, DACC=sw1, DACD=sw3 (B/C wired
-// swapped). Each 3-byte block: [CMD: 0x40|(hwCh<<2)]
-// [VREF=0,PD=00,GAIN=0,D11:8] [D7:0]
+// Write all 4 DAC channels in a single I2C transaction (one START/STOP).
+// Hardware channels A,B,C,D drive outputs 1..4 in order — see _chanMap above.
+//
+// FRAME FORMAT: MCP4728 Fast Write — two bytes per channel, channels A-D in
+// order, no command byte:
+//
+//     [0 0 PD1 PD0 D11 D10 D9 D8] [D7..D0]
+//
+// Nine bytes a frame against Multi-Write's thirteen, which at 400 kHz is about
+// 210 us against 300. With two devices on the bus that is the difference
+// between a ~600 us and a ~415 us frame, straight off the Tick0 rate.
+//
+// Two conditions make this legal, and both are hardware facts rather than
+// anything the firmware arranges:
+//
+//   * Fast Write updates the INPUT register; the output follows it only while
+//     LDAC is low. LDAC IS low here — grounded on the base board, pulled down
+//     on the shared node the expander joins — so it is transparent. Nothing
+//     drives it and nothing needs to; the pin would only be wanted for
+//     latching both DACs at the same instant, which no pad is left for.
+//   * Fast Write carries no VREF or gain bits, so those must already be set.
+//     InitDAC()/InitExpDAC() write them once with Multi-Write and the device
+//     retains them.
+//
+// If LDAC ever came off ground, the failure is loud rather than subtle: the
+// input registers would fill and the outputs would never move at all.
 inline void DACWriteAll(uint16_t ch0, uint16_t ch1, uint16_t ch2, uint16_t ch3) {
     _dacShadow[0] = ch0;
     _dacShadow[1] = ch1;
     _dacShadow[2] = ch2;
     _dacShadow[3] = ch3;
-    // Apply per-channel output calibration (desired counts → command code),
-    // then map into hardware channel order A,B,C,D = sw[0,2,1,3].
-    const uint16_t c0 = _CalibrateDACValue(0, ch0);
-    const uint16_t c1 = _CalibrateDACValue(1, ch1);
-    const uint16_t c2 = _CalibrateDACValue(2, ch2);
-    const uint16_t c3 = _CalibrateDACValue(3, ch3);
-    const uint16_t hwVals[4] = {c0, c2, c1, c3};
+    // Apply per-channel output calibration (desired counts → command code).
+    const uint16_t hwVals[4] = {
+        _CalibrateDACValue(0, ch0),
+        _CalibrateDACValue(1, ch1),
+        _CalibrateDACValue(2, ch2),
+        _CalibrateDACValue(3, ch3),
+    };
     Wire1.beginTransmission(MCP4728_ADDR);
     for (int i = 0; i < 4; i++) {
-        Wire1.write(
-            0x40 |
-            (i << 1)); // Multi-Write cmd: cmd=010, channel=i (bits [2:1]), UDAC=0
-        Wire1.write((hwVals[i] >> 8) &
-                    0x0F);             // VREF=VDD, PD=normal, GAIN=1x, D[11:8]
-        Wire1.write(hwVals[i] & 0xFF); // D[7:0]
+        Wire1.write((hwVals[i] >> 8) & 0x0F); // PD=normal, D[11:8]
+        Wire1.write(hwVals[i] & 0xFF);        // D[7:0]
+    }
+    uint8_t result = Wire1.endTransmission();
+    (void)result;
+}
+
+// Write the expander's four channels (outputs 5-8). Same Fast Write frame as
+// DACWriteAll — see the note there — addressed to the second device.
+//
+// The two banks are NOT updated simultaneously and cannot be: latching them
+// together needs LDAC driven, and no pad is left to drive it. Bank 2 trails
+// bank 1 by one transaction, every frame. That is a fixed offset rather than
+// jitter — both values come from the same engine pass — and at the rates
+// these outputs run it is not observable.
+//
+// Measure with metrics.BeginDACMeasurement() before tuning further; the
+// byte counts above are arithmetic, not readings.
+inline void DACWriteAllExp(uint16_t ch4, uint16_t ch5, uint16_t ch6, uint16_t ch7) {
+    if (!expanderDacPresent)
+        return;
+    _dacShadow[4] = ch4;
+    _dacShadow[5] = ch5;
+    _dacShadow[6] = ch6;
+    _dacShadow[7] = ch7;
+    // The expander's four trimmers are its own, so its calibration entries are
+    // separate: channels 4-7 of the same per-channel tables.
+    const uint16_t hwVals[4] = {
+        _CalibrateDACValue(4, ch4),
+        _CalibrateDACValue(5, ch5),
+        _CalibrateDACValue(6, ch6),
+        _CalibrateDACValue(7, ch7),
+    };
+    Wire1.beginTransmission(MCP4728_EXP_ADDR);
+    for (int i = 0; i < 4; i++) {
+        Wire1.write((hwVals[i] >> 8) & 0x0F); // PD=normal, D[11:8]
+        Wire1.write(hwVals[i] & 0xFF);        // D[7:0]
     }
     uint8_t result = Wire1.endTransmission();
     (void)result;

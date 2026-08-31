@@ -24,8 +24,8 @@ class Adafruit_MCP4728 {
                          MCP4728_gain_t = MCP4728_GAIN_1X,
                          MCP4728_pd_mode_t = MCP4728_PD_MODE_NORMAL,
                          bool = false) {
-        // Hardware channels A,B,C,D map to outputs 0,2,1,3 (B/C swapped on board).
-        static const int hwToOut[4] = {0, 2, 1, 3};
+        // Hardware channels A,B,C,D drive outputs 0..3 in order (see core/boardIO.hpp).
+        static const int hwToOut[4] = {0, 1, 2, 3};
         if (g_host) g_host->dac[hwToOut[(int)ch]] = value;
         return true;
     }

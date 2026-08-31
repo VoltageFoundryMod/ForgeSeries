@@ -40,13 +40,13 @@ CF_ARRAY (unsigned long, _extInterval, 3)
 CF_SCALAR(int,           _extIntervalIndex)
 
 // ── CV inputs (../lib/cvInputs.hpp) ──────────────────────────────────────────
-CF_ARRAY (CVTarget, pendingCVInputTarget, NUM_CV_INS)
-CF_ARRAY (CVTarget, CVInputTarget,        NUM_CV_INS)
-CF_ARRAY (int,      CVInputAttenuation,   NUM_CV_INS)
-CF_ARRAY (int,      CVInputOffset,        NUM_CV_INS)
-CF_ARRAY (float,    channelCv,            NUM_CV_INS)
-CF_ARRAY (float,    oldChannelCv,         NUM_CV_INS)
-CF_ARRAY (float,    lastDispatchedCv,    NUM_CV_INS)
+CF_ARRAY (CVTarget, pendingCVInputTarget, NUM_MAX_CV_INS)
+CF_ARRAY (CVTarget, CVInputTarget,        NUM_MAX_CV_INS)
+CF_ARRAY (int,      CVInputAttenuation,   NUM_MAX_CV_INS)
+CF_ARRAY (int,      CVInputOffset,        NUM_MAX_CV_INS)
+CF_ARRAY (float,    channelCv,            NUM_MAX_CV_INS)
+CF_ARRAY (float,    oldChannelCv,         NUM_MAX_CV_INS)
+CF_ARRAY (float,    lastDispatchedCv,     NUM_MAX_CV_INS)
 CF_SCALAR(bool,     lastResetState)                    // volatile global
 
 // ── Presets (../lib/presetManager.hpp) ───────────────────────────────────────
@@ -65,6 +65,7 @@ CF_SCALAR(int,  quantizerOutputSelect)
 CF_SCALAR(int,  envelopeOutputSelect)
 CF_SCALAR(int,  loopOutputSelect)
 CF_SCALAR(int,  menuScreenTimeout)
+CF_SCALAR(int,  expanderType)
 
 // ── Objects (default-constructible, swappable) ───────────────────────────────
 CF_OBJECT(CalibrationData, cal)

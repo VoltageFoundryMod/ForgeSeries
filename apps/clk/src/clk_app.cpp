@@ -67,6 +67,7 @@ static volatile bool _displayLocked = false;
     } while (0)
 
 // ── 2. ClockForge's own headers ─────────────────────────────────────────────
+#include "../lib/expander.hpp"
 #include "../lib/euclidean.hpp"
 #include "../lib/outputs.hpp"
 #include "../lib/clockEngine.hpp"
@@ -91,11 +92,17 @@ static volatile bool _displayLocked = false;
 #include "../lib/version.hpp"
 // clang-format on
 
-Output outputs[NUM_OUTPUTS] = {
-    Output(1, OutputType::DACOut), // all outputs go through the MCP4728
+Output outputs[NUM_MAX_OUTPUTS] = {
+    Output(1, OutputType::DACOut), // all outputs go through an MCP4728
     Output(2, OutputType::DACOut),
     Output(3, OutputType::DACOut),
-    Output(4, OutputType::DACOut)};
+    Output(4, OutputType::DACOut),
+    // 5-8 exist whether or not an expander is fitted; ActiveOutputs()
+    // decides how many are driven. See lib/expander.hpp.
+    Output(5, OutputType::DACOut),
+    Output(6, OutputType::DACOut),
+    Output(7, OutputType::DACOut),
+    Output(8, OutputType::DACOut)};
 
 bool masterState = true; // global play/stop
 
@@ -110,6 +117,7 @@ int quantizerOutputSelect = 0;
 int envelopeOutputSelect = 0;
 int loopOutputSelect = 0;
 int menuScreenTimeout = 2;
+int expanderType = 0;
 unsigned long lastEncoderUpdate = 0;
 
 // ── core/encoderMenu.hpp hooks ───────────────────────────────────────────────
@@ -120,19 +128,18 @@ static inline void MenuApplyEdit(int item, int delta) {
         MENU_ITEMS[item - 1].setter(delta);
 }
 static inline void OnItemActivated(const MenuItem &) {}
-// Items 61/62 edit a CV target through a pending copy, so it is seeded on the
-// way in and committed on the way out.
+// The CV target rows edit through a pending copy, so it is seeded on the way in
+// and committed on the way out. Which items those are comes from
+// CVTargetItemChannel() in menuHandlers.hpp — see the note there.
 static inline void OnEnterEdit(int item) {
-    if (item == 61)
-        pendingCVInputTarget[0] = CVInputTarget[0];
-    else if (item == 62)
-        pendingCVInputTarget[1] = CVInputTarget[1];
+    const int ch = CVTargetItemChannel(item);
+    if (ch >= 0)
+        pendingCVInputTarget[ch] = CVInputTarget[ch];
 }
 static inline void OnExitEdit(int item) {
-    if (item == 61)
-        CVInputTarget[0] = pendingCVInputTarget[0];
-    else if (item == 62)
-        CVInputTarget[1] = pendingCVInputTarget[1];
+    const int ch = CVTargetItemChannel(item);
+    if (ch >= 0)
+        CVInputTarget[ch] = pendingCVInputTarget[ch];
 }
 static inline void OnMenuNavigate() {}
 
@@ -148,6 +155,11 @@ class ClockForgeApp final : public IApp {
         EEPROMInit();
         cal = LoadCalibration();
         UpdateParameters(Load(0));
+
+        // UpdateParameters() has restored expanderType, so this is the first
+        // point at which we know whether to look for the second DAC.
+        if (ExpanderFitted())
+            InitExpDAC();
 
         // Timer BEFORE the external-clock interrupt: ClockReceived() calls
         // UpdateBPM(), which cancels the repeating timer, so the timer struct

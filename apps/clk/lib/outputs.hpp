@@ -50,7 +50,20 @@ enum WaveformType {
     ADSREnvelope,
     CVInput1, // mirror CV input 1 to this output (quantise via the Quantize toggle)
     CVInput2, // mirror CV input 2 to this output
+    CVInput3, // mirror CV input 3 (the expander's IN 4)
 };
+
+// The passthrough waveforms are contiguous and last, so the several places
+// that ask 'is this output just mirroring an input?' can be a range test.
+// They were four separate `w == CVInput1 || w == CVInput2` conditions, each of
+// which would have needed a third term.
+static inline bool IsCVPassthrough(WaveformType w) {
+    return w >= WaveformType::CVInput1 && w <= WaveformType::CVInput3;
+}
+
+// Which CV input each passthrough waveform mirrors, indexed by CV channel.
+static const WaveformType kCvPassthroughWave[NUM_MAX_CV_INS] = {
+    WaveformType::CVInput1, WaveformType::CVInput2, WaveformType::CVInput3};
 
 String WaveformTypeDescriptions[] = {
     "Square",
@@ -74,6 +87,7 @@ String WaveformTypeDescriptions[] = {
     "ADSR Env",
     "CV 1",
     "CV 2",
+    "CV 3",
 };
 int WaveformTypeLength = sizeof(WaveformTypeDescriptions) / sizeof(WaveformTypeDescriptions[0]);
 
@@ -109,15 +123,25 @@ int CrossOpLength = sizeof(CrossOpDescriptions) / sizeof(CrossOpDescriptions[0])
 
 // Cross source: which signal modulates this output.  Out1-4 use the other
 // outputs' pre-cross-op (snapshot) values; IN1/IN2 use the sampled CV inputs.
+// Sources are the outputs in order, then the CV inputs. The split point is
+// NUM_MAX_OUTPUTS, which is what engine.hpp tests to decide whether an index
+// names an output's snapshot or a sampled input.
 enum CrossSource {
     CrossSrcOut1 = 0,
     CrossSrcOut2,
     CrossSrcOut3,
     CrossSrcOut4,
+    CrossSrcOut5,
+    CrossSrcOut6,
+    CrossSrcOut7,
+    CrossSrcOut8,
     CrossSrcIn1,
     CrossSrcIn2,
+    CrossSrcIn3,
 };
-String CrossSourceDescriptions[] = {"Out 1", "Out 2", "Out 3", "Out 4", "IN 1", "IN 2"};
+static const char *const CrossSourceDescriptions[] = {
+    "Out 1", "Out 2", "Out 3", "Out 4", "Out 5",
+    "Out 6", "Out 7", "Out 8", "IN 1", "IN 2", "IN 3"};
 int CrossSourceLength = sizeof(CrossSourceDescriptions) / sizeof(CrossSourceDescriptions[0]);
 
 // ADSR envelope parameters
@@ -396,14 +420,16 @@ class Output {
     // per-instance state snapshots.  Value/codegen identical on hardware.
     static constexpr float MaxWaveValue = 255.0;
     static int const _dividerAmount = 21;
-    float _clockDividers[_dividerAmount] = {0.0078125, 0.015625, 0.03125, 0.0625, 0.125, 0.25, 0.3333333333, 0.5, 0.6666666667, 1.0, 1.5, 2.0, 3.0, 4.0, 8.0, 16.0, 24.0, 32.0, 48.0, 64.0, 10000};
+    // static: these are constants, and a per-instance copy cost 84 bytes in
+    // every Output — 672 across eight of them.
+    static constexpr float _clockDividers[_dividerAmount] = {0.0078125, 0.015625, 0.03125, 0.0625, 0.125, 0.25, 0.3333333333, 0.5, 0.6666666667, 1.0, 1.5, 2.0, 3.0, 4.0, 8.0, 16.0, 24.0, 32.0, 48.0, 64.0, 10000};
     String _dividerDescription[_dividerAmount] = {"/128", "/64", "/32", "/16", "/8", "/4", "/3", "/2", "/1.5", "x1", "x1.5", "x2", "x3", "x4", "x8", "x16", "x24", "x32", "x48", "x64", "Env"};
     static int const MaxEuclideanSteps = 64;
 
     // The shuffle of the TR-909 delays each even-numbered 1/16th by 2/96 of a beat for shuffle setting 1,
     // 4/96 for 2, 6/96 for 3, 8/96 for 4, 10/96 for 5 and 12/96 for 6.
     static int const _swingAmount = 7;
-    float _swingAmounts[_swingAmount] = {0, 2, 4, 6, 8, 10, 12};
+    static constexpr float _swingAmounts[_swingAmount] = {0, 2, 4, 6, 8, 10, 12};
     String _swingAmountDescriptions[_swingAmount] = {"0", "2/96", "4/96", "6/96", "8/96", "10/96", "12/96"};
 
     // Variables
@@ -1239,7 +1265,7 @@ void Output::GeneratePulse(int PPQN, unsigned long globalTick) {
     // Probability and Euclidean don't gate its output, so make them inert here
     // too and keep the blink indicator following the flowing CV (rather than
     // blinking "off" while the CV is still being emitted).
-    if (_waveformType == WaveformType::CVInput1 || _waveformType == WaveformType::CVInput2) {
+    if (IsCVPassthrough(_waveformType)) {
         _pulseFired = true;
         _blinkOnStartTick = globalTick;
         StartWaveform();
@@ -1473,6 +1499,7 @@ void Output::Pulse(int PPQN, unsigned long globalTick) {
         break;
     case WaveformType::CVInput1:
     case WaveformType::CVInput2:
+    case WaveformType::CVInput3:
         // Output mirrors a CV input.  Keep _waveValue in sync for the blink
         // indicator; ComputeRawOutput() emits _inputCV scaled to the output domain so
         // the quantiser, when enabled, sees the correct note grid.
@@ -1510,7 +1537,7 @@ void Output::SetWaveformType(WaveformType type) {
         _envStartTime = 0;
         _triggerMode = true;
         SetDividerInternal(_dividerAmount - 1); // Env slot (always the last entry)
-    } else if (_waveformType == WaveformType::CVInput1 || _waveformType == WaveformType::CVInput2) {
+    } else if (IsCVPassthrough(_waveformType)) {
         // CV passthrough: behaves like a value waveform.  Leave the quantiser
         // state untouched so it is an independent toggle — pick "CV 1/2", then
         // enable Quantize in the Quantize menu (the two-step flow).
@@ -1575,7 +1602,7 @@ float Output::ComputeRawOutput() {
     // counts/semitone × 60 = MAXDAC), so the quantiser (if enabled) sees the
     // correct pitch distances and snaps to the right note (2 V → C2).
     // The hardware ceiling is enforced by FinalizeOutput()'s clamp.
-    if (_waveformType == WaveformType::CVInput1 || _waveformType == WaveformType::CVInput2) {
+    if (IsCVPassthrough(_waveformType)) {
         return _inputCV * (float)MAXDAC;
     }
 

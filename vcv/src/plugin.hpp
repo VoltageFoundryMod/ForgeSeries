@@ -12,6 +12,7 @@ extern Plugin* pluginInstance;
 // declaring only its own Model; those keep the standalone single-module builds
 // working and are what the module sources include.
 extern Model* modelClockForge;   // ../apps/clk
+extern Model* modelClockForgeExpander; // ../apps/clk (ClockForge's expander)
 extern Model* modelNoteForge;    // ../apps/dq
 extern Model* modelForgeView;    // ../apps/scp
 extern Model* modelGravityForge; // ../apps/gen

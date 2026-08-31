@@ -35,6 +35,8 @@ Check the module on [ModularGrid](https://modulargrid.net/e/voltage-foundry-modu
 - **Cross Operations**: Modulate an output with another output or CV input using arithmetic, logic and sample/hold operations.
 - **Loops**: Rewind an output's pattern every few beats to build repeating, structured random/Euclidean phrases, with nap/wake muting.
 - **Save/Load Configuration**: Save and load up to 10 configurations.
+- **Expandable**: An optional [expander](#expander) adds four more outputs and a
+  third CV input, with the same per-output settings as the built-in four.
 
 The module has a user-friendly interface with an encoder for navigation and parameter adjustment, and a clear display showing the current settings and status of each output. The main screen shows the BPM and the status of each output, while navigating into each output's settings allows for detailed configuration of that specific output. There are no submenus as all parameters are accessible by scrolling horizontally on the same menu screen.
 
@@ -78,6 +80,12 @@ The current hardware design supports input signals from 0 to 5V, and the outputs
       - [Boot menu](#boot-menu)
     - [Save/Load Configuration](#saveload-configuration)
     - [External Clock Sync](#external-clock-sync)
+  - [Expander](#expander)
+    - [Enabling the expander](#enabling-the-expander)
+    - [What it adds](#what-it-adds)
+    - [After fitting one](#after-fitting-one)
+    - [In VCV Rack](#in-vcv-rack)
+    - [Notes](#notes)
   - [VCV Rack Plugin](#vcv-rack-plugin)
   - [Hardware Calibration](#hardware-calibration)
     - [What you need](#what-you-need)
@@ -296,7 +304,7 @@ Adjust the envelope parameters like Attack, Decay and Release times, Sustain lev
 
 ![cv input targets](images/display/CVTargets.png)
 
-Many parameters can be modulated by the CV inputs. The CV inputs are 0-5V and can be used on the modulation matrix to control the parameters below:
+Many parameters can be modulated by the CV inputs. The CV inputs are 0-5V and can be used on the modulation matrix to control the parameters below (X is the output number, 1-4, or 1-8 with an [expander](#expander) fitted):
 
 - **Start/Stop**: Start or stop all outputs with a gate/CV signal (high = play, low = stop).
 - **Reset**: Reset the clock on a rising edge.
@@ -311,15 +319,19 @@ Many parameters can be modulated by the CV inputs. The CV inputs are 0-5V and ca
 - **Output X Duty Cycle**: Modulate the duty cycle of the output X.
 - **Output X Envelope**: Trigger the envelope generation for the output X by sending a gate/trigger signal to the assigned CV input.
 
-> To route a CV input straight to an output (e.g. to quantize an external CV), no target assignment is needed — set that output's waveform to "CV 1" or "CV 2" instead (see [Quantization](#quantization)).
+> To route a CV input straight to an output (e.g. to quantize an external CV), no target assignment is needed — set that output's waveform to "CV 1", "CV 2" or "CV 3" instead (see [Quantization](#quantization)).
 
-Each input can be assigned to one of the parameters above. The CV input can be attenuated or offset by using configuration parameters.
+Each input can be assigned to one of the parameters above, and each has its own
+attenuation and offset. These live on two pages: **CV INPUT TARGETS** for the
+assignments, and **CV ATTEN / OFFSET** for the trims.
 
-1. Navigate to the selected CV Input parameter.
+1. On **CV INPUT TARGETS**, navigate to the CV input you want to assign.
 2. Click the encoder to enter edit mode.
 3. Use the encoder to select the desired parameter to be modulated.
 4. Click the encoder to exit edit mode.
-5. Optionally, navigate to the attenuation and offset parameters for each CV input and set the desired values in a similar way.
+5. Optionally, scroll on to **CV ATTEN / OFFSET** and set the attenuation and
+   offset for that input in the same way. The arrow at the top of the page shows
+   which of the two columns the encoder is editing.
 
 The CV target is only applied to the selected parameter when the user exits edit mode. This way, a CV connected to an input does not change the scrolled parameters while the user is selecting the target.
 
@@ -442,6 +454,56 @@ If the external clock is faster than needed (for example running at higher PPQN)
 
 The module works with external clocks from 30 to 300 BPM. Due to timer resolution, using very slow external clocks with high multipliers may lead to jitter on the outputs.
 
+## Expander
+
+**Expander 1** is a 4 HP companion module that adds four more outputs (**OUT 5** to
+**OUT 8**) and one more CV input (**IN 4**). It connects to the expansion header on
+the back of the module with a ribbon cable, and draws its power from there.
+
+### Enabling the expander
+
+Go to **SETTINGS → EXPANDER** and select **Exp 1**. The setting is stored with the
+preset, so a saved patch remembers whether it expects an expander.
+
+Left on **None**, the extra menu pages are not shown at all and outputs 5-8 stay
+silent — which is also what happens if the ribbon comes loose.
+
+### What it adds
+
+Outputs 5-8 are not a reduced set: they are the same as outputs 1-4 in every
+respect, with the same clock dividers, waveforms, levels, envelopes, Euclidean
+patterns, swing, probability, loops, quantization and cross-operations.
+
+- Eight new menu pages appear after **CROSS OPS**, mirroring the pages for
+  outputs 1-4: dividers, waveform, level/offset, state and invert, probability,
+  swing, phase/duty, and cross-operations — each covering outputs 5 to 8.
+- The pages that work one output at a time (**Euclidean**, **Loops**,
+  **Envelopes**, **Quantize**) simply extend their **OUTPUT** selector to 1-8.
+- **IN 4** becomes a third CV input, listed as **CV 3**. It can be assigned a
+  modulation target like CV 1 and CV 2, used as a cross-operation source, and
+  mirrored straight to an output with the **CV 3** waveform.
+
+### After fitting one
+
+Re-run the calibration wizard (see [Hardware Calibration](#hardware-calibration)).
+The expander has its own output trimmers and its own input stage, so it needs its
+own measurements — the wizard detects it automatically and grows from six steps
+to eight.
+
+### In VCV Rack
+
+The expander is a separate module in the browser. Place it on either side of
+ClockForge and they connect automatically; the right-click menu's **Add
+Expander 1** adds it and switches the setting on in one go.
+
+### Notes
+
+- The main screen still shows four output indicators, for the module's own jacks.
+- Outputs 5-8 are updated one I2C frame after outputs 1-4, a fixed offset of
+  roughly 200 microseconds. Both banks are calculated in the same pass, so this
+  is a constant delay rather than jitter, and it is far below anything audible at
+  the rates these outputs run.
+
 ## VCV Rack Plugin
 
 The VCV Rack plugin is a full software emulation of the hardware module and can be used to test the module without having the physical hardware. The plugin saves and loads the configuration in the same way as the hardware module internally without the use of VCV Rack presets.
@@ -469,7 +531,12 @@ Calibration data is stored in a dedicated area of non-volatile memory **separate
 
 ### Running calibration
 
-The wizard has 5 steps: one output trim followed by four CV input captures (1 V and 3 V on each of the two inputs).
+The wizard has 6 steps: an output trim, an output offset measurement, then four
+CV input captures (1 V and 3 V on each of the two inputs).
+
+With an [expander](#expander) fitted it becomes 8 steps — the extra two are the
+1 V and 3 V captures for **IN 4** — and the trim and offset steps cover all eight
+output jacks. The wizard detects the expander itself; there is nothing to select.
 
 1. Power on the module **from your Eurorack supply** while **holding the encoder button** pressed, which opens the module selector. Release the button, scroll to **CALIBRATE** at the bottom of the list and click. (From a running module you can get to the same screen with **SETTINGS → BOOT MENU**, or by holding the encoder for two seconds.) Click the encoder at the welcome screen to start.
 
@@ -477,19 +544,28 @@ The wizard has 5 steps: one output trim followed by four CV input captures (1 V 
 
    > ⚠️ Calibrate on Eurorack power, **not** the MCU's USB port — USB cannot drive the outputs to full scale, so the trim would be wrong. **Never connect Eurorack power and USB at the same time, as this could damage the module.**
 
-2. **Step 1 — Output trim** (`1/5  OUTPUT TRIM`):
-   All four outputs are driven to full scale. Using a multimeter set to DC voltage, probe each output jack in turn and adjust its corresponding trimmer potentiometer on the PCB until the reading is exactly **5.00 V**. When all four outputs read 5.00 V, press the encoder to continue.
+2. **Step 1 — Output trim** (`1/6  OUTPUT TRIM`):
+   Every output is driven to full scale. Using a multimeter set to DC voltage, probe each output jack in turn and adjust its corresponding trimmer potentiometer on the PCB until the reading is exactly **5.00 V**. When they all read 5.00 V, press the encoder to continue.
 
-3. **Steps 2–5 — CV input capture** (`2/5` … `5/5`):
+3. **Step 2 — Output offset** (`2/6  OUT 1 OFFSET` … ):
+   Each output is driven to the code that should give exactly 1.000 V. Measure the
+   jack and dial the reading you actually get into the display, then click to move
+   to the next output. Together with the full-scale trim above, this pins down the
+   op-amp's offset — the part a trimmer alone cannot remove.
+
+4. **Steps 3–6 — CV input capture** (`3/6` … `6/6`):
    The display asks for a specific reference voltage on a specific input, in turn:
-   - `2/5  CV1 INPUT 1V` — apply **1 V** to CV input 1
-   - `3/5  CV1 INPUT 3V` — apply **3 V** to CV input 1
-   - `4/5  CV2 INPUT 1V` — apply **1 V** to CV input 2
-   - `5/5  CV2 INPUT 3V` — apply **3 V** to CV input 2
+   - `3/6  CV1 INPUT 1V` — apply **1 V** to CV input 1
+   - `4/6  CV1 INPUT 3V` — apply **3 V** to CV input 1
+   - `5/6  CV2 INPUT 1V` — apply **1 V** to CV input 2
+   - `6/6  CV2 INPUT 3V` — apply **3 V** to CV input 2
 
-   For each step, apply the requested voltage to the named input. The screen shows a live voltage reading so you can confirm the signal is stable; when it is steady, press the encoder to capture (256 ADC samples are averaged). Repeat for all four steps.
+   With an expander fitted every step number reads `/8` rather than `/6`, and two
+   more follow — `7/8  CV3 INPUT 1V` and `8/8  CV3 INPUT 3V` — for **IN 4**.
 
-4. **Review and save**:
+   For each step, apply the requested voltage to the named input. The screen shows a live voltage reading so you can confirm the signal is stable; when it is steady, press the encoder to capture (256 ADC samples are averaged).
+
+5. **Review and save**:
    The display shows the derived per-channel scale and offset for a sanity check. Press the encoder to **save and reboot**. The module restarts with calibration applied.
 
 > **Tip:** Calibration only needs to be run once. Re-run it if you replace any resistors or trimmers on the board, or if CV tracking feels off after assembly.

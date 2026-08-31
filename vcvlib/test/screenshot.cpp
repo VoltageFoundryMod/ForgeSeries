@@ -84,6 +84,7 @@ struct Options {
     float cv[2] = {0, 0};  // held CV on the two modulation inputs
     int turn = 0;          // encoder detents, applied before the run
     int clicks = 0;        // encoder presses, applied before the run
+    std::string seq;       // interleaved turns and clicks, e.g. t85,c1,t1,c1
     bool randomize = false;
     bool invert = false; // draw lit pixels as space (for light terminals)
 };
@@ -96,6 +97,11 @@ void usage() {
         "  --cv A B       hold the two modulation inputs at A and B volts\n"
         "  --turn N       encoder detents before running (negative = anticlockwise)\n"
         "  --click N      encoder presses before running (after --turn)\n"
+        "  --seq LIST     interleaved encoder actions, comma separated:\n"
+        "                   tN = turn N detents,  cN = click N times\n"
+        "                 e.g. --seq t85,c1,t1,c1 walks to a row, opens it,\n"
+        "                 changes the value and commits. --turn/--click cannot\n"
+        "                 express that - they run every turn, then every click.\n"
         "  --randomize    randomize the patch first\n"
         "  --invert       swap ink and paper (for light terminals)\n");
 }
@@ -114,6 +120,8 @@ bool parse(int argc, char **argv, Options &o) {
             o.turn = atoi(argv[++i]);
         } else if (a == "--click" && i + 1 < argc) {
             o.clicks = atoi(argv[++i]);
+        } else if (a == "--seq" && i + 1 < argc) {
+            o.seq = argv[++i];
         } else if (a == "--randomize") {
             o.randomize = true;
         } else if (a == "--invert") {
@@ -153,6 +161,27 @@ int main(int argc, char **argv) {
         engine.encoderButton(true);
         engine.encoderButton(false);
     }
+    // --seq: the same two actions, but in the order given, so one invocation
+    // can walk to a page AND edit a value on it.
+    for (size_t p = 0; p < o.seq.size();) {
+        const size_t comma = o.seq.find(',', p);
+        const std::string tok = o.seq.substr(p, comma - p);
+        p = (comma == std::string::npos) ? o.seq.size() : comma + 1;
+        if (tok.size() < 2)
+            continue;
+        const int n = atoi(tok.c_str() + 1);
+        if (tok[0] == 't') {
+            if (n != 0)
+                engine.encoderTurn(n);
+        } else if (tok[0] == 'c') {
+            for (int c = 0; c < n; c++) {
+                engine.encoderButton(true);
+                engine.encoderButton(false);
+            }
+        } else {
+            std::printf("bad --seq token: %s\n", tok.c_str());
+        }
+    }
 
     // A clock pulse is one block high; the rest of its period low. At the 1 ms
     // block that is a 1 ms pulse, comfortably past the firmware's input debounce
@@ -169,7 +198,7 @@ int main(int argc, char **argv) {
 
     std::printf("t=%dms clock=%dHz cv=%.2f/%.2f  out:", o.ms, o.clockHz,
                 (double)o.cv[0], (double)o.cv[1]);
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 8; i++) {
         std::printf(" %.2f", (double)out[i]);
     }
     std::printf("\n");

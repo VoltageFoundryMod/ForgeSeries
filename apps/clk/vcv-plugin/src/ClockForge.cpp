@@ -1,4 +1,5 @@
 #include "engine/fw_engine.hpp"
+#include "expander_message.hpp"
 #include "plugin.hpp"
 
 #include "forgevcv/ForgeModule.hpp"
@@ -33,6 +34,19 @@ struct ClockForge : forgevcv::ForgeModule {
     // bridge (context menu); the base owns and deletes it via ForgeModule::engine.
     cfengine::VcvEngine *cf = nullptr;
 
+    // Expander link. Buffers on both sides because the expander may sit on
+    // either — see expander_message.hpp.
+    ForgeExpanderMessage leftMessages[2];
+    ForgeExpanderMessage rightMessages[2];
+    bool expanderAdjacent = false; // mirrored for the context menu
+
+    // The firmware's EXPANDER setting, cached. Reading it through the bridge
+    // takes the engine globals lock, which is not something to do per sample;
+    // it only changes when someone turns the encoder, so a poll every few
+    // hundred samples is imperceptible and costs nothing.
+    bool engineExpanderOn = false;
+    int expanderPoll = 0;
+
     ClockForge() {
         config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
         configInput(CLKIN_INPUT, "Clock (TRIG)");
@@ -48,20 +62,69 @@ struct ClockForge : forgevcv::ForgeModule {
         configLight(LED4_LIGHT, "Out 4 level");
         cf = new cfengine::VcvEngine();
         engine = cf; // base takes ownership
+
+        leftExpander.producerMessage = &leftMessages[0];
+        leftExpander.consumerMessage = &leftMessages[1];
+        rightExpander.producerMessage = &rightMessages[0];
+        rightExpander.consumerMessage = &rightMessages[1];
+    }
+
+    // Which side is the expander on, if any.
+    Expander *expanderSide() {
+        if (rightExpander.module && rightExpander.module->model == modelClockForgeExpander)
+            return &rightExpander;
+        if (leftExpander.module && leftExpander.module->model == modelClockForgeExpander)
+            return &leftExpander;
+        return nullptr;
     }
 
     void process(const ProcessArgs &args) override {
-        float cv[2] = {
+        Expander *side = expanderSide();
+        expanderAdjacent = (side != nullptr);
+
+        if (--expanderPoll <= 0) {
+            expanderPoll = 512;
+            engineExpanderOn = (cfengine::expanderType(cf->raw()) != 0);
+        }
+
+        // IN 4 lives on the expander; without one it reads 0 V, exactly as an
+        // unpatched jack would.
+        float in4 = 0.f;
+        if (side) {
+            if (const ForgeExpanderMessage *m =
+                    static_cast<const ForgeExpanderMessage *>(side->consumerMessage))
+                in4 = m->in;
+        }
+
+        float cv[3] = {
             mapCvInput(inputs[CV1IN_INPUT].getVoltage()),
-            mapCvInput(inputs[CV2IN_INPUT].getVoltage())};
+            mapCvInput(inputs[CV2IN_INPUT].getVoltage()),
+            mapCvInput(in4)};
         bool clk = inputs[CLKIN_INPUT].getVoltage() > 1.f;
-        stepEngine(args.sampleTime, cv, 2, clk, 4);
+        // Always ask for eight: the engine fills only what its EXPANDER
+        // setting makes live, and outHold's upper half stays at zero otherwise.
+        stepEngine(args.sampleTime, cv, 3, clk, forgevcv::FORGE_MAX_OUT);
 
         for (int i = 0; i < 4; i++)
             outputs[OUT1_OUTPUT + i].setVoltage(outHold[i]);
 
         // Panel LEDs sit on the output pins themselves — see updateOutputLights.
         updateOutputLights(LED1_LIGHT, 4, args.sampleTime);
+
+        // Hand outputs 5-8 to the expander, writing into ITS near-side
+        // producer buffer and flipping it there.
+        if (side && side->module) {
+            Expander &facing = (side == &rightExpander) ? side->module->leftExpander
+                                                        : side->module->rightExpander;
+            if (facing.producerMessage) {
+                ForgeExpanderMessage *m =
+                    static_cast<ForgeExpanderMessage *>(facing.producerMessage);
+                m->parentActive = engineExpanderOn;
+                for (int i = 0; i < 4; i++)
+                    m->out[i] = outHold[4 + i];
+                facing.requestMessageFlip();
+            }
+        }
     }
 
     json_t *dataToJson() override {
@@ -90,6 +153,36 @@ static forgevcv::EngineIntQuantity *bpmQuantity(ClockForge *m) {
     q->getFn = [=]() { return cfengine::bpm(e); };
     q->setFn = [=](int v) { cfengine::setBpm(e, v); };
     return q;
+}
+
+// Create the expander, drop it immediately to the right of `m`, and switch the
+// firmware setting on. Both halves go into one undo entry: the add, and the
+// shove that setModulePosForce may give the modules already sitting there.
+// Without the second, Ctrl+Z removes the module and leaves the rack rearranged.
+static void addExpanderBeside(ClockForge *m) {
+    ModuleWidget *mw = APP->scene->rack->getModule(m->id);
+    if (!mw)
+        return;
+
+    engine::Module *em = modelClockForgeExpander->createModule();
+    APP->engine->addModule(em);
+    ModuleWidget *ew = modelClockForgeExpander->createModuleWidget(em);
+
+    APP->scene->rack->updateModuleOldPositions();
+    APP->scene->rack->addModule(ew);
+    APP->scene->rack->setModulePosForce(
+        ew, mw->box.pos.plus(math::Vec(mw->box.size.x, 0)));
+
+    history::ComplexAction *h = new history::ComplexAction;
+    h->name = "add ClockForge expander";
+    history::ModuleAdd *ha = new history::ModuleAdd;
+    ha->name = h->name;
+    ha->setModule(ew);
+    h->push(ha);
+    h->push(APP->scene->rack->getModuleDragAction());
+    APP->history->push(h);
+
+    cfengine::setExpanderType(m->cf->raw(), 1);
 }
 
 struct ClockForgeWidget : ModuleWidget {
@@ -174,7 +267,25 @@ struct ClockForgeWidget : ModuleWidget {
                 "Input CV Range", {"0V – 5V", "-5V – +5V", "0V – 10V"}, &m->cvRange));
             menu->addChild(createIndexPtrSubmenuItem(
                 "Encoder Sensitivity", {"Low", "Medium", "High"}, &m->encoderSensitivity));
+
+            // Same setting as the module's EXPANDER menu row, and the same
+            // authority: with it on NONE the expander's jacks sit at 0 V even
+            // if the widget is right there, which is what pulling the ribbon
+            // out of the real thing does.
+            menu->addChild(createIndexSubmenuItem(
+                "Expander", {"None", "Expander 1 (4 out / 1 in)"},
+                [=]() { return (size_t)cfengine::expanderType(e); },
+                [=](size_t v) { cfengine::setExpanderType(e, (int)v); }));
         }));
+
+        // Offered only when there is not already one alongside. Adds the module
+        // and switches the firmware setting on in one action, so the two can
+        // never disagree by accident.
+        if (!m->expanderAdjacent) {
+            menu->addChild(createMenuItem("Add Expander 1", "", [=]() {
+                addExpanderBeside(m);
+            }));
+        }
 
         // ── Module parameters, mirrored from the firmware menu ────────────────
         // These drive the engine's live state directly (same values the on-panel
@@ -196,8 +307,11 @@ struct ClockForgeWidget : ModuleWidget {
             menu->addChild(slider);
         }));
 
-        // Per-output: enable, waveform, and clock divider.
-        for (int i = 0; i < 4; i++) {
+        // Per-output: enable, waveform, and clock divider. Follows the same
+        // count the on-screen menu does, so an expander's outputs 5-8 appear
+        // here too rather than only on the module's own display.
+        const int nOut = cfengine::outputCount(e);
+        for (int i = 0; i < nOut; i++) {
             menu->addChild(createSubmenuItem(string::f("Output %d", i + 1), "", [=](Menu *menu) {
                 menu->addChild(createBoolMenuItem(
                     "Enabled", "",

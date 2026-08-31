@@ -45,7 +45,12 @@
 // This replaces the former per-app magics ('CLK2', 'NFQ2', 'GFV1'), which made
 // each firmware reject calibration written by any other even though all three
 // structs were byte-identical. One magic means one calibration for the board.
-#define CAL_MAGIC 0x46524731UL // 'FRG1' — ForgeSeries calibration, layout v1
+// 'FRG2' (was 'FRG1'): the per-channel arrays grew from the base board's
+// counts to NUM_MAX_*, so an expander's four outputs and its CV input carry
+// coefficients of their own. They must — the expander has its own output
+// trimmers and its own input stage, so nothing about it is described by the
+// base board's numbers.
+#define CAL_MAGIC 0x46524732UL // 'FRG2' — ForgeSeries calibration, layout v1
 
 // ── Calibration data struct ─────────────────────────────────────────────────
 struct CalibrationData {
@@ -53,10 +58,10 @@ struct CalibrationData {
     boolean valid;
     // Per-channel CV input linear coefficients derived from two external refs.
     // Conversion: mv = cvScale[ch] * raw_adc + cvOffset[ch]
-    float cvScale[NUM_CV_INS];
-    float cvOffset[NUM_CV_INS];
+    float cvScale[NUM_MAX_CV_INS];
+    float cvOffset[NUM_MAX_CV_INS];
     // Per-channel output (DAC) correction: cmd = dacScale*desired + dacOffset,
     // where desired/cmd are DAC counts (0..MAXDAC == 0..5V).
-    float dacScale[NUM_OUTPUTS];
-    float dacOffset[NUM_OUTPUTS];
+    float dacScale[NUM_MAX_OUTPUTS];
+    float dacOffset[NUM_MAX_OUTPUTS];
 };
