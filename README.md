@@ -58,6 +58,20 @@ Each **Manual** is the complete user guide — every menu page, screenshot,
 calibration and wiring detail. Browsable versions with images live on
 [vfmod.com](https://vfmod.com).
 
+### Expanders
+
+|                                                                                      | Module                                         | What it does                                                                                                                                                       | Docs                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------ | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| <img src="apps/exp1/images/Front.png" width="70" alt="Forge Expander 1 front panel"> | **Forge Expander 1**<br><sub>`apps/exp1`</sub> | 4 HP expander adding four outputs (**5**–**8**) and one CV input (**CV 3**) to a host module. Ribbon cable to the host's expansion header, powered from it.        | [Manual](apps/exp1/Manual.md) · [In ClockForge](apps/clk/Manual.md#expander) · [ModularGrid](https://modulargrid.net/e/voltage-foundry-modular-forge-expander-1)         |
+
+The expander carries jacks and analog stages, not a microcontroller — what the
+extra jacks do is decided by the host firmware, so each module can use it its own
+way and one expander serves all of them. **ClockForge** is the first to support
+it, turning its four outputs into eight and adding a third CV modulation source.
+Its VCV Rack module and its panel are built as part of its host's plugin, which
+is why the code lives under `apps/clk/` while the docs and artwork live in
+`apps/exp1/`.
+
 ## Get one running
 
 ### On hardware
@@ -127,6 +141,10 @@ Every ForgeSeries module is the same hardware:
 Because the hardware is identical across modules, one board plus one firmware
 flash gets you any of them — and a new module is a new firmware, not a new PCB.
 
+The board also carries an expansion header, which
+[Forge Expander 1](#expanders) uses to add a second DAC and a fourth input —
+8 outputs and 4 inputs in total, on modules whose firmware supports it.
+
 ## Repository layout
 
 ```text
@@ -140,6 +158,7 @@ apps/
   scp/     ForgeView     — oscilloscope / spectrum analyser
   att/     ChaosForge    — dual chaotic-attractor modulation source
   wea/     WeaveForge    — dual shift-register sequencer
+  exp1/    Forge Exp 1   — expander docs + artwork; no firmware, no code
 vcv/       the consolidated VCV Rack plugin (all modules, one binary)
 vcvlib/    shared VCV Rack layer (Arduino shim, ForgeModule, IEngine, widgets)
 tools/     env.ps1 — optional PATH helper for Windows

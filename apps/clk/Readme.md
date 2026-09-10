@@ -35,6 +35,7 @@ Check the module on [ModularGrid](https://modulargrid.net/e/voltage-foundry-modu
 - **Cross Operations**: Modulate an output with another output or CV input using arithmetic, logic and sample/hold operations.
 - **Loops**: Rewind an output's pattern every few beats to build repeating, structured random/Euclidean phrases, with nap/wake muting.
 - **Save/Load Configuration**: Save and load up to 10 configurations.
+- **Expandable**: [Forge Expander 1](../exp1/Manual.md) adds four more outputs and a third CV input, with the same per-output settings as the built-in four. See [Expander](Manual.md#expander) in the manual.
 
 The module has a user-friendly interface with an encoder for navigation and parameter adjustment, and a clear display showing the current settings and status of each output. The main screen shows the BPM and the status of each output, while navigating into each output's settings allows for detailed configuration of that specific output. There are no submenus as all parameters are accessible by scrolling horizontally on the same menu screen.
 
