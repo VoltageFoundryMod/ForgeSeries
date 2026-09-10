@@ -456,9 +456,13 @@ The module works with external clocks from 30 to 300 BPM. Due to timer resolutio
 
 ## Expander
 
-**Expander 1** is a 4 HP companion module that adds four more outputs (**OUT 5** to
-**OUT 8**) and one more CV input (**IN 4**). It connects to the expansion header on
-the back of the module with a ribbon cable, and draws its power from there.
+[Forge Expander 1](https://vfmod.com/modules/forgeexp1/) is a 4 HP companion
+module that adds four more outputs (**OUT 5** to **OUT 8**) and one more CV input
+(**IN 4**).
+
+It is a generic Forge series expander, shared across modules — its own manual
+covers the hardware, fitting it and wiring the ribbon cable. This section covers
+what ClockForge does with it.
 
 ### Enabling the expander
 
@@ -485,10 +489,10 @@ patterns, swing, probability, loops, quantization and cross-operations.
 
 ### After fitting one
 
-Re-run the calibration wizard (see [Hardware Calibration](#hardware-calibration)).
-The expander has its own output trimmers and its own input stage, so it needs its
-own measurements — the wizard detects it automatically and grows from six steps
-to eight.
+Re-run the calibration wizard (see [Hardware Calibration](#hardware-calibration)):
+the expander's jacks have trimmers and an input stage of their own, so they need
+their own measurements. The wizard detects it automatically and grows from six
+steps to eight.
 
 ### In VCV Rack
 

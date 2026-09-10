@@ -112,12 +112,12 @@ struct ClockForgeExpander : Module {
 struct ClockForgeExpanderWidget : ModuleWidget {
     ClockForgeExpanderWidget(ClockForgeExpander *module) {
         setModule(module);
-        setPanel(createPanel(asset::plugin(pluginInstance, "res/ClockForge_Exp1.svg")));
+        setPanel(createPanel(asset::plugin(pluginInstance, "res/Forge_Exp1.svg")));
 
         addChild(createWidget<ScrewBlack>(Vec(RACK_GRID_WIDTH, 0)));
         addChild(createWidget<ScrewBlack>(Vec(RACK_GRID_WIDTH, RACK_GRID_HEIGHT - RACK_GRID_WIDTH)));
 
-        // Positions read off panel-src/ClockForge_Exp1.svg's components
+        // Positions read off panel-src/Forge_Exp1.svg's components
         // layer — `make panel-coords-clk`. Not generated; keep them in step by
         // re-running that after moving anything on the drawing.
         addInput(createInputCentered<PJ301MPort>(mm2px(Vec(9.719f, 22.681f)), module, ClockForgeExpander::IN4_INPUT));

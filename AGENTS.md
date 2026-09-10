@@ -23,6 +23,7 @@ apps/gen/       GravityForge  — physics-based generative sequencer
 apps/scp/       ForgeView     — oscilloscope / spectrum analyser
 apps/att/       ChaosForge    — dual chaotic-attractor modulation source
 apps/wea/       WeaveForge    — dual shift-register sequencer
+apps/exp1/      Forge Exp 1   — docs + artwork only, no firmware (see below)
 vcv/            the consolidated Rack plugin (all modules, one binary)
 vcvlib/         shared Rack layer (Arduino shim, ForgeModule, IEngine, widgets)
 panel-src/      the panel artwork you edit in Inkscape, one SVG per module
@@ -40,6 +41,18 @@ apps/<app>/
   vcv-plugin/         the same module as a standalone Rack plugin
   test/test_native/   googletest + ArduinoFake suites
 ```
+
+`apps/<app>/` is **one product's sources, docs and artwork — firmware
+optional.** `apps/exp1/` is the first entry with no firmware at all: Forge
+Expander 1 has no microcontroller, so it is only `Manual.md` and `images/`.
+Nothing in the build looks at it — `APPS` in the Makefile is an explicit list,
+and every derived list (`FW_APPS`, `PLUGIN_APPS`, `TEST_APPS`, `PANEL_APPS`)
+filters on files that exist. Its VCV module and its panel are built as part of
+its host, `apps/clk/` (`PANELS_clk := ClockForge Forge_Exp1`), because each
+host firmware drives the expander its own way. What the directory exists for is
+the website: [the site generator](https://github.com/VoltageFoundryMod/VFM-Website)
+derives a module page from `<src>/Manual.md` + `<src>/images/Front.png`, so a
+product needs that shape to be published, firmware or not.
 
 There is **no per-module `platformio.ini`** — the root project builds every
 firmware and owns the native test environments (`test_dir = apps`). It has two

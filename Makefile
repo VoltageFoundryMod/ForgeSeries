@@ -394,7 +394,7 @@ PANEL_TMP    := $(BUILD_TMP)/panels
 # A LIST per app, not a single name: a module can ship more than one panel.
 # ClockForge has two — its own, and its expander's.
 PANELS_att := ChaosForge
-PANELS_clk := ClockForge ClockForge_Exp1
+PANELS_clk := ClockForge Forge_Exp1
 PANELS_dq  := NoteForge
 PANELS_gen := GravityForge
 PANELS_scp := ForgeView
