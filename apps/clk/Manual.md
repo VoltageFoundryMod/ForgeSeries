@@ -580,7 +580,7 @@ output jacks. The wizard detects the expander itself; there is nothing to select
 2. Connect the module to your computer using a USB-C cable while holding the small BOOT (B) button. The CPU can be removed from the module as it's socketed to the main board if desired. Firmware loading can be done with the CPU removed.
 3. A new drive will show on your computer named RPI-RP2. Copy and overwrite the `CURRENT.UF2` file to the module USB drive. After copy is finished, the module will reboot and the new firmware will be loaded.
 
-<img src="./images/XIAORP2040.png" alt="XIAO RP2040 MCU" style="width:20%"/>
+<img src="../../images/XIAORP2040.png" alt="XIAO RP2040 MCU" style="width:20%"/>
 
 ## Troubleshooting
 
